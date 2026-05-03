@@ -137,3 +137,7 @@ C:\Users\12orb\GitHub\EndOfYearCarProject\CarStats.api\CarStats.API\obj\Debug\ne
 C:\Users\12orb\GitHub\EndOfYearCarProject\CarStats.api\CarStats.API\obj\Debug\net10.0\CarStats.API.pdb
 C:\Users\12orb\GitHub\EndOfYearCarProject\CarStats.api\CarStats.API\obj\Debug\net10.0\CarStats.API.genruntimeconfig.cache
 C:\Users\12orb\GitHub\EndOfYearCarProject\CarStats.api\CarStats.API\obj\Debug\net10.0\ref\CarStats.API.dll
+C:\Users\12orb\GitHub\EndOfYearCarProject\CarStats.api\CarStats.API\bin\Debug\net10.0\Swashbuckle.AspNetCore.Swagger.dll
+C:\Users\12orb\GitHub\EndOfYearCarProject\CarStats.api\CarStats.API\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerGen.dll
+C:\Users\12orb\GitHub\EndOfYearCarProject\CarStats.api\CarStats.API\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerUI.dll
+C:\Users\12orb\GitHub\EndOfYearCarProject\CarStats.api\CarStats.API\obj\Debug\net10.0\staticwebassets.upToDateCheck.txt

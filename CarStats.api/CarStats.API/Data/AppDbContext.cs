@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using CarStats.API.Models; 
+using CarStats.API.Models;
 
 namespace CarStats.API.Data
 {
@@ -10,5 +10,7 @@ namespace CarStats.API.Data
         }
 
         public DbSet<DiagnosticCode> DiagnosticCodes { get; set; }
+
+        public DbSet<VehicleEvent> VehicleEvents { get; set; }
     }
 }
