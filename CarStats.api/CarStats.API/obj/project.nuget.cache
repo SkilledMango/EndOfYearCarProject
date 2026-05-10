@@ -1,11 +1,12 @@
 {
   "version": 2,
-  "dgSpecHash": "89Tg9VrCZ2g=",
+  "dgSpecHash": "pFSPGiAMxkY=",
   "success": true,
   "projectFilePath": "C:\\Users\\12orb\\GitHub\\EndOfYearCarProject\\CarStats.api\\CarStats.API\\CarStats.API.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\12orb\\.nuget\\packages\\azure.core\\1.38.0\\azure.core.1.38.0.nupkg.sha512",
     "C:\\Users\\12orb\\.nuget\\packages\\azure.identity\\1.11.4\\azure.identity.1.11.4.nupkg.sha512",
+    "C:\\Users\\12orb\\.nuget\\packages\\bcrypt.net-next\\4.1.0\\bcrypt.net-next.4.1.0.nupkg.sha512",
     "C:\\Users\\12orb\\.nuget\\packages\\humanizer.core\\2.14.1\\humanizer.core.2.14.1.nupkg.sha512",
     "C:\\Users\\12orb\\.nuget\\packages\\microsoft.aspnetcore.openapi\\10.0.7\\microsoft.aspnetcore.openapi.10.0.7.nupkg.sha512",
     "C:\\Users\\12orb\\.nuget\\packages\\microsoft.bcl.asyncinterfaces\\6.0.0\\microsoft.bcl.asyncinterfaces.6.0.0.nupkg.sha512",

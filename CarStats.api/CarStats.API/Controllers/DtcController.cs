@@ -36,5 +36,16 @@ namespace CarStats.API.Controllers
             // Returns a 201 Created success status
             return CreatedAtAction(nameof(GetDiagnosticCodes), new { id = diagnosticCode.Id }, diagnosticCode);
         }
+        // DELETE: Remove a diagnostic code
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteDtc(int id)
+        {
+            var dtc = await _context.DiagnosticCodes.FindAsync(id);
+            if (dtc == null) return NotFound();
+
+            _context.DiagnosticCodes.Remove(dtc);
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
     }
 }
