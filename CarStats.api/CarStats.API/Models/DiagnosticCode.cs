@@ -33,8 +33,13 @@ namespace CarStats.API.Models
 
         [Column(TypeName = "decimal(18,2)")]
         public decimal EstimatedCostMin { get; set; }
-        
+
         [Column(TypeName = "decimal(18,2)")]
         public decimal EstimatedCostMax { get; set; }
+
+        public int? AppUserId { get; set; }
+
+        [ForeignKey("AppUserId")]
+        public AppUser? User { get; set; }
     }
 }

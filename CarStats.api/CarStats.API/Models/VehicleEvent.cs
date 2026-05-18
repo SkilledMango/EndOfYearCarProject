@@ -1,5 +1,4 @@
-﻿using System;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CarStats.API.Models
@@ -9,16 +8,15 @@ namespace CarStats.API.Models
         [Key]
         public int Id { get; set; }
 
-        // We will tie this to a specific user/vehicle later, for now we keep it simple
-        public string VehicleId { get; set; } = "TEST-CAR-01";
-
-        [Required]
-        [MaxLength(10)]
+        public string VehicleId { get; set; } = string.Empty;
         public string RawErrorCode { get; set; } = string.Empty;
+        public DateTime Timestamp { get; set; }
+        public bool IsAcknowledged { get; set; }
 
-        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+        // --- ADD THESE TWO LINES ---
+        public int? AppUserId { get; set; }
 
-        // Has the user seen the alert for this event?
-        public bool IsAcknowledged { get; set; } = false;
+        [ForeignKey("AppUserId")]
+        public AppUser? User { get; set; } // This is the "User" property the error was complaining about!
     }
 }

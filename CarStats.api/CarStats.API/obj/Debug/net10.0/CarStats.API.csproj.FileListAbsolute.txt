@@ -141,4 +141,3 @@ C:\Users\12orb\GitHub\EndOfYearCarProject\CarStats.api\CarStats.API\bin\Debug\ne
 C:\Users\12orb\GitHub\EndOfYearCarProject\CarStats.api\CarStats.API\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerGen.dll
 C:\Users\12orb\GitHub\EndOfYearCarProject\CarStats.api\CarStats.API\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerUI.dll
 C:\Users\12orb\GitHub\EndOfYearCarProject\CarStats.api\CarStats.API\bin\Debug\net10.0\BCrypt.Net-Next.dll
-C:\Users\12orb\GitHub\EndOfYearCarProject\CarStats.api\CarStats.API\obj\Debug\net10.0\staticwebassets.upToDateCheck.txt

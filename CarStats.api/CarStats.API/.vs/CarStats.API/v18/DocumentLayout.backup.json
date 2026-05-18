@@ -3,6 +3,10 @@
   "WorkspaceRootPath": "C:\\Users\\12orb\\GitHub\\EndOfYearCarProject\\CarStats.api\\CarStats.API\\",
   "Documents": [
     {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\12orb\\GitHub\\EndOfYearCarProject\\CarStats.api\\CarStats.API\\Migrations\\20260515094612_FinalizeRelationships.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Migrations\\20260515094612_FinalizeRelationships.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{6311C769-FA4F-6978-7FCE-8378EC175820}|CarStats.API.csproj|c:\\users\\12orb\\github\\endofyearcarproject\\carstats.api\\carstats.api\\controllers\\dtccontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{6311C769-FA4F-6978-7FCE-8378EC175820}|CarStats.API.csproj|solutionrelative:controllers\\dtccontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
@@ -43,19 +47,32 @@
             {
               "$type": "Document",
               "DocumentIndex": 0,
+              "Title": "20260515094612_FinalizeRelationships.cs",
+              "DocumentMoniker": "C:\\Users\\12orb\\GitHub\\EndOfYearCarProject\\CarStats.api\\CarStats.API\\Migrations\\20260515094612_FinalizeRelationships.cs",
+              "RelativeDocumentMoniker": "Migrations\\20260515094612_FinalizeRelationships.cs",
+              "ToolTip": "C:\\Users\\12orb\\GitHub\\EndOfYearCarProject\\CarStats.api\\CarStats.API\\Migrations\\20260515094612_FinalizeRelationships.cs*",
+              "RelativeToolTip": "Migrations\\20260515094612_FinalizeRelationships.cs*",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-05-15T09:46:12.32Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
               "Title": "DtcController.cs",
               "DocumentMoniker": "C:\\Users\\12orb\\GitHub\\EndOfYearCarProject\\CarStats.api\\CarStats.API\\Controllers\\DtcController.cs",
               "RelativeDocumentMoniker": "Controllers\\DtcController.cs",
               "ToolTip": "C:\\Users\\12orb\\GitHub\\EndOfYearCarProject\\CarStats.api\\CarStats.API\\Controllers\\DtcController.cs",
               "RelativeToolTip": "Controllers\\DtcController.cs",
-              "ViewState": "AgIAABMAAAAAAAAAAAAQwCYAAAAPAAAAAAAAAA==",
+              "ViewState": "AgIAABAAAAAAAAAAAAAQwCEAAAAuAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-05-10T09:08:19.549Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 2,
               "Title": "ShopController.cs",
               "DocumentMoniker": "C:\\Users\\12orb\\GitHub\\EndOfYearCarProject\\CarStats.api\\CarStats.API\\Controllers\\ShopController.cs",
               "RelativeDocumentMoniker": "Controllers\\ShopController.cs",
@@ -63,12 +80,11 @@
               "RelativeToolTip": "Controllers\\ShopController.cs",
               "ViewState": "AgIAAAYAAAAAAAAAAAAswB8AAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-05-10T09:07:49.376Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-05-10T09:07:49.376Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 3,
               "Title": "UsersController.cs",
               "DocumentMoniker": "C:\\Users\\12orb\\GitHub\\EndOfYearCarProject\\CarStats.api\\CarStats.API\\Controllers\\UsersController.cs",
               "RelativeDocumentMoniker": "Controllers\\UsersController.cs",
@@ -76,12 +92,11 @@
               "RelativeToolTip": "Controllers\\UsersController.cs",
               "ViewState": "AgIAAEAAAAAAAAAAAAAUwFAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-05-10T08:53:45.943Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-05-10T08:53:45.943Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 4,
               "Title": "MobileController.cs",
               "DocumentMoniker": "C:\\Users\\12orb\\GitHub\\EndOfYearCarProject\\CarStats.api\\CarStats.API\\Controllers\\MobileController.cs",
               "RelativeDocumentMoniker": "Controllers\\MobileController.cs",
@@ -89,12 +104,11 @@
               "RelativeToolTip": "Controllers\\MobileController.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAYAAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-05-03T09:40:49.001Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-05-03T09:40:49.001Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 5,
               "Title": "AppDbContext.cs",
               "DocumentMoniker": "C:\\Users\\12orb\\GitHub\\EndOfYearCarProject\\CarStats.api\\CarStats.API\\Data\\AppDbContext.cs",
               "RelativeDocumentMoniker": "Data\\AppDbContext.cs",
@@ -106,7 +120,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 6,
               "Title": "VehicleEvent.cs",
               "DocumentMoniker": "C:\\Users\\12orb\\GitHub\\EndOfYearCarProject\\CarStats.api\\CarStats.API\\Models\\VehicleEvent.cs",
               "RelativeDocumentMoniker": "Models\\VehicleEvent.cs",
@@ -118,7 +132,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 6,
+              "DocumentIndex": 7,
               "Title": "Program.cs",
               "DocumentMoniker": "C:\\Users\\12orb\\GitHub\\EndOfYearCarProject\\CarStats.api\\CarStats.API\\Program.cs",
               "RelativeDocumentMoniker": "Program.cs",
