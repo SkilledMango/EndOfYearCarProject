@@ -23,6 +23,16 @@ namespace CarStats.API.Controllers
             return await _context.Users.ToListAsync();
         }
 
+        // GET: Fetch a single user's profile for the mobile app
+        [HttpGet("{id}")]
+        public async Task<ActionResult<AppUser>> GetUser(int id)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null) return NotFound();
+            user.PasswordHash = string.Empty; // never expose the hash to clients
+            return user;
+        }
+
         // POST: Create a brand new user
         [HttpPost]
         public async Task<ActionResult<AppUser>> CreateUser(AppUser newUser)
