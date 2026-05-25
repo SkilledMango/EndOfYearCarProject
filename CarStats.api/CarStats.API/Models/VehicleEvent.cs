@@ -8,15 +8,20 @@ namespace CarStats.API.Models
         [Key]
         public int Id { get; set; }
 
-        public string VehicleId { get; set; } = string.Empty;
         public string RawErrorCode { get; set; } = string.Empty;
         public DateTime Timestamp { get; set; }
         public bool IsAcknowledged { get; set; }
 
-        // --- ADD THESE TWO LINES ---
+        // FK → the specific vehicle that triggered this event (nullable)
+        public int? VehicleId { get; set; }
+
+        [ForeignKey("VehicleId")]
+        public Vehicle? Vehicle { get; set; }
+
+        // FK → the owning user (for direct user-level queries)
         public int? AppUserId { get; set; }
 
         [ForeignKey("AppUserId")]
-        public AppUser? User { get; set; } // This is the "User" property the error was complaining about!
+        public AppUser? User { get; set; }
     }
 }

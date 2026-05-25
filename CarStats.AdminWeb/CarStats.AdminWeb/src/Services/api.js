@@ -4,6 +4,7 @@ const BASE_URL = 'https://localhost:7077/api';
 const DTC_URL = `${BASE_URL}/dtc`;
 const SHOPS_URL = `${BASE_URL}/shops`;
 const USERS_URL = `${BASE_URL}/users`;
+const VEHICLES_URL = `${BASE_URL}/vehicles`;
 
 // --- DIAGNOSTIC CODES (DTC) SERVICES ---
 
@@ -105,6 +106,47 @@ export const deleteUser = async (id) => {
         await axios.delete(`${USERS_URL}/${id}`);
     } catch (error) {
         console.error(`Error deleting user ${id}:`, error);
+        throw error;
+    }
+};
+
+// --- VEHICLE SERVICES ---
+
+export const getVehiclesForUser = async (userId) => {
+    try {
+        const response = await axios.get(`${VEHICLES_URL}/user/${userId}`);
+        return response.data;
+    } catch (error) {
+        console.error(`Error fetching vehicles for user ${userId}:`, error);
+        return [];
+    }
+};
+
+export const addVehicle = async (vehicleData) => {
+    try {
+        const response = await axios.post(VEHICLES_URL, vehicleData);
+        return response.data;
+    } catch (error) {
+        console.error("Error adding vehicle:", error);
+        throw error;
+    }
+};
+
+export const updateVehicle = async (id, vehicleData) => {
+    try {
+        const response = await axios.put(`${VEHICLES_URL}/${id}`, vehicleData);
+        return response.data;
+    } catch (error) {
+        console.error(`Error updating vehicle ${id}:`, error);
+        throw error;
+    }
+};
+
+export const deleteVehicle = async (id) => {
+    try {
+        await axios.delete(`${VEHICLES_URL}/${id}`);
+    } catch (error) {
+        console.error(`Error deleting vehicle ${id}:`, error);
         throw error;
     }
 };

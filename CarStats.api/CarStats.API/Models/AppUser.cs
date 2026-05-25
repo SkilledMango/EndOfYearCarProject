@@ -3,6 +3,13 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CarStats.API.Models
 {
+    public enum UserRole
+    {
+        User = 1,       // Standard driver account
+        Admin = 2,      // Can manage DTC dictionary and shops
+        SuperAdmin = 3  // Full access including user management
+    }
+
     public class AppUser
     {
         [Key]
@@ -20,14 +27,13 @@ namespace CarStats.API.Models
         [NotMapped]
         public string? NewPassword { get; set; }
 
-        public string LicensePlate { get; set; } = string.Empty;
-        public string VehicleModel { get; set; } = string.Empty;
-        public double AverageFuelConsumption { get; set; } = 0.0;
+        public UserRole Role { get; set; } = UserRole.User;
+
         public int TotalFaultsLogged { get; set; } = 0;
         public bool IsPremiumMember { get; set; } = false;
 
-        // --- RELATIONSHIP ---
-        // This connects the User to their Diagnostic Codes
+        // --- RELATIONSHIPS ---
+        public List<Vehicle> Vehicles { get; set; } = new();
         public List<DiagnosticCode> SavedCodes { get; set; } = new();
         public List<VehicleEvent> VehicleEvents { get; set; } = new();
     }

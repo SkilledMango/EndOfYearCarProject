@@ -16,18 +16,23 @@ namespace CarStats.API.Controllers
             _context = context;
         }
 
-        // GET: Fetch all users to watch their stats
+        // GET: Fetch all users (with their vehicles) for the admin panel
         [HttpGet]
         public async Task<ActionResult<IEnumerable<AppUser>>> GetUsers()
         {
-            return await _context.Users.ToListAsync();
+            return await _context.Users
+                .Include(u => u.Vehicles)
+                .ToListAsync();
         }
 
-        // GET: Fetch a single user's profile for the mobile app
+        // GET: Fetch a single user's profile (with vehicles) for the mobile app
         [HttpGet("{id}")]
         public async Task<ActionResult<AppUser>> GetUser(int id)
         {
-            var user = await _context.Users.FindAsync(id);
+            var user = await _context.Users
+                .Include(u => u.Vehicles)
+                .FirstOrDefaultAsync(u => u.Id == id);
+
             if (user == null) return NotFound();
             user.PasswordHash = string.Empty; // never expose the hash to clients
             return user;
@@ -67,9 +72,7 @@ namespace CarStats.API.Controllers
             // 2. Update the normal fields
             existingUser.FullName = updatedUser.FullName;
             existingUser.Email = updatedUser.Email;
-            existingUser.VehicleModel = updatedUser.VehicleModel;
-            existingUser.LicensePlate = updatedUser.LicensePlate;
-            existingUser.AverageFuelConsumption = updatedUser.AverageFuelConsumption;
+            existingUser.Role = updatedUser.Role;
             existingUser.TotalFaultsLogged = updatedUser.TotalFaultsLogged;
             existingUser.IsPremiumMember = updatedUser.IsPremiumMember;
 
