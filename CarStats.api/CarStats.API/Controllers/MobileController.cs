@@ -9,6 +9,7 @@ namespace CarStats.API.Controllers
     {
         public string RawCode { get; set; } = string.Empty;
         public int? UserId { get; set; }
+        public int? VehicleId { get; set; }
     }
 
     [Route("api/[controller]")]
@@ -30,12 +31,23 @@ namespace CarStats.API.Controllers
             if (string.IsNullOrWhiteSpace(request.RawCode))
                 return BadRequest("Error code cannot be empty.");
 
-            // 1. Log the raw event, linking it to the user if provided
+            // Validate FK references — silently clear them if they don't exist
+            // so a missing user never causes a 500 crash
+            if (request.UserId.HasValue &&
+                !await _context.Users.AnyAsync(u => u.Id == request.UserId.Value))
+                request.UserId = null;
+
+            if (request.VehicleId.HasValue &&
+                !await _context.Vehicles.AnyAsync(v => v.Id == request.VehicleId.Value))
+                request.VehicleId = null;
+
+            // 1. Log the raw event, linking it to the user and specific vehicle
             var newEvent = new VehicleEvent
             {
                 RawErrorCode = request.RawCode.ToUpper(),
                 Timestamp = DateTime.UtcNow,
-                AppUserId = request.UserId
+                AppUserId = request.UserId,
+                VehicleId = request.VehicleId
             };
             _context.VehicleEvents.Add(newEvent);
             await _context.SaveChangesAsync();
