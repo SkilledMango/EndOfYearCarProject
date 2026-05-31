@@ -119,3 +119,21 @@ export const getVehiclesForUser = async (userId: number): Promise<Vehicle[]> => 
   const { data } = await api.get<Vehicle[]>(`/vehicles/user/${userId}`);
   return data;
 };
+
+export interface CreateVehicleDto {
+  make: string;
+  model: string;
+  year: number;
+  licensePlate: string;
+  averageFuelConsumption: number;
+  appUserId: number;
+}
+
+export const createVehicle = async (dto: CreateVehicleDto): Promise<Vehicle> => {
+  const { data } = await api.post<Vehicle>('/vehicles', dto);
+  return data;
+};
+
+export const deleteVehicle = async (vehicleId: number): Promise<void> => {
+  await api.delete(`/vehicles/${vehicleId}`);
+};

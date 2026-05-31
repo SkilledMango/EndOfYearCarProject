@@ -24,7 +24,8 @@ export interface LiveData {
   rpm: number;
   speedKmh: number;
   coolantCelsius: number;
-  fuelPercent: number;
+  /** null when the car doesn't support PID 0x2F (fuel level not reported) */
+  fuelPercent: number | null;
   engineLoadPct: number;
   /** true when the adapter is receiving real CAN frames */
   valid: boolean;
@@ -44,6 +45,12 @@ export interface ScannerStatus {
 
 export interface DtcScanResult {
   codes: string[];
+}
+
+export interface VinResult {
+  /** 17-char VIN, or null if not supported / car not connected */
+  vin: string | null;
+  simMode: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -95,6 +102,17 @@ export async function scanDtcs(): Promise<DtcScanResult> {
   const res = await fetchWithTimeout(`${SCANNER_BASE_URL}/dtcs`);
   if (!res.ok) throw new Error(`Scanner /dtcs returned ${res.status}`);
   return res.json() as Promise<DtcScanResult>;
+}
+
+/**
+ * Fetches the VIN from the OBD adapter (cached — read once per car connection).
+ * Returns null vin when the car doesn't support Service 09 PID 02, or in sim mode.
+ * Never throws — VIN detection is best-effort.
+ */
+export async function getVehicleVin(): Promise<VinResult> {
+  const res = await fetchWithTimeout(`${SCANNER_BASE_URL}/vin`);
+  if (!res.ok) throw new Error(`Scanner /vin returned ${res.status}`);
+  return res.json() as Promise<VinResult>;
 }
 
 /**

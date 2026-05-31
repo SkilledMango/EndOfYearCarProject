@@ -1,12 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AddVehicleModal, VehiclePrefill } from '@/components/AddVehicleModal';
 import {
   AppUser,
   ReportDtcResponse,
@@ -23,9 +27,11 @@ import {
   ScannerStatus,
   getLiveData,
   getScannerStatus,
+  getVehicleVin,
   isScannerReachable,
   scanDtcs,
 } from '@/services/scanner';
+import { decodeVin, VinDecodeResult, vinMatchesVehicle } from '@/services/vindecode';
 import { Dashboard, Severity } from '@/constants/theme';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -38,27 +44,52 @@ const severityColor = (s: SeverityLevel | undefined) => {
   }
 };
 
+// ─── Fuel baseline (stored in AsyncStorage per vehicle) ───────────────────────
+
+interface FuelBaseline {
+  pct: number;    // fuel % when the user set it
+  tankL: number;  // tank capacity in litres
+  tripKm: number; // accumulated trip km at the time of setting
+}
+
+function fuelKey(vehicleId?: number) {
+  return `fuel_baseline_${vehicleId ?? 'default'}`;
+}
+
 // ─── Home Screen ──────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
-  const { user: authUser, logout }            = useAuth();
+  const { user: authUser, logout } = useAuth();
 
   // ── User / vehicle state ──
-  const [user, setUser]                       = useState<AppUser | null>(null);
+  const [user, setUser]                     = useState<AppUser | null>(null);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
-  const [recentEvents, setRecentEvents]       = useState<VehicleEventEnriched[]>([]);
-  const [loading, setLoading]                 = useState(true);
+  const [recentEvents, setRecentEvents]     = useState<VehicleEventEnriched[]>([]);
+  const [loading, setLoading]               = useState(true);
 
   // ── Scanner state ──
-  const [scannerOnline, setScannerOnline]     = useState(false);
-  const [scannerStatus, setScannerStatus]     = useState<ScannerStatus | null>(null);
-  const [liveData, setLiveData]               = useState<LiveData | null>(null);
-  const [liveError, setLiveError]             = useState(false);
+  const [scannerOnline, setScannerOnline]   = useState(false);
+  const [scannerStatus, setScannerStatus]   = useState<ScannerStatus | null>(null);
+  const [liveData, setLiveData]             = useState<LiveData | null>(null);
+  const [liveError, setLiveError]           = useState(false);
 
   // ── DTC scan state ──
-  const [scanning, setScanning]               = useState(false);
-  const [dtcResults, setDtcResults]           = useState<ReportDtcResponse[]>([]);
-  const [scanError, setScanError]             = useState<string | null>(null);
+  const [scanning, setScanning]             = useState(false);
+  const [dtcResults, setDtcResults]         = useState<ReportDtcResponse[]>([]);
+  const [scanError, setScanError]           = useState<string | null>(null);
+
+  // ── Fuel estimation ──
+  const [tripKm, setTripKm]                 = useState(0);
+  const [fuelBaseline, setFuelBaseline]     = useState<FuelBaseline | null>(null);
+  const [estimatedFuel, setEstimatedFuel]   = useState<number | null>(null);
+  const [fuelModalVisible, setFuelModalVisible]       = useState(false);
+  const [addVehicleVisible, setAddVehicleVisible]     = useState(false);
+  const [prefillData, setPrefillData]       = useState<VehiclePrefill | undefined>();
+  const lastPollTimeRef = useRef(Date.now());
+
+  // ── OBD vehicle detection ──
+  const [detectedVehicle, setDetectedVehicle] = useState<VinDecodeResult | null>(null);
+  const vinCheckDoneRef = useRef(false);  // prevent re-checking in the same session
 
   // ── Polling timer ref ──
   const liveInterval = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -81,11 +112,31 @@ export default function HomeScreen() {
     }
   }, []);
 
+  // ── Load fuel baseline when vehicle changes ───────────────────────────────
+  const loadFuelBaseline = useCallback(async (vehicleId?: number) => {
+    try {
+      const stored = await AsyncStorage.getItem(fuelKey(vehicleId));
+      if (stored) {
+        const baseline: FuelBaseline = JSON.parse(stored);
+        setFuelBaseline(baseline);
+        // Don't reset tripKm — keep accumulating. If we already drove past
+        // the baseline point, depletion will be calculated correctly.
+        setTripKm(prev => Math.max(prev, baseline.tripKm));
+      }
+    } catch { /* ignore storage errors */ }
+  }, []);
+
+  const saveFuelBaseline = useCallback(async (baseline: FuelBaseline, vehicleId?: number) => {
+    try {
+      await AsyncStorage.setItem(fuelKey(vehicleId), JSON.stringify(baseline));
+      setFuelBaseline(baseline);
+    } catch { /* ignore */ }
+  }, []);
+
   // ── Check scanner & start live-data polling ───────────────────────────────
   const checkScanner = useCallback(async () => {
     const reachable = await isScannerReachable();
     setScannerOnline(reachable);
-
     if (reachable) {
       try {
         const status = await getScannerStatus();
@@ -97,7 +148,16 @@ export default function HomeScreen() {
   const pollLive = useCallback(async () => {
     if (!scannerOnline) return;
     try {
+      const now = Date.now();
       const data = await getLiveData();
+
+      // Accumulate trip distance for fuel estimation
+      if (data.speedKmh > 0) {
+        const dtHours = (now - lastPollTimeRef.current) / 3_600_000;
+        setTripKm(prev => prev + data.speedKmh * dtHours);
+      }
+      lastPollTimeRef.current = now;
+
       setLiveData(data);
       setLiveError(false);
     } catch {
@@ -109,6 +169,35 @@ export default function HomeScreen() {
     loadData();
     checkScanner();
   }, [loadData, checkScanner]);
+
+  useEffect(() => {
+    loadFuelBaseline(selectedVehicle?.id);
+  }, [selectedVehicle, loadFuelBaseline]);
+
+  // ── OBD vehicle detection — runs once per real-car connection ────────────
+  useEffect(() => {
+    if (!scannerOnline || scannerStatus?.simMode) {
+      vinCheckDoneRef.current = false;   // reset when disconnected / in sim
+      return;
+    }
+    if (vinCheckDoneRef.current) return; // already checked this session
+    vinCheckDoneRef.current = true;
+
+    (async () => {
+      try {
+        const vinResult = await getVehicleVin();
+        if (!vinResult.vin || vinResult.simMode) return;
+
+        const decoded = await decodeVin(vinResult.vin);
+        if (!decoded) return;
+
+        // Only suggest adding if no vehicle in garage already matches
+        const vehicles = user?.vehicles ?? [];
+        const alreadyInGarage = vehicles.some(v => vinMatchesVehicle(decoded, v));
+        if (!alreadyInGarage) setDetectedVehicle(decoded);
+      } catch { /* VIN detection is best-effort — silent failure is fine */ }
+    })();
+  }, [scannerOnline, scannerStatus, user]); // eslint-disable-line
 
   // Start / stop the 1 s live-data polling based on scanner availability
   useEffect(() => {
@@ -126,6 +215,29 @@ export default function HomeScreen() {
       if (liveInterval.current) clearInterval(liveInterval.current);
     };
   }, [scannerOnline, pollLive]);
+
+  // ── Recalculate estimated fuel whenever distance or baseline changes ───────
+  useEffect(() => {
+    if (!liveData || liveData.fuelPercent != null) {
+      // Real OBD fuel reading available — no estimation needed
+      setEstimatedFuel(null);
+      return;
+    }
+    if (!fuelBaseline) {
+      setEstimatedFuel(null);
+      return;
+    }
+    const avgL100km = selectedVehicle?.averageFuelConsumption ?? null;
+    if (!avgL100km || avgL100km <= 0) {
+      // Can't estimate without consumption data — just show baseline
+      setEstimatedFuel(Math.max(0, fuelBaseline.pct));
+      return;
+    }
+    const kmDriven    = Math.max(0, tripKm - fuelBaseline.tripKm);
+    const litersUsed  = (kmDriven / 100) * avgL100km;
+    const pctDropped  = (litersUsed / fuelBaseline.tankL) * 100;
+    setEstimatedFuel(Math.max(0, Math.round(fuelBaseline.pct - pctDropped)));
+  }, [liveData, fuelBaseline, tripKm, selectedVehicle]);
 
   // ── Auto-scan DTCs from hardware ─────────────────────────────────────────
   const handleScanDtcs = async () => {
@@ -147,12 +259,11 @@ export default function HomeScreen() {
         return;
       }
 
-      // Report each code to the CarStats API so it is logged + translated
       const responses = await Promise.all(
         codes.map(code => reportDtc(code, authUser!.id, selectedVehicle?.id))
       );
       setDtcResults(responses);
-      loadData(); // refresh fault count + recent events
+      loadData();
     } catch {
       setScanError('Scan failed. Check that the adapter is connected to the car.');
     } finally {
@@ -216,6 +327,37 @@ export default function HomeScreen() {
         </ScrollView>
       )}
 
+      {/* ── OBD vehicle detection banner ── */}
+      {detectedVehicle && (
+        <View style={styles.detectionBanner}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.detectionTitle}>🔍 Car detected via OBD</Text>
+            <Text style={styles.detectionSub}>
+              {detectedVehicle.year} {detectedVehicle.make} {detectedVehicle.model}
+              {' '}— not in your garage yet
+            </Text>
+          </View>
+          <Pressable
+            style={styles.detectionAddBtn}
+            onPress={() => {
+              setPrefillData({ make: detectedVehicle.make, model: detectedVehicle.model, year: detectedVehicle.year });
+              setDetectedVehicle(null);
+              setAddVehicleVisible(true);
+            }}
+          >
+            <Text style={styles.detectionAddText}>ADD</Text>
+          </Pressable>
+          <Pressable onPress={() => setDetectedVehicle(null)} style={styles.detectionDismiss}>
+            <Text style={styles.detectionDismissText}>✕</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* ── Add vehicle button ── */}
+      <Pressable style={styles.addVehicleBtn} onPress={() => setAddVehicleVisible(true)}>
+        <Text style={styles.addVehicleBtnText}>＋  Add vehicle</Text>
+      </Pressable>
+
       {/* ── Stat cards ── */}
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
@@ -238,9 +380,13 @@ export default function HomeScreen() {
       {/* ── OBD-II Adapter status banner ── */}
       <ScannerBanner online={scannerOnline} status={scannerStatus} onRetry={checkScanner} />
 
-      {/* ── Live gauges (only shown when adapter is online and sending data) ── */}
+      {/* ── Live gauges ── */}
       {scannerOnline && liveData && !liveError && (
-        <LiveGauges data={liveData} />
+        <LiveGauges
+          data={liveData}
+          estimatedFuel={estimatedFuel}
+          onSetFuel={() => setFuelModalVisible(true)}
+        />
       )}
 
       {/* ── Scan button ── */}
@@ -295,6 +441,26 @@ export default function HomeScreen() {
           ))}
         </View>
       )}
+
+      {/* ── Add vehicle modal ── */}
+      <AddVehicleModal
+        visible={addVehicleVisible}
+        userId={authUser!.id}
+        prefill={prefillData}
+        onAdded={() => { setAddVehicleVisible(false); setPrefillData(undefined); loadData(); }}
+        onClose={() => { setAddVehicleVisible(false); setPrefillData(undefined); }}
+      />
+
+      {/* ── Fuel set modal ── */}
+      <FuelSetModal
+        visible={fuelModalVisible}
+        currentEstimate={estimatedFuel ?? fuelBaseline?.pct ?? null}
+        onSave={(pct, tankL) => {
+          saveFuelBaseline({ pct, tankL, tripKm }, selectedVehicle?.id);
+          setFuelModalVisible(false);
+        }}
+        onCancel={() => setFuelModalVisible(false)}
+      />
 
     </ScrollView>
   );
@@ -357,9 +523,21 @@ const bannerStyles = StyleSheet.create({
 
 // ─── Live gauges ───────────────────────────────────────────────────────────────
 
-function LiveGauges({ data }: { data: LiveData }) {
+function LiveGauges({
+  data,
+  estimatedFuel,
+  onSetFuel,
+}: {
+  data: LiveData;
+  estimatedFuel: number | null;
+  onSetFuel: () => void;
+}) {
   const rpmPct  = Math.min(data.rpm / 7000, 1);
-  const loadPct = data.engineLoadPct / 100;
+
+  // Determine which fuel value to display
+  const fuelValue    = data.fuelPercent ?? estimatedFuel;
+  const fuelIsReal   = data.fuelPercent != null;
+  const fuelIsEst    = data.fuelPercent == null && estimatedFuel != null;
 
   return (
     <View style={gaugeStyles.card}>
@@ -386,13 +564,45 @@ function LiveGauges({ data }: { data: LiveData }) {
           barPct={Math.min((data.coolantCelsius + 40) / 160, 1)}
           barColor={data.coolantCelsius > 110 ? Severity.red : data.coolantCelsius > 95 ? Severity.yellow : Severity.green}
         />
-        <GaugeTile
-          label="FUEL"
-          value={`${data.fuelPercent}%`}
-          subValue="in tank"
-          barPct={data.fuelPercent / 100}
-          barColor={data.fuelPercent < 15 ? Severity.red : data.fuelPercent < 30 ? Severity.yellow : Severity.green}
-        />
+        {/* ── Fuel tile — tap to set level when OBD doesn't report it ── */}
+        <Pressable
+          style={[gaugeStyles.tile, !fuelIsReal && gaugeStyles.tileTappable]}
+          onPress={!fuelIsReal ? onSetFuel : undefined}
+        >
+          <View style={gaugeStyles.tileLabelRow}>
+            <Text style={gaugeStyles.tileLabel}>FUEL</Text>
+            {!fuelIsReal && (
+              <Text style={gaugeStyles.tileSetBtn}>{fuelIsEst ? 'UPDATE' : 'SET'}</Text>
+            )}
+          </View>
+          <Text style={gaugeStyles.tileValue}>
+            {fuelValue != null ? `${fuelValue}%` : '—'}
+          </Text>
+          <Text style={gaugeStyles.tileSub}>
+            {fuelIsReal ? 'in tank' : fuelIsEst ? 'estimated' : 'tap to set'}
+          </Text>
+          {/* Note shown when car doesn't report fuel via OBD-II */}
+          {!fuelIsReal && (
+            <Text style={gaugeStyles.tileNote}>
+              {fuelIsEst
+                ? '⚠ OBD fuel not supported — using estimate'
+                : '⚠ Car does not report fuel level via OBD-II (PID 0x2F unsupported)'}
+            </Text>
+          )}
+          <View style={gaugeStyles.barTrack}>
+            <View style={[
+              gaugeStyles.barFill,
+              {
+                width: `${Math.round((fuelValue ?? 0) / 100 * 100)}%`,
+                backgroundColor: fuelValue == null  ? Dashboard.cardBorder
+                  : fuelValue < 15 ? Severity.red
+                  : fuelValue < 30 ? Severity.yellow
+                  : fuelIsEst      ? Dashboard.accent + 'AA'  // dimmed for estimates
+                  : Severity.green,
+              },
+            ]} />
+          </View>
+        </Pressable>
       </View>
     </View>
   );
@@ -451,11 +661,26 @@ const gaugeStyles = StyleSheet.create({
     borderColor: Dashboard.cardBorder,
     padding: 12,
   },
+  tileTappable: {
+    borderColor: Dashboard.accent + '66',
+    borderStyle: 'dashed',
+  },
+  tileLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   tileLabel: {
     fontSize: 10,
     color: Dashboard.textSecondary,
     letterSpacing: 1.5,
-    marginBottom: 4,
+  },
+  tileSetBtn: {
+    fontSize: 9,
+    color: Dashboard.accent,
+    fontWeight: '700',
+    letterSpacing: 1,
   },
   tileValue: {
     fontSize: 26,
@@ -465,7 +690,13 @@ const gaugeStyles = StyleSheet.create({
   tileSub: {
     fontSize: 11,
     color: Dashboard.textSecondary,
-    marginBottom: 10,
+    marginBottom: 6,
+  },
+  tileNote: {
+    fontSize: 9,
+    color: Severity.yellow,
+    lineHeight: 13,
+    marginBottom: 6,
   },
   barTrack: {
     height: 4,
@@ -476,6 +707,226 @@ const gaugeStyles = StyleSheet.create({
   barFill: {
     height: 4,
     borderRadius: 2,
+  },
+});
+
+// ─── Fuel set modal ────────────────────────────────────────────────────────────
+
+const QUICK_FILL = [
+  { label: '¼',    pct: 25 },
+  { label: '½',    pct: 50 },
+  { label: '¾',    pct: 75 },
+  { label: 'FULL', pct: 100 },
+];
+
+function FuelSetModal({
+  visible,
+  currentEstimate,
+  onSave,
+  onCancel,
+}: {
+  visible: boolean;
+  currentEstimate: number | null;
+  onSave: (pct: number, tankL: number) => void;
+  onCancel: () => void;
+}) {
+  const [pctText,  setPctText]  = useState(String(currentEstimate ?? 100));
+  const [tankText, setTankText] = useState('55');
+
+  useEffect(() => {
+    if (visible) setPctText(String(currentEstimate ?? 100));
+  }, [visible, currentEstimate]);
+
+  const handleSave = () => {
+    const pct   = Math.min(100, Math.max(0, Number(pctText)  || 0));
+    const tankL = Math.max(10,              Number(tankText) || 55);
+    onSave(pct, tankL);
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={modalStyles.overlay}>
+        <View style={modalStyles.sheet}>
+          <Text style={modalStyles.title}>SET FUEL LEVEL</Text>
+          <Text style={modalStyles.sub}>
+            Your OBD adapter can't read the fuel sensor directly.{'\n'}
+            Set your current level and the app will track usage automatically.
+          </Text>
+
+          {/* ── Quick-fill buttons ── */}
+          <View style={modalStyles.quickRow}>
+            {QUICK_FILL.map(q => (
+              <Pressable
+                key={q.pct}
+                style={[
+                  modalStyles.quickBtn,
+                  pctText === String(q.pct) && modalStyles.quickBtnActive,
+                ]}
+                onPress={() => setPctText(String(q.pct))}
+              >
+                <Text style={[
+                  modalStyles.quickLabel,
+                  pctText === String(q.pct) && modalStyles.quickLabelActive,
+                ]}>
+                  {q.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {/* ── Manual % input ── */}
+          <View style={modalStyles.inputRow}>
+            <Text style={modalStyles.inputLabel}>Custom %</Text>
+            <TextInput
+              style={modalStyles.input}
+              value={pctText}
+              onChangeText={setPctText}
+              keyboardType="numeric"
+              maxLength={3}
+              placeholderTextColor={Dashboard.textSecondary}
+              placeholder="0–100"
+            />
+          </View>
+
+          {/* ── Tank capacity input ── */}
+          <View style={modalStyles.inputRow}>
+            <Text style={modalStyles.inputLabel}>Tank size (L)</Text>
+            <TextInput
+              style={modalStyles.input}
+              value={tankText}
+              onChangeText={setTankText}
+              keyboardType="numeric"
+              maxLength={4}
+              placeholderTextColor={Dashboard.textSecondary}
+              placeholder="e.g. 55"
+            />
+          </View>
+          <Text style={modalStyles.hint}>Kia Sportage ≈ 55 L  ·  Most sedans 50–65 L</Text>
+
+          {/* ── Buttons ── */}
+          <View style={modalStyles.btnRow}>
+            <Pressable style={modalStyles.cancelBtn} onPress={onCancel}>
+              <Text style={modalStyles.cancelText}>CANCEL</Text>
+            </Pressable>
+            <Pressable style={modalStyles.saveBtn} onPress={handleSave}>
+              <Text style={modalStyles.saveText}>SAVE</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const modalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: '#000000BB',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  sheet: {
+    backgroundColor: Dashboard.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Dashboard.cardBorder,
+    padding: 24,
+    gap: 16,
+  },
+  title: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Dashboard.textPrimary,
+    letterSpacing: 1.5,
+  },
+  sub: {
+    fontSize: 13,
+    color: Dashboard.textSecondary,
+    lineHeight: 19,
+  },
+  quickRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  quickBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Dashboard.cardBorder,
+    alignItems: 'center',
+    backgroundColor: Dashboard.bg,
+  },
+  quickBtnActive: {
+    borderColor: Dashboard.accent,
+    backgroundColor: Dashboard.accent + '22',
+  },
+  quickLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Dashboard.textSecondary,
+  },
+  quickLabelActive: {
+    color: Dashboard.accent,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  inputLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: Dashboard.textSecondary,
+  },
+  input: {
+    width: 80,
+    backgroundColor: Dashboard.bg,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Dashboard.cardBorder,
+    padding: 10,
+    fontSize: 16,
+    fontWeight: '600',
+    color: Dashboard.textPrimary,
+    textAlign: 'center',
+  },
+  hint: {
+    fontSize: 11,
+    color: Dashboard.textSecondary,
+    marginTop: -8,
+  },
+  btnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Dashboard.cardBorder,
+    alignItems: 'center',
+  },
+  cancelText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Dashboard.textSecondary,
+    letterSpacing: 1,
+  },
+  saveBtn: {
+    flex: 2,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: Dashboard.accent,
+    alignItems: 'center',
+  },
+  saveText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 1,
   },
 });
 
@@ -540,6 +991,63 @@ const styles = StyleSheet.create({
   vehicleChipActive:     { borderColor: Dashboard.accent, backgroundColor: Dashboard.accent + '22' },
   vehicleChipText:       { fontSize: 13, color: Dashboard.textSecondary },
   vehicleChipTextActive: { color: Dashboard.accent, fontWeight: '600' },
+
+  detectionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Dashboard.accent + '15',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Dashboard.accent + '55',
+    padding: 14,
+    marginBottom: 16,
+    gap: 10,
+  },
+  detectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Dashboard.accent,
+  },
+  detectionSub: {
+    fontSize: 12,
+    color: Dashboard.textSecondary,
+    marginTop: 2,
+  },
+  detectionAddBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: Dashboard.accent,
+  },
+  detectionAddText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 1,
+  },
+  detectionDismiss: {
+    padding: 4,
+  },
+  detectionDismissText: {
+    fontSize: 16,
+    color: Dashboard.textSecondary,
+  },
+
+  addVehicleBtn: {
+    borderWidth: 1,
+    borderColor: Dashboard.accent + '66',
+    borderStyle: 'dashed',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  addVehicleBtnText: {
+    fontSize: 13,
+    color: Dashboard.accent,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
 
   statsRow:              { flexDirection: 'row', gap: 12, marginBottom: 20 },
   statCard:              {
