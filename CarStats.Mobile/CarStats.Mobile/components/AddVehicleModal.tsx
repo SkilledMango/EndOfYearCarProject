@@ -91,39 +91,49 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
   const runFuelLookupChain = async (
     make: string, model: string, year: number, hFuelType: string,
   ) => {
+    console.log(`[fuel] looking up ${year} ${make} ${model} (fuelType="${hFuelType}")`);
+
     // Stage 2: EPA (US-market cars)
     try {
       const trimItems = await getTrims(year, make, model);
       if (trimItems.length > 0) {
+        console.log(`[fuel] Stage 2 EPA: ${trimItems.length} trim(s) found`);
         setTrims(trimItems);
         setLoading(false);
         setStep('trim');
         return;
       }
     } catch { /* not in EPA — continue */ }
+    console.log('[fuel] Stage 2 EPA: no match');
 
     // Stage 3: NRCan (Canadian dataset — European petrol + all Asian/US)
     const nrcanL100km = await getNRCanL100km(make, model, year);
     if (nrcanL100km) {
+      console.log(`[fuel] Stage 3 NRCan: ${nrcanL100km} L/100km`);
       setFuelL100km(String(nrcanL100km));
       setFuelSource('nrcan');
       setLoading(false);
       setStep('details');
       return;
     }
+    console.log('[fuel] Stage 3 NRCan: no match');
 
     // Stage 3.5: Gemini AI (global knowledge — covers any model)
+    console.log('[fuel] Stage 3.5 Gemini: querying…');
     const aiL100km = await getGeminiL100km(make, model, year, hFuelType);
     if (aiL100km) {
+      console.log(`[fuel] Stage 3.5 Gemini: ${aiL100km} L/100km`);
       setFuelL100km(String(aiL100km));
       setFuelSource('ai');
       setLoading(false);
       setStep('details');
       return;
     }
+    console.log('[fuel] Stage 3.5 Gemini: no result (key missing, error, or unknown model)');
 
     // Stage 4: Smart default from fuel type
     const suggested = suggestL100kmByFuelType(hFuelType);
+    console.log(`[fuel] Stage 4 fallback: suggested=${suggested}`);
     if (suggested !== null) {
       setFuelL100km(String(suggested));
       setFuelSource('suggested');
