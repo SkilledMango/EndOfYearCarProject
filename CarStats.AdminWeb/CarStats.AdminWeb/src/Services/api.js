@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BASE_URL = 'https://localhost:7077/api';
+const BASE_URL = 'https://carstats-api-fed6fqe5bkcreme6.israelcentral-01.azurewebsites.net/api';
 const DTC_URL = `${BASE_URL}/dtc`;
 const SHOPS_URL = `${BASE_URL}/shops`;
 const USERS_URL = `${BASE_URL}/users`;

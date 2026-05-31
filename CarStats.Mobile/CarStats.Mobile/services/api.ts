@@ -8,8 +8,9 @@ import { Platform } from 'react-native';
  *  - Real device: replace with your machine's LAN IP (e.g. http://192.168.1.42:5279/api)
  *  - Use HTTP in dev to avoid self-signed cert issues
  */
-const HOST =
-  Platform.OS === 'android' ? 'http://10.0.2.2:5279' : 'http://localhost:5279';
+// Production Azure API — used on real devices
+// Change back to localhost:5279 temporarily if doing local development
+const HOST = 'https://carstats-api-fed6fqe5bkcreme6.israelcentral-01.azurewebsites.net';
 
 export const API_BASE_URL = `${HOST}/api`;
 
