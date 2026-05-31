@@ -39,6 +39,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={26} name="clock.fill" color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="navigate"
+        options={{
+          title: 'Navigate',
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="location.fill" color={color} />,
+        }}
+      />
     </Tabs>
   );
 }

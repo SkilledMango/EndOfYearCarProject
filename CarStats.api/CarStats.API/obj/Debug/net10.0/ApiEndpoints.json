@@ -188,6 +188,16 @@
     "ReturnTypes": []
   },
   {
+    "ContainingType": "CarStats.API.Controllers.StatsController",
+    "Method": "GetStats",
+    "RelativePath": "api/Stats",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
     "ContainingType": "CarStats.API.Controllers.UsersController",
     "Method": "GetUsers",
     "RelativePath": "api/Users",

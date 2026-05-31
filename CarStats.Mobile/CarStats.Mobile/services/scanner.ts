@@ -11,9 +11,9 @@
  *   GET /dtcs       → { codes: string[] }
  */
 
-// Fixed IP of the ESP32 Access Point — always 192.168.4.1 when in AP mode.
-// The phone must be connected to the "CarStats-Scanner" WiFi network.
-const SCANNER_BASE_URL = 'http://192.168.4.1';
+// Fixed IP of the ESP32 scanner — static IP assigned in firmware.
+// The ESP32 connects to the phone's hotspot, so no WiFi switching needed.
+const SCANNER_BASE_URL = 'http://192.168.148.100';
 
 /** How long (ms) before a fetch is considered failed */
 const FETCH_TIMEOUT_MS = 3000;

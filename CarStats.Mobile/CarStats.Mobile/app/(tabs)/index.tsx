@@ -149,7 +149,7 @@ export default function HomeScreen() {
 
       // Report each code to the CarStats API so it is logged + translated
       const responses = await Promise.all(
-        codes.map(code => reportDtc(code, CURRENT_USER_ID, selectedVehicle?.id))
+        codes.map(code => reportDtc(code, authUser!.id, selectedVehicle?.id))
       );
       setDtcResults(responses);
       loadData(); // refresh fault count + recent events
