@@ -6,18 +6,6 @@ const SHOPS_URL = `${BASE_URL}/shops`;
 const USERS_URL = `${BASE_URL}/users`;
 const VEHICLES_URL = `${BASE_URL}/vehicles`;
 
-// --- ANALYTICS STATS ---
-
-export const getStats = async () => {
-    try {
-        const response = await axios.get(`${BASE_URL}/stats`);
-        return response.data;
-    } catch (error) {
-        console.error("Error fetching stats:", error);
-        return null;
-    }
-};
-
 // --- DIAGNOSTIC CODES (DTC) SERVICES ---
 
 export const getDiagnosticCodes = async () => {

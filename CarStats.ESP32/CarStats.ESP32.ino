@@ -26,17 +26,10 @@
 #include <ArduinoJson.h>
 #include "driver/twai.h"
 
-// ─── WiFi Station config ──────────────────────────────────────────────────────
-// ESP32 connects TO the phone's mobile hotspot.
-// Phone keeps its internet connection the whole time.
-#define HOTSPOT_SSID  "OrWifi"
-#define HOTSPOT_PASS  "24681357"
-
-// Static IP on Samsung hotspot subnet — always 192.168.148.100
-IPAddress STATIC_IP(192, 168, 148, 100);
-IPAddress GATEWAY  (192, 168, 148,   1);
-IPAddress SUBNET   (255, 255, 255,   0);
-
+// ─── WiFi Access Point config ─────────────────────────────────────────────────
+// Phone connects to THIS network — no internet router needed.
+#define AP_SSID  "CarStats-Scanner"
+#define AP_PASS  "carstats123"       // minimum 8 characters
 
 // ─── CAN pin config (Waveshare ESP32-S3-RS485S-CAN) ──────────────────────────
 #define CAN_TX_PIN  GPIO_NUM_5
@@ -101,25 +94,16 @@ String dtcBytesToString(uint8_t high, uint8_t low);
 // ─── Setup ────────────────────────────────────────────────────────────────────
 void setup() {
   Serial.begin(115200);
-  delay(3000);   // wait for Serial Monitor to connect
+  delay(500);
   Serial.println("\n[CarStats] Booting...");
 
-  // 1. Connect to phone hotspot in Station mode
-  WiFi.mode(WIFI_STA);
-  WiFi.config(STATIC_IP, GATEWAY, SUBNET);
-  WiFi.begin(HOTSPOT_SSID, HOTSPOT_PASS);
-  Serial.printf("[CarStats] Connecting to hotspot: %s\n", HOTSPOT_SSID);
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-    delay(500);
-    Serial.print(".");
-    attempts++;
-  }
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.printf("\n[CarStats] Connected! IP: %s\n", WiFi.localIP().toString().c_str());
-  } else {
-    Serial.println("\n[CarStats] Could not connect to hotspot — check SSID/password");
-  }
+  // 1. Start WiFi in Access Point mode
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(AP_SSID, AP_PASS);
+  Serial.printf("[CarStats] Access Point started\n");
+  Serial.printf("[CarStats] SSID     : %s\n", AP_SSID);
+  Serial.printf("[CarStats] Password : %s\n", AP_PASS);
+  Serial.printf("[CarStats] IP       : %s\n", WiFi.softAPIP().toString().c_str());
 
   // 2. Initialise TWAI (CAN) driver
   if (twaiInit()) {
@@ -148,30 +132,6 @@ void setup() {
 // ─── Loop ─────────────────────────────────────────────────────────────────────
 void loop() {
   server.handleClient();
-
-  // Print WiFi status every 5 seconds
-  static unsigned long lastStatusMs = 0;
-  if (millis() - lastStatusMs >= 5000) {
-    lastStatusMs = millis();
-    int wifiStatus = WiFi.status();
-    Serial.printf("[WiFi] status=%d  IP=%s  SSID=%s\n",
-      wifiStatus,
-      WiFi.localIP().toString().c_str(),
-      WiFi.SSID().c_str()
-    );
-    // status codes: 3=CONNECTED, 1=NO_SSID, 4=WRONG_PASSWORD, 6=DISCONNECTED
-  }
-
-  // Respond to any message typed in Serial Monitor
-  if (Serial.available()) {
-    Serial.readStringUntil('\n'); // consume input
-    Serial.printf("[STATUS] WiFi=%d  IP=%s  SSID=%s  uptime=%lus\n",
-      WiFi.status(),
-      WiFi.localIP().toString().c_str(),
-      WiFi.SSID().c_str(),
-      millis() / 1000
-    );
-  }
 
   if (millis() - lastPollMs >= POLL_INTERVAL_MS) {
     lastPollMs = millis();
@@ -325,11 +285,11 @@ void handleStatus() {
   setCorsHeaders();
   StaticJsonDocument<256> doc;
   doc["device"]        = "carstats-scanner";
-  doc["ssid"]          = HOTSPOT_SSID;
-  doc["ip"]            = WiFi.localIP().toString();
+  doc["ssid"]          = AP_SSID;
+  doc["ip"]            = WiFi.softAPIP().toString();
   doc["uptimeSeconds"] = millis() / 1000;
   doc["simMode"]       = simMode;
-  doc["connected"]     = (WiFi.status() == WL_CONNECTED);
+  doc["connectedClients"] = WiFi.softAPgetStationNum();
   String body;
   serializeJson(doc, body);
   server.send(200, "application/json", body);

@@ -335,18 +335,6 @@
         }
       }
     },
-    "/api/Stats": {
-      "get": {
-        "tags": [
-          "Stats"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        }
-      }
-    },
     "/api/Users": {
       "get": {
         "tags": [
@@ -1022,9 +1010,6 @@
     },
     {
       "name": "Shops"
-    },
-    {
-      "name": "Stats"
     },
     {
       "name": "Users"
