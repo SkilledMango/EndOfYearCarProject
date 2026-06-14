@@ -8,12 +8,15 @@
 # ─── .NET / ASP.NET Core build output ────────────────────────────────────────
 **/bin/
 **/obj/
+**/publish/
+**/publish-somee/
 *.nupkg
 *.snupkg
 
 # ─── App secrets & config overrides ──────────────────────────────────────────
 **/appsettings.Development.json
 **/appsettings.Local.json
+**/appsettings.Production.json
 **/secrets.json
 
 # ─── Node / npm ───────────────────────────────────────────────────────────────
