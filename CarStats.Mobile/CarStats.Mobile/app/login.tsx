@@ -33,6 +33,12 @@ export default function LoginScreen() {
       await login(email.trim(), password);
       // AuthContext sets the user → _layout.tsx automatically navigates to tabs
     } catch (err: any) {
+      // Unverified account — the API just emailed a fresh code. Send them to
+      // the verification step with their email pre-filled.
+      if (err?.code === 'EMAIL_NOT_VERIFIED') {
+        router.push({ pathname: '/register', params: { verifyEmail: err.email ?? email.trim() } });
+        return;
+      }
       setError(err.message ?? 'Login failed. Please try again.');
     } finally {
       setLoading(false);

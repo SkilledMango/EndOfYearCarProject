@@ -21,13 +21,17 @@ function RootNavigator() {
   useEffect(() => {
     if (isLoading) return;
 
-    const onLoginScreen = segments[0] === 'login';
+    const onLoginScreen    = segments[0] === 'login';
+    const onRegisterScreen = segments[0] === 'register';
+    const inAuthFlow       = onLoginScreen || onRegisterScreen;
 
-    if (!user && !onLoginScreen) {
-      // Not logged in — go to login
+    if (!user && !inAuthFlow) {
+      // Not logged in and not on an auth screen — go to login
       router.replace('/login');
     } else if (user && onLoginScreen) {
-      // Already logged in — go to main app
+      // Already logged in on the login screen — go to main app.
+      // NOTE: we intentionally do NOT redirect away from the register screen
+      // when a user exists, so the post-signup "add your first car" step can show.
       router.replace('/(tabs)');
     }
   }, [user, isLoading, segments]);

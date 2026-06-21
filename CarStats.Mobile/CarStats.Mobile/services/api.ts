@@ -3,14 +3,14 @@ import { Platform } from 'react-native';
 
 /**
  * NOTES FOR THE TEAM:
- *  - Android emulator: 10.0.2.2 reaches the host machine (not localhost)
- *  - iOS simulator + web: plain localhost works
- *  - Real device: replace with your machine's LAN IP (e.g. http://192.168.1.42:5279/api)
- *  - Use HTTP in dev to avoid self-signed cert issues
+ *  - Production API is hosted on Somee (HTTPS works on the *.somee.com domain).
+ *  - For local development against your own machine, temporarily switch HOST to:
+ *      Android emulator:  http://10.0.2.2:5279   (10.0.2.2 reaches the host)
+ *      iOS sim / web:     http://localhost:5279
+ *      Real device:       http://<your-LAN-IP>:5279
  */
-// Production Azure API — used on real devices
-// Change back to localhost:5279 temporarily if doing local development
-const HOST = 'https://carstats-api-fed6fqe5bkcreme6.israelcentral-01.azurewebsites.net';
+// Production Somee API — used on real devices
+const HOST = 'https://CarProject.somee.com';
 
 export const API_BASE_URL = `${HOST}/api`;
 

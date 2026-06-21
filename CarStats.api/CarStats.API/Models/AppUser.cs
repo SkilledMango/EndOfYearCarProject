@@ -32,6 +32,14 @@ namespace CarStats.API.Models
         public int TotalFaultsLogged { get; set; } = 0;
         public bool IsPremiumMember { get; set; } = false;
 
+        // --- EMAIL VERIFICATION ---
+        public bool IsEmailVerified { get; set; } = false;
+
+        [MaxLength(6)]
+        public string? EmailVerificationCode { get; set; }
+
+        public DateTime? VerificationCodeExpiresAt { get; set; }
+
         // --- RELATIONSHIPS ---
         public List<Vehicle> Vehicles { get; set; } = new();
         public List<DiagnosticCode> SavedCodes { get; set; } = new();

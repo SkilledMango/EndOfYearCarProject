@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
 using CarStats.API.Data;
+using CarStats.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,6 +42,9 @@ builder.Services.AddCors(options =>
             }
         });
 });
+
+// Email provider (Brevo HTTP API) for sending verification codes
+builder.Services.AddHttpClient<IEmailService, BrevoEmailService>();
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
