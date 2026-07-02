@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getShops, addShop, deleteShop } from '../services/api';
+import { getShops, addShop, deleteShop } from '../Services/api';
 import { 
     Table, TableBody, TableCell, TableContainer, TableHead, 
     TableRow, Paper, Button, Dialog, DialogTitle, DialogContent, 

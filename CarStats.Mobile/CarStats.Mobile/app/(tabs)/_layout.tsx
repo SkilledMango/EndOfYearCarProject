@@ -21,7 +21,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
+          title: 'Garage',
           tabBarIcon: ({ color }) => <IconSymbol size={26} name="house.fill" color={color} />,
         }}
       />
@@ -42,8 +42,15 @@ export default function TabLayout() {
       <Tabs.Screen
         name="navigate"
         options={{
-          title: 'Navigate',
+          title: 'Mechanics',
           tabBarIcon: ({ color }) => <IconSymbol size={26} name="location.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="person.fill" color={color} />,
         }}
       />
     </Tabs>

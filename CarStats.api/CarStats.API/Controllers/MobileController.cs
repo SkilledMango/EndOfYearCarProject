@@ -50,6 +50,14 @@ namespace CarStats.API.Controllers
                 VehicleId = request.VehicleId
             };
             _context.VehicleEvents.Add(newEvent);
+
+            // Keep the user's lifetime fault counter in sync
+            if (request.UserId.HasValue)
+            {
+                var user = await _context.Users.FindAsync(request.UserId.Value);
+                if (user != null) user.TotalFaultsLogged++;
+            }
+
             await _context.SaveChangesAsync();
 
             // 2. Look up the human-readable translation from the dictionary
@@ -88,11 +96,22 @@ namespace CarStats.API.Controllers
                 .OrderByDescending(e => e.Timestamp)
                 .ToListAsync();
 
-            var enriched = await Task.WhenAll(events.Select(async ev =>
-            {
-                var dtc = await _context.DiagnosticCodes
-                    .FirstOrDefaultAsync(d => d.ErrorCode == ev.RawErrorCode);
+            // Load all referenced DTC translations in ONE query, then join in
+            // memory. (Task.WhenAll over the same DbContext is not thread-safe
+            // and the previous version also caused an N+1 query per event.)
+            var codes = events.Select(e => e.RawErrorCode).Distinct().ToList();
+            var dtcRows = await _context.DiagnosticCodes
+                .Where(d => codes.Contains(d.ErrorCode))
+                .ToListAsync();
+            // Group defensively — the dictionary table may contain duplicate
+            // ErrorCode rows; keep the first match per code like before.
+            var dtcMap = dtcRows
+                .GroupBy(d => d.ErrorCode)
+                .ToDictionary(g => g.Key, g => g.First());
 
+            var enriched = events.Select(ev =>
+            {
+                dtcMap.TryGetValue(ev.RawErrorCode, out var dtc);
                 return new
                 {
                     ev.Id,
@@ -108,7 +127,7 @@ namespace CarStats.API.Controllers
                         dtc.EstimatedCostMax
                     } : null
                 };
-            }));
+            }).ToList();
 
             return Ok(enriched);
         }

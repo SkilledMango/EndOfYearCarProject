@@ -1,71 +1,39 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * CarStats theme tokens — single source of truth for colors used across the app.
  */
 
-import { Platform } from 'react-native';
-
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
-
-export const Colors = {
-  light: {
-    text: '#11181C',
-    background: '#fff',
-    tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
-  },
-  dark: {
-    text: '#ECEDEE',
-    background: '#151718',
-    tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: tintColorDark,
-  },
+// CarStats "Soft Tech" light palette (from the Stitch design system).
+// Token names kept from the old dark theme so every screen re-skins at once.
+export const Dashboard = {
+  bg: '#F1F1F9',          // page background — light cool lavender-grey
+  card: '#FFFFFF',        // white surface cards
+  cardBorder: '#E2E1ED',  // subtle card/input outline
+  textPrimary: '#191B23', // near-black ink
+  textSecondary: '#5B5F70',
+  accent: '#1353D8',      // Engine Blue — buttons, active states
+  accentDeep: '#003FB1',  // pressed / emphasis blue
+  accentSoft: '#DBE1FF',  // light blue tint (icon chips, active tab pill)
 };
 
-// CarStats dark dashboard palette
-export const Dashboard = {
-  bg: '#0F0F14',
-  card: '#1C1C27',
-  cardBorder: '#2A2A38',
-  textPrimary: '#F1F5F9',
-  textSecondary: '#94A3B8',
-  accent: '#3B82F6',
+// Israeli license-plate component colors (Stitch design)
+export const Plate = {
+  yellow: '#FFD700',
+  border: '#191B23',
+  tabBlue: '#1353D8',
 };
 
 // OBD-II severity colors — maps to SeverityLevel enum (Green=1, Yellow=2, Red=3)
+// High-chroma but dark enough to stay readable on light surfaces.
 export const Severity = {
-  green: '#22C55E',
-  yellow: '#EAB308',
-  red: '#EF4444',
+  green: '#059669',   // Emerald — healthy / connected
+  yellow: '#D97706',  // Warm amber — caution
+  red: '#BA1A1A',     // Crimson — urgent
   unknown: '#6B7280',
 };
 
-export const Fonts = Platform.select({
-  ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
-  },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
-  },
-  web: {
-    sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-    serif: "Georgia, 'Times New Roman', serif",
-    rounded: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
-    mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-  },
-});
+// Soft tinted containers behind status content (design "containers")
+export const SeveritySoft = {
+  green: '#DEF7EC',
+  yellow: '#FDF0DC',
+  red: '#FFDAD6',
+};

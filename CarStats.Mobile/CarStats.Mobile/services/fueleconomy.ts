@@ -12,22 +12,9 @@
  * but it is accurate enough as a default for the vehicle profile.
  */
 
+import { fetchWithTimeout } from './http';
+
 const FE_BASE = 'https://www.fueleconomy.gov/ws/rest';
-
-// ─── Shared fetch helper with timeout ────────────────────────────────────────
-
-async function timedFetch(url: string, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, {
-      headers: { Accept: 'application/json' },
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,7 +49,7 @@ function normalizeItems(raw: unknown): FEMenuItem[] {
 }
 
 async function feGet(path: string): Promise<unknown> {
-  const res = await timedFetch(`${FE_BASE}${path}`, 6000);
+  const res = await fetchWithTimeout(`${FE_BASE}${path}`, 6000);
   if (!res.ok) throw new Error(`FuelEconomy.gov error ${res.status} on ${path}`);
   return res.json();
 }
@@ -170,7 +157,7 @@ export async function getNRCanL100km(
     }));
     const url = `${NRCAN_BASE}?resource_id=${resourceId}&filters=${filters}&limit=50`;
 
-    const res = await timedFetch(url, 8000);
+    const res = await fetchWithTimeout(url, 8000);
     if (!res.ok) return null;
 
     const json = await res.json();
@@ -208,19 +195,19 @@ export async function getNRCanL100km(
 
 // ─── Gemini AI fuel lookup ────────────────────────────────────────────────────
 //
-// Uses Google Gemini 1.5 Flash (free tier: 1,500 req/day) to look up
-// WLTP combined fuel consumption for any car model worldwide.
-// Works for European diesels, obscure trims, and cars not in EPA/NRCan.
+// Uses Google Gemini 2.0 Flash (free tier) to look up WLTP combined fuel
+// consumption for any car model worldwide. Works for European diesels,
+// obscure trims, and cars not in EPA/NRCan.
+// (gemini-1.5-flash was retired by Google for new API projects — do not use.)
 //
 // Get a free key at: https://aistudio.google.com  (takes ~30 seconds)
-// Then replace the empty string below with your key.
 
 // Loaded from .env (gitignored). Set EXPO_PUBLIC_GEMINI_API_KEY in your .env file.
 // See .env.example for the format. If blank, Gemini lookup is silently skipped.
 const GEMINI_API_KEY: string = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
 
 const GEMINI_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
 /**
  * Asks Gemini for the WLTP combined fuel consumption (L/100km) of a specific car.
@@ -247,18 +234,14 @@ export async function getGeminiL100km(
     `Reply with ONLY the number, for example: 5.2. ` +
     `If the car is electric or you don't know, reply: unknown`;
 
-  const controller = new AbortController();
-  const timer      = setTimeout(() => controller.abort(), 8000);
-
   try {
-    const res = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+    const res = await fetchWithTimeout(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, 8000, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body:    JSON.stringify({
         contents:         [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0, maxOutputTokens: 16 },
       }),
-      signal: controller.signal,
     });
 
     if (!res.ok) return null;
@@ -276,8 +259,6 @@ export async function getGeminiL100km(
     return isFinite(num) && num >= 2 && num <= 35 ? Math.round(num * 10) / 10 : null;
   } catch {
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
 

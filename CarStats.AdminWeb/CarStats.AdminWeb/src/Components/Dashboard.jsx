@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getDiagnosticCodes, addDiagnosticCode, deleteDiagnosticCode } from '../services/api';
+import { getDiagnosticCodes, addDiagnosticCode, deleteDiagnosticCode } from '../Services/api';
 import { 
     Table, TableBody, TableCell, TableContainer, TableHead, 
     TableRow, Paper, Button, Dialog, DialogTitle, DialogContent, 

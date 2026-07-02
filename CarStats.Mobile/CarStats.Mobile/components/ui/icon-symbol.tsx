@@ -20,6 +20,8 @@ const MAPPING = {
   'paperplane.fill': 'send',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
+  'location.fill': 'place',        // was missing — Navigate tab icon broke on Android
+  'person.fill': 'person',         // Profile tab
 } as IconMapping;
 
 /**

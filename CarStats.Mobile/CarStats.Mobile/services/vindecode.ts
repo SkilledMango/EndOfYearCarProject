@@ -18,6 +18,7 @@
  */
 
 import { Vehicle } from './api';
+import { fetchWithTimeout } from './http';
 
 const NHTSA_BASE = 'https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin';
 
@@ -37,14 +38,8 @@ export interface VinDecodeResult {
 export async function decodeVin(vin: string): Promise<VinDecodeResult | null> {
   if (!vin || vin.length !== 17) return null;
 
-  const controller = new AbortController();
-  const timer      = setTimeout(() => controller.abort(), 8000);
-
   try {
-    const res = await fetch(`${NHTSA_BASE}/${encodeURIComponent(vin)}?format=json`, {
-      headers: { Accept: 'application/json' },
-      signal:  controller.signal,
-    });
+    const res = await fetchWithTimeout(`${NHTSA_BASE}/${encodeURIComponent(vin)}?format=json`, 8000);
     if (!res.ok) return null;
 
     const json = await res.json();
@@ -58,10 +53,8 @@ export async function decodeVin(vin: string): Promise<VinDecodeResult | null> {
     const model    = get('Model');
     const yearStr  = get('Model Year');
     const year     = parseInt(yearStr, 10);
-    const errorCode = get('Error Code');  // "0" = no error
 
-    // NHTSA returns error code "0" for clean decodes; non-zero means partial
-    // We still proceed if we got at least a make and year
+    // NHTSA decodes can be partial — proceed if we got at least a make and year
     if (!make || !year) return null;
 
     // Title-case the make so "KIA" → "Kia", "MERCEDES-BENZ" → "Mercedes-Benz"
@@ -78,8 +71,6 @@ export async function decodeVin(vin: string): Promise<VinDecodeResult | null> {
     return { vin, make: titleMake, model: titleModel, year };
   } catch {
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
 

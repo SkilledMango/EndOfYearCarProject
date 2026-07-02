@@ -6,6 +6,34 @@ const SHOPS_URL = `${BASE_URL}/shops`;
 const USERS_URL = `${BASE_URL}/users`;
 const VEHICLES_URL = `${BASE_URL}/vehicles`;
 
+// --- AUTH (admin panel login) ---
+
+// Role values mirror the C# UserRole enum
+export const ROLE_ADMIN = 2;
+export const ROLE_SUPERADMIN = 3;
+
+/**
+ * Logs in against the shared /auth/login endpoint.
+ * Throws an Error with a user-readable message on failure.
+ * Only Admin / SuperAdmin accounts are allowed into the panel.
+ */
+export const login = async (email, password) => {
+    let response;
+    try {
+        response = await axios.post(`${BASE_URL}/auth/login`, { email, password });
+    } catch (error) {
+        const status = error?.response?.status;
+        if (status === 401) throw new Error('Incorrect email or password.');
+        if (status === 403) throw new Error('This account has not verified its email yet.');
+        throw new Error('Could not reach the server. Please try again.');
+    }
+    const user = response.data;
+    if (user.role !== ROLE_ADMIN && user.role !== ROLE_SUPERADMIN) {
+        throw new Error('This account does not have admin access.');
+    }
+    return user;
+};
+
 // --- ANALYTICS STATS ---
 
 export const getStats = async () => {

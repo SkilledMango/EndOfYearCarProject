@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Add Vehicle</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-tint": "#1353d8",
+                      "on-primary-fixed": "#00174d",
+                      "on-surface-variant": "#434654",
+                      "on-error-container": "#93000a",
+                      "surface-container-low": "#f3f3fe",
+                      "secondary-container": "#6cf8bb",
+                      "secondary-fixed": "#6ffbbe",
+                      "tertiary-container": "#895600",
+                      "surface-bright": "#faf8ff",
+                      "tertiary": "#694100",
+                      "on-surface": "#191b23",
+                      "surface-variant": "#e2e1ed",
+                      "error-container": "#ffdad6",
+                      "outline": "#737686",
+                      "on-tertiary-container": "#ffd6a8",
+                      "on-tertiary-fixed": "#2a1700",
+                      "primary-fixed": "#dbe1ff",
+                      "on-secondary": "#ffffff",
+                      "tertiary-fixed-dim": "#ffb95f",
+                      "on-secondary-fixed": "#002113",
+                      "on-tertiary": "#ffffff",
+                      "primary-container": "#1a56db",
+                      "tertiary-fixed": "#ffddb8",
+                      "on-primary-container": "#d4dcff",
+                      "surface-container-lowest": "#ffffff",
+                      "on-primary-fixed-variant": "#003dab",
+                      "on-tertiary-fixed-variant": "#653e00",
+                      "error": "#ba1a1a",
+                      "background": "#faf8ff",
+                      "outline-variant": "#c3c5d7",
+                      "surface-dim": "#d9d9e4",
+                      "primary-fixed-dim": "#b5c4ff",
+                      "surface-container-high": "#e7e7f3",
+                      "on-secondary-fixed-variant": "#005236",
+                      "on-background": "#191b23",
+                      "inverse-on-surface": "#f0f0fb",
+                      "secondary-fixed-dim": "#4edea3",
+                      "primary": "#003fb1",
+                      "surface": "#faf8ff",
+                      "on-secondary-container": "#00714d",
+                      "inverse-surface": "#2e3039",
+                      "surface-container-highest": "#e2e1ed",
+                      "on-error": "#ffffff",
+                      "inverse-primary": "#b5c4ff",
+                      "on-primary": "#ffffff",
+                      "surface-container": "#ededf8",
+                      "secondary": "#006c49"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "sm": "8px",
+                      "unit": "4px",
+                      "container-padding": "20px",
+                      "md": "16px",
+                      "xs": "4px",
+                      "lg": "24px",
+                      "xl": "32px",
+                      "card-gap": "16px"
+              },
+              "fontFamily": {
+                      "headline-lg": [
+                              "Inter"
+                      ],
+                      "headline-lg-mobile": [
+                              "Inter"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "body-sm": [
+                              "Inter"
+                      ],
+                      "label-md": [
+                              "Inter"
+                      ],
+                      "headline-sm": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "28px",
+                              {
+                                      "lineHeight": "34px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "26px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-sm": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-sm": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+        body {
+            background-color: #faf8ff;
+            color: #191b23;
+        }
+        
+        /* Israeli License Plate Custom Styling */
+        .il-plate {
+            background-color: #FFD700;
+            border: 2px solid #000;
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.4), 0 4px 6px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+        
+        .il-plate-strip {
+            background-color: #003fb1; /* Using primary color for consistency */
+            width: 48px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            border-right: 1px solid rgba(0,0,0,0.2);
+        }
+
+        .il-plate-input {
+            background: transparent;
+            border: none;
+            outline: none;
+            text-align: center;
+            font-family: monospace;
+            font-size: 32px;
+            font-weight: 700;
+            color: #000;
+            letter-spacing: 4px;
+            width: 100%;
+        }
+
+        .il-plate-input::placeholder {
+            color: rgba(0,0,0,0.3);
+        }
+
+        /* Glassmorphism Card */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.05);
+        }
+        
+        .active-state-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(25, 27, 35, 0.4);
+            backdrop-filter: blur(4px);
+            z-index: 40;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .confirmation-card {
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        
+        .confirmation-card.show {
+            transform: translateY(0);
+        }
+        
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="min-h-screen bg-background font-body-md text-on-background pb-32">
+<!-- Top Navigation (Task-focused, so standard shell is suppressed, using a specialized header) -->
+<header class="fixed top-0 w-full z-30 bg-surface/90 backdrop-blur-md shadow-sm h-16 flex items-center px-container-padding">
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-high transition-colors text-on-surface-variant">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">arrow_back</span>
+</button>
+<h1 class="ml-4 font-headline-sm text-headline-sm text-on-background">Add Vehicle</h1>
+</header>
+<main class="pt-24 px-container-padding max-w-md mx-auto space-y-8">
+<!-- Header Section -->
+<div class="text-center space-y-2">
+<div class="w-20 h-20 mx-auto bg-primary-container/20 rounded-full flex items-center justify-center mb-4">
+<span class="material-symbols-outlined text-primary text-4xl" style="font-variation-settings: 'FILL' 1;">directions_car</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-background">Let's find your car</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Enter your license plate number to automatically retrieve vehicle details.</p>
+</div>
+<!-- License Plate Input Area -->
+<div class="space-y-6">
+<div class="il-plate flex h-20 w-full shadow-lg">
+<!-- Blue Strip -->
+<div class="il-plate-strip flex-shrink-0">
+<span class="material-symbols-outlined text-sm mb-1" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-bold text-xs tracking-widest mt-1">IL</span>
+<span class="text-[8px] font-bold mt-1">ישראל</span>
+</div>
+<!-- Input Area -->
+<div class="flex-grow flex items-center relative bg-[#FFD700]">
+<!-- Subtle dashes pattern -->
+<div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(#000 1px, transparent 1px); background-size: 8px 8px;"></div>
+<input autocomplete="off" class="il-plate-input z-10" id="plateInput" maxlength="10" placeholder="123-45-678" type="text"/>
+</div>
+</div>
+<button class="w-full h-14 bg-primary text-on-primary font-bold rounded-xl shadow-[0_8px_20px_rgba(0,63,177,0.2)] hover:bg-on-primary-fixed-variant transition-all active:scale-95 flex items-center justify-center gap-2" id="lookupBtn">
+<span class="material-symbols-outlined">search</span>
+                Look Up My Car
+            </button>
+<div class="text-center">
+<button class="font-body-sm text-body-sm text-primary font-semibold hover:underline">Enter manually instead</button>
+</div>
+</div>
+</main>
+<!-- Overlay for Confirmation State -->
+<div class="active-state-overlay" id="overlay"></div>
+<!-- Confirmation Bottom Sheet -->
+<div class="confirmation-card fixed bottom-0 left-0 w-full bg-surface rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.1)] z-50 px-container-padding pt-6 pb-8 pb-safe max-w-md mx-auto right-0" id="confirmationSheet">
+<!-- Handle -->
+<div class="w-12 h-1.5 bg-outline-variant rounded-full mx-auto mb-6"></div>
+<div class="flex items-center gap-4 mb-8 bg-surface-container-low p-4 rounded-2xl border border-surface-variant">
+<div class="w-16 h-16 rounded-xl bg-surface-container-high flex items-center justify-center flex-shrink-0 relative overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A sleek, modern 2021 Mazda CX-5 SUV parked in a bright, clean, minimalist studio setting with soft top-down lighting. The car is a deep, rich red color, contrasting with the pure white background. The aesthetic is high-end automotive photography, extremely detailed, showcasing the vehicle's sharp lines and premium design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBu_2EFMj_hDAQbSMlC6B4kzR5hF0HNqqReP4bKciy9lvkpDEuQE37cklzWgUA2AFDSl4U1oDwq821a5d1ED9ixrn-gGg5m_hv_YujweWAT7Fmwp0cgbwsAjAQ8AuHsr6vPTVC68GYISLT3UX-hnB9Gb0KHk5eoQsyWxuhGT_m_0dRbtHFRcUQrtUgseBGCJZKsrDNbrBgMqqNcQ5Qx5YteZ9M1k8r8FwULVbwm_GTLNMIKFkTStNmn7oT4ROzmn8m8H_4uBsKiH37z"/>
+</div>
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-background">2021 Mazda CX-5</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1 mt-1">
+<span class="material-symbols-outlined text-[16px]">build_circle</span>
+                    2.5L SkyActiv-G
+                </p>
+</div>
+<div class="ml-auto w-8 h-8 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+</div>
+<div class="space-y-6">
+<div>
+<label class="block font-label-md text-label-md text-on-surface-variant mb-2">Average Fuel Economy</label>
+<div class="relative">
+<input class="w-full h-14 bg-surface-bright border border-outline-variant rounded-xl px-4 font-body-md text-on-background focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" placeholder="e.g. 7.5" type="number"/>
+<span class="absolute right-4 top-1/2 -translate-y-1/2 font-body-sm text-on-surface-variant">L/100km</span>
+</div>
+<p class="font-body-sm text-body-sm text-outline mt-2">Optional. Helps us track your efficiency.</p>
+</div>
+<button class="w-full h-14 bg-primary text-on-primary font-bold rounded-xl shadow-[0_8px_20px_rgba(0,63,177,0.2)] hover:bg-on-primary-fixed-variant transition-all active:scale-95 flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">add_circle</span>
+                Add to Garage
+            </button>
+</div>
+</div>
+<script>
+        // Formatting for Israeli license plate (typically 7 or 8 digits)
+        const plateInput = document.getElementById('plateInput');
+        plateInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, ''); // Remove non-digits
+            let formatted = value;
+            
+            // Format 7 or 8 digit plates typical in Israel (e.g., 12-345-67 or 123-45-678)
+            if (value.length > 7) {
+                if (value.length > 2) formatted = value.slice(0,3) + '-' + value.slice(3);
+                if (value.length > 5) formatted = formatted.slice(0,6) + '-' + formatted.slice(6);
+            } else {
+                if (value.length > 2) formatted = value.slice(0,2) + '-' + value.slice(2);
+                if (value.length > 5) formatted = formatted.slice(0,6) + '-' + formatted.slice(6);
+            }
+            
+            e.target.value = formatted;
+        });
+
+        // Simulate lookup
+        const lookupBtn = document.getElementById('lookupBtn');
+        const overlay = document.getElementById('overlay');
+        const confirmationSheet = document.getElementById('confirmationSheet');
+
+        lookupBtn.addEventListener('click', () => {
+            if(plateInput.value.length < 5) return; // Simple validation
+            
+            // Show loading state on button
+            const originalContent = lookupBtn.innerHTML;
+            lookupBtn.innerHTML = '<span class="material-symbols-outlined animate-spin">refresh</span> Looking up...';
+            
+            // Simulate network request
+            setTimeout(() => {
+                lookupBtn.innerHTML = originalContent;
+                overlay.style.display = 'block';
+                // Trigger reflow
+                void overlay.offsetWidth;
+                overlay.style.opacity = '1';
+                confirmationSheet.classList.add('show');
+            }, 800);
+        });
+
+        // Close sheet on overlay click
+        overlay.addEventListener('click', () => {
+            confirmationSheet.classList.remove('show');
+            overlay.style.opacity = '0';
+            setTimeout(() => {
+                overlay.style.display = 'none';
+            }, 300);
+        });
+    </script>
+</body></html>

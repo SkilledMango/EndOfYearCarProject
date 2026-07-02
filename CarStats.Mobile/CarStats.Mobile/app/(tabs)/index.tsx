@@ -32,7 +32,7 @@ import {
   scanDtcs,
 } from '@/services/scanner';
 import { decodeVin, VinDecodeResult, vinMatchesVehicle } from '@/services/vindecode';
-import { Dashboard, Severity } from '@/constants/theme';
+import { Dashboard, Plate, Severity, SeveritySoft } from '@/constants/theme';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -59,7 +59,7 @@ function fuelKey(vehicleId?: number) {
 // ─── Home Screen ──────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
-  const { user: authUser, logout } = useAuth();
+  const { user: authUser } = useAuth();
 
   // ── User / vehicle state ──
   const [user, setUser]                     = useState<AppUser | null>(null);
@@ -282,24 +282,58 @@ export default function HomeScreen() {
 
   const firstName    = user?.fullName?.split(' ')[0] ?? 'Driver';
   const vehicles     = user?.vehicles ?? [];
-  const vehicleName  = selectedVehicle
-    ? `${selectedVehicle.year} ${selectedVehicle.make} ${selectedVehicle.model}`
-    : 'No vehicle registered';
   const vehiclePlate = selectedVehicle?.licensePlate ?? '—';
   const fuelAvg      = selectedVehicle?.averageFuelConsumption ?? null;
+
+  // Overall health derived from the most recent alerts
+  const worstRecent: SeverityLevel | null = recentEvents.reduce<SeverityLevel | null>(
+    (worst, ev) => {
+      const s = ev.translation?.severity;
+      if (s == null) return worst;
+      return worst == null || s > worst ? s : worst;
+    }, null);
+  const healthGood = worstRecent == null || worstRecent === SeverityLevel.Green;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
 
-      {/* ── Header ── */}
+      {/* ── Header: avatar + greeting ── */}
       <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.greeting}>Good day, {firstName}</Text>
-          <Text style={styles.vehicleInfo}>{vehicleName}{'  ·  '}{vehiclePlate}</Text>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{firstName[0]?.toUpperCase() ?? '?'}</Text>
         </View>
-        <Pressable onPress={logout} style={styles.logoutBtn}>
-          <Text style={styles.logoutText}>Sign out</Text>
-        </Pressable>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={styles.greetingSmall}>Good Morning</Text>
+          <Text style={styles.greeting}>{firstName}</Text>
+        </View>
+      </View>
+
+      {/* ── Vehicle card (name + health chip + Israeli plate) ── */}
+      <View style={styles.vehicleCard}>
+        <View style={styles.vehicleCardTop}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.vehicleCardName}>
+              {selectedVehicle ? `${selectedVehicle.make} ${selectedVehicle.model}` : 'No vehicle yet'}
+            </Text>
+            <Text style={styles.vehicleCardSub}>
+              {selectedVehicle ? `${selectedVehicle.year}` : 'Add your car to get started'}
+            </Text>
+          </View>
+          <View style={styles.healthChip}>
+            <View style={styles.healthChipDot} />
+            <Text style={styles.healthChipText}>
+              {(user?.totalFaultsLogged ?? 0) === 0 ? 'Healthy' : 'Check'}
+            </Text>
+          </View>
+        </View>
+        {selectedVehicle && (
+          <View style={styles.miniPlate}>
+            <View style={styles.miniPlateTab}>
+              <Text style={styles.miniPlateIL}>IL</Text>
+            </View>
+            <Text style={styles.miniPlateText}>{vehiclePlate}</Text>
+          </View>
+        )}
       </View>
 
       {/* ── Vehicle chips ── */}
@@ -358,6 +392,19 @@ export default function HomeScreen() {
         <Text style={styles.addVehicleBtnText}>＋  Add vehicle</Text>
       </Pressable>
 
+      {/* ── Vehicle health status card ── */}
+      <View style={[styles.healthCard, !healthGood && styles.healthCardWarn]}>
+        <View style={[styles.healthCircle, !healthGood && styles.healthCircleWarn]} />
+        <Text style={styles.healthTitle}>
+          {healthGood ? 'Vehicle is in great shape' : 'Attention needed'}
+        </Text>
+        <Text style={styles.healthSub}>
+          {healthGood
+            ? 'All critical systems are functioning normally.'
+            : 'Recent fault codes need your attention — check the alerts below.'}
+        </Text>
+      </View>
+
       {/* ── Stat cards ── */}
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
@@ -404,7 +451,7 @@ export default function HomeScreen() {
         >
           {scanning
             ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.scanButtonText}>SCAN MY CAR</Text>}
+            : <Text style={styles.scanButtonText}>🔍  Scan My Car</Text>}
         </Pressable>
         {scanError && (
           <Text style={styles.scanErrorText}>{scanError}</Text>
@@ -957,7 +1004,7 @@ function DtcResultCard({ result }: { result: ReportDtcResponse }) {
         <View style={[styles.costPill, { borderColor: meta.accent }]}>
           <Text style={styles.costLabel}>EST. REPAIR COST</Text>
           <Text style={[styles.costValue, { color: meta.accent }]}>
-            ${t.estimatedCostMin} – ${t.estimatedCostMax}
+            ₪{t.estimatedCostMin} – ₪{t.estimatedCostMax}
           </Text>
         </View>
       )}
@@ -972,11 +1019,107 @@ const styles = StyleSheet.create({
   centered:              { justifyContent: 'center', alignItems: 'center' },
   content:               { padding: 24, paddingTop: 64, paddingBottom: 40 },
 
-  header:                { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 16 },
-  greeting:              { fontSize: 26, fontWeight: '700', color: Dashboard.textPrimary },
-  vehicleInfo:           { fontSize: 14, color: Dashboard.textSecondary, marginTop: 4 },
-  logoutBtn:             { paddingTop: 4, paddingLeft: 8 },
-  logoutText:            { fontSize: 12, color: Dashboard.textSecondary },
+  header:                { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  avatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: Dashboard.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText:            { color: '#fff', fontSize: 18, fontWeight: '800' },
+  greetingSmall:         { fontSize: 13, color: Dashboard.textSecondary },
+  greeting:              { fontSize: 22, fontWeight: '800', color: Dashboard.textPrimary, letterSpacing: -0.3 },
+
+  // Vehicle card with Israeli plate
+  vehicleCard: {
+    backgroundColor: Dashboard.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Dashboard.cardBorder,
+    padding: 16,
+    marginBottom: 16,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  vehicleCardTop:  { flexDirection: 'row', alignItems: 'center' },
+  vehicleCardName: { fontSize: 19, fontWeight: '800', color: Dashboard.textPrimary },
+  vehicleCardSub:  { fontSize: 13, color: Dashboard.textSecondary, marginTop: 2 },
+  healthChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: SeveritySoft.green,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  healthChipDot:  { width: 8, height: 8, borderRadius: 4, backgroundColor: Severity.green },
+  healthChipText: { fontSize: 12, fontWeight: '700', color: Severity.green },
+  miniPlate: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    borderWidth: 2,
+    borderColor: Plate.border,
+    borderRadius: 8,
+    overflow: 'hidden',
+    height: 38,
+  },
+  miniPlateTab: {
+    width: 30,
+    backgroundColor: Plate.tabBlue,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  miniPlateIL: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  miniPlateText: {
+    backgroundColor: Plate.yellow,
+    color: Plate.border,
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 2,
+    paddingHorizontal: 14,
+    textAlignVertical: 'center',
+    lineHeight: 34,
+  },
+
+  // Health status card
+  healthCard: {
+    backgroundColor: SeveritySoft.green,
+    borderRadius: 16,
+    padding: 22,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  healthCardWarn:   { backgroundColor: SeveritySoft.yellow },
+  healthCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Severity.green + '33',
+    borderWidth: 3,
+    borderColor: Severity.green,
+    marginBottom: 12,
+  },
+  healthCircleWarn: { backgroundColor: Severity.yellow + '33', borderColor: Severity.yellow },
+  healthTitle: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: Dashboard.textPrimary,
+    textAlign: 'center',
+  },
+  healthSub: {
+    fontSize: 13,
+    color: Dashboard.textSecondary,
+    textAlign: 'center',
+    lineHeight: 19,
+    marginTop: 4,
+  },
 
   vehicleScroll:         { marginBottom: 20 },
   vehicleScrollContent:  { gap: 8, paddingVertical: 4 },
@@ -1072,9 +1215,19 @@ const styles = StyleSheet.create({
   },
   scanLabel:             { fontSize: 11, color: Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 8 },
   scanHint:              { fontSize: 13, color: Dashboard.textSecondary, lineHeight: 18, marginBottom: 14 },
-  scanButton:            { backgroundColor: Dashboard.accent, borderRadius: 8, paddingVertical: 14, alignItems: 'center' },
+  scanButton: {
+    backgroundColor: Dashboard.accentDeep,
+    borderRadius: 999,
+    paddingVertical: 16,
+    alignItems: 'center',
+    shadowColor: Dashboard.accentDeep,
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4,
+  },
   scanButtonDisabled:    { opacity: 0.5 },
-  scanButtonText:        { color: '#fff', fontWeight: '700', fontSize: 15, letterSpacing: 1.5 },
+  scanButtonText:        { color: '#fff', fontWeight: '700', fontSize: 16 },
   scanErrorText:         { color: Severity.yellow, fontSize: 12, marginTop: 10, lineHeight: 17 },
 
   resultCard:            {

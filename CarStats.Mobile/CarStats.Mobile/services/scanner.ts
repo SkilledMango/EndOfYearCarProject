@@ -11,6 +11,8 @@
  *   GET /dtcs       → { codes: string[] }
  */
 
+import { fetchWithTimeout } from './http';
+
 // Fixed IP of the ESP32 scanner — static IP assigned in firmware.
 // The ESP32 connects to the phone's hotspot, so no WiFi switching needed.
 const SCANNER_BASE_URL = 'http://192.168.148.100';
@@ -53,23 +55,6 @@ export interface VinResult {
   simMode: boolean;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * fetch() wrapper that rejects after FETCH_TIMEOUT_MS so the UI never hangs
- * waiting on a device that's not on the network.
- */
-async function fetchWithTimeout(url: string): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const response = await fetch(url, { signal: controller.signal });
-    return response;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 // ─── API functions ────────────────────────────────────────────────────────────
 
 /**
@@ -77,7 +62,7 @@ async function fetchWithTimeout(url: string): Promise<Response> {
  * Throws if the adapter is unreachable.
  */
 export async function getScannerStatus(): Promise<ScannerStatus> {
-  const res = await fetchWithTimeout(`${SCANNER_BASE_URL}/status`);
+  const res = await fetchWithTimeout(`${SCANNER_BASE_URL}/status`, FETCH_TIMEOUT_MS);
   if (!res.ok) throw new Error(`Scanner /status returned ${res.status}`);
   return res.json() as Promise<ScannerStatus>;
 }
@@ -88,7 +73,7 @@ export async function getScannerStatus(): Promise<ScannerStatus> {
  * Throws if the adapter is unreachable.
  */
 export async function getLiveData(): Promise<LiveData> {
-  const res = await fetchWithTimeout(`${SCANNER_BASE_URL}/live-data`);
+  const res = await fetchWithTimeout(`${SCANNER_BASE_URL}/live-data`, FETCH_TIMEOUT_MS);
   if (!res.ok) throw new Error(`Scanner /live-data returned ${res.status}`);
   return res.json() as Promise<LiveData>;
 }
@@ -99,7 +84,7 @@ export async function getLiveData(): Promise<LiveData> {
  * Throws if the adapter is unreachable.
  */
 export async function scanDtcs(): Promise<DtcScanResult> {
-  const res = await fetchWithTimeout(`${SCANNER_BASE_URL}/dtcs`);
+  const res = await fetchWithTimeout(`${SCANNER_BASE_URL}/dtcs`, FETCH_TIMEOUT_MS);
   if (!res.ok) throw new Error(`Scanner /dtcs returned ${res.status}`);
   return res.json() as Promise<DtcScanResult>;
 }
@@ -110,7 +95,7 @@ export async function scanDtcs(): Promise<DtcScanResult> {
  * Never throws — VIN detection is best-effort.
  */
 export async function getVehicleVin(): Promise<VinResult> {
-  const res = await fetchWithTimeout(`${SCANNER_BASE_URL}/vin`);
+  const res = await fetchWithTimeout(`${SCANNER_BASE_URL}/vin`, FETCH_TIMEOUT_MS);
   if (!res.ok) throw new Error(`Scanner /vin returned ${res.status}`);
   return res.json() as Promise<VinResult>;
 }

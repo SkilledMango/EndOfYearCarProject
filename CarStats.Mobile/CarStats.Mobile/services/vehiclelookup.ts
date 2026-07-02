@@ -18,21 +18,10 @@
  *   sug_delek_nm    — fuel type ("בנזין", "דיזל", "חשמל"…)
  */
 
+import { fetchWithTimeout } from './http';
+
 const IL_API   = 'https://data.gov.il/api/3/action/datastore_search';
 const IL_RES   = '053cea08-09bc-40ec-8f7a-156f0677aff3';
-
-async function timedFetch(url: string, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, {
-      headers: { Accept: 'application/json' },
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 // ─── Country suffixes the Israeli registry appends to make names ──────────────
 // e.g. "מרצדס בנץ גרמניה" → strip "גרמניה" → "מרצדס בנץ" → "Mercedes-Benz"
@@ -169,7 +158,7 @@ export async function lookupByPlate(plate: string): Promise<VehicleLookupResult 
 
   let res: Response;
   try {
-    res = await timedFetch(url, 8000);
+    res = await fetchWithTimeout(url, 8000);
   } catch (networkErr) {
     const isTimeout = networkErr instanceof Error && networkErr.name === 'AbortError';
     throw new Error(isTimeout ? 'Request timed out — government API is slow, try again' : `Network error: ${String(networkErr)}`);
@@ -198,7 +187,7 @@ export async function lookupByPlate(plate: string): Promise<VehicleLookupResult 
     const fallbackUrl = `${IL_API}?resource_id=${IL_RES}&q=${encodeURIComponent(normalized)}&limit=5`;
     let fb: Response;
     try {
-      fb = await timedFetch(fallbackUrl, 8000);
+      fb = await fetchWithTimeout(fallbackUrl, 8000);
       const fbJson = await fb.json();
       const fbRecords: Record<string, unknown>[] = fbJson?.result?.records ?? [];
       // Find a record whose plate number matches

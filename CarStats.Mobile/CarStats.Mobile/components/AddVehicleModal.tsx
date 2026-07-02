@@ -31,7 +31,7 @@ import {
 import { lookupByPlate }                          from '@/services/vehiclelookup';
 import { FEMenuItem, getMakes, getModels, getTrims, getVehicleDetails, mpgToL100km, getNRCanL100km, getGeminiL100km, suggestL100kmByFuelType } from '@/services/fueleconomy';
 import { CreateVehicleDto, Vehicle, createVehicle } from '@/services/api';
-import { Dashboard, Severity }                    from '@/constants/theme';
+import { Dashboard, Plate, Severity, SeveritySoft } from '@/constants/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -88,6 +88,44 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
   // SHARED: Fuel-lookup chain (EPA → NRCan → Gemini AI → smart default)
   // Called by both the plate lookup flow and the VIN prefill flow.
   // ─────────────────────────────────────────────────────────────────────────
+  /**
+   * Fallback stages shared by the plate flow and the trim flow:
+   *   NRCan (Canadian dataset) → Gemini AI → smart default by fuel type.
+   * Always lands on the details step.
+   */
+  const applyFallbackFuel = async (
+    make: string, model: string, year: number, hFuelType: string,
+  ) => {
+    // Stage 3: NRCan (European petrol + all Asian/US)
+    const nrcanL100km = await getNRCanL100km(make, model, year);
+    if (nrcanL100km) {
+      console.log(`[fuel] Stage 3 NRCan: ${nrcanL100km} L/100km`);
+      setFuelL100km(String(nrcanL100km));
+      setFuelSource('nrcan');
+    } else {
+      // Stage 3.5: Gemini AI (global knowledge — covers any model)
+      console.log('[fuel] Stage 3 NRCan: no match — trying Gemini');
+      const aiL100km = await getGeminiL100km(make, model, year, hFuelType);
+      if (aiL100km) {
+        console.log(`[fuel] Stage 3.5 Gemini: ${aiL100km} L/100km`);
+        setFuelL100km(String(aiL100km));
+        setFuelSource('ai');
+      } else {
+        // Stage 4: Smart default from fuel type
+        const suggested = suggestL100kmByFuelType(hFuelType);
+        console.log(`[fuel] Stage 3.5 Gemini: no result — fallback suggested=${suggested}`);
+        if (suggested !== null) {
+          setFuelL100km(String(suggested));
+          setFuelSource('suggested');
+        } else {
+          setFuelSource('manual');  // electric — L/100km not applicable
+        }
+      }
+    }
+    setLoading(false);
+    setStep('details');
+  };
+
   const runFuelLookupChain = async (
     make: string, model: string, year: number, hFuelType: string,
   ) => {
@@ -106,42 +144,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
     } catch { /* not in EPA — continue */ }
     console.log('[fuel] Stage 2 EPA: no match');
 
-    // Stage 3: NRCan (Canadian dataset — European petrol + all Asian/US)
-    const nrcanL100km = await getNRCanL100km(make, model, year);
-    if (nrcanL100km) {
-      console.log(`[fuel] Stage 3 NRCan: ${nrcanL100km} L/100km`);
-      setFuelL100km(String(nrcanL100km));
-      setFuelSource('nrcan');
-      setLoading(false);
-      setStep('details');
-      return;
-    }
-    console.log('[fuel] Stage 3 NRCan: no match');
-
-    // Stage 3.5: Gemini AI (global knowledge — covers any model)
-    console.log('[fuel] Stage 3.5 Gemini: querying…');
-    const aiL100km = await getGeminiL100km(make, model, year, hFuelType);
-    if (aiL100km) {
-      console.log(`[fuel] Stage 3.5 Gemini: ${aiL100km} L/100km`);
-      setFuelL100km(String(aiL100km));
-      setFuelSource('ai');
-      setLoading(false);
-      setStep('details');
-      return;
-    }
-    console.log('[fuel] Stage 3.5 Gemini: no result (key missing, error, or unknown model)');
-
-    // Stage 4: Smart default from fuel type
-    const suggested = suggestL100kmByFuelType(hFuelType);
-    console.log(`[fuel] Stage 4 fallback: suggested=${suggested}`);
-    if (suggested !== null) {
-      setFuelL100km(String(suggested));
-      setFuelSource('suggested');
-    } else {
-      setFuelSource('manual');  // electric — L/100km not applicable
-    }
-    setLoading(false);
-    setStep('details');
+    await applyFallbackFuel(make, model, year, hFuelType);
   };
 
   // ── Reset + optional prefill whenever the modal opens ────────────────────
@@ -316,13 +319,11 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
       }
     } catch { /* fall through */ }
 
-    // EPA trim had no fuel data — run NRCan → Gemini → smart default
+    // EPA trim had no fuel data — run the shared NRCan → Gemini → default chain
     const year = parseInt(yearText, 10);
     if (selectedMake && selectedModel && year) {
-      const nrcanL100km = await getNRCanL100km(selectedMake, selectedModel, year);
-      if (nrcanL100km) { setFuelL100km(String(nrcanL100km)); setFuelSource('nrcan'); setStep('details'); setLoading(false); return; }
-      const aiL100km = await getGeminiL100km(selectedMake, selectedModel, year, fuelType);
-      if (aiL100km) { setFuelL100km(String(aiL100km)); setFuelSource('ai'); setStep('details'); setLoading(false); return; }
+      await applyFallbackFuel(selectedMake, selectedModel, year, fuelType);
+      return;
     }
     const suggested = suggestL100kmByFuelType(fuelType);
     if (suggested !== null) { setFuelL100km(String(suggested)); setFuelSource('suggested'); } else { setFuelSource('manual'); }
@@ -399,24 +400,36 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
           {step === 'plate' && (
             <View style={s.section}>
 
-              {/* Primary: look up by plate */}
-              <Text style={s.sectionLabel}>ENTER LICENSE PLATE</Text>
-              <Text style={s.sectionHint}>
-                We'll look up your car's details automatically from the Israeli vehicle registry.
-              </Text>
+              {/* Hero */}
+              <View style={s.plateHero}>
+                <View style={s.plateHeroCircle}>
+                  <Text style={s.plateHeroIcon}>🚗</Text>
+                </View>
+                <Text style={s.plateHeadline}>Let's find your car</Text>
+                <Text style={s.plateSub}>
+                  Enter your license plate number to automatically retrieve vehicle details.
+                </Text>
+              </View>
 
-              <TextInput
-                style={s.input}
-                value={plateText}
-                onChangeText={t => { setPlateText(t); setLookupError(null); }}
-                placeholder="e.g. 12-345-67"
-                placeholderTextColor={Dashboard.textSecondary}
-                keyboardType="default"
-                autoCapitalize="none"
-                autoFocus
-                returnKeyType="search"
-                onSubmitEditing={handlePlateLookup}
-              />
+              {/* Israeli license-plate input: blue IL tab + yellow field */}
+              <View style={s.plateWrap}>
+                <View style={s.plateTab}>
+                  <Text style={s.plateTabStar}>✡</Text>
+                  <Text style={s.plateTabIL}>IL</Text>
+                </View>
+                <TextInput
+                  style={s.plateInput}
+                  value={plateText}
+                  onChangeText={t => { setPlateText(t); setLookupError(null); }}
+                  placeholder="123-45-678"
+                  placeholderTextColor="#9a8a00"
+                  keyboardType="default"
+                  autoCapitalize="none"
+                  autoFocus
+                  returnKeyType="search"
+                  onSubmitEditing={handlePlateLookup}
+                />
+              </View>
 
               {!!lookupError && (
                 <Text style={s.lookupError}>{lookupError}</Text>
@@ -429,19 +442,12 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
               >
                 {loading
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={s.primaryBtnText}>LOOK UP CAR →</Text>}
+                  : <Text style={s.primaryBtnText}>🔍  Look Up My Car</Text>}
               </Pressable>
-
-              {/* Divider */}
-              <View style={s.divider}>
-                <View style={s.dividerLine} />
-                <Text style={s.dividerText}>or</Text>
-                <View style={s.dividerLine} />
-              </View>
 
               {/* Fallback: manual entry */}
               <Pressable style={s.secondaryBtn} onPress={() => setStep('year')}>
-                <Text style={s.secondaryBtnText}>Enter details manually</Text>
+                <Text style={s.secondaryBtnText}>Enter manually instead</Text>
               </Pressable>
             </View>
           )}
@@ -567,10 +573,15 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
               {/* Detected vehicle summary */}
               {!!(yearText && selectedMake && selectedModel) && (
                 <View style={s.vehicleSummaryCard}>
-                  <Text style={s.vehicleSummaryLabel}>DETECTED VEHICLE</Text>
-                  <Text style={s.vehicleSummaryName}>
-                    {yearText} {selectedMake} {selectedModel}
-                  </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.vehicleSummaryLabel}>DETECTED VEHICLE</Text>
+                    <Text style={s.vehicleSummaryName}>
+                      {yearText} {selectedMake} {selectedModel}
+                    </Text>
+                  </View>
+                  <View style={s.checkCircle}>
+                    <Text style={s.checkMark}>✓</Text>
+                  </View>
                 </View>
               )}
 
@@ -648,7 +659,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
               >
                 {saving
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={s.primaryBtnText}>ADD TO MY GARAGE ✓</Text>}
+                  : <Text style={s.primaryBtnText}>＋  Add to Garage</Text>}
               </Pressable>
             </View>
           )}
@@ -659,7 +670,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Styles (Soft Tech light theme) ──────────────────────────────────────────
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Dashboard.bg },
@@ -670,27 +681,28 @@ const s = StyleSheet.create({
     paddingTop: 56,
     paddingHorizontal: 20,
     paddingBottom: 14,
+    backgroundColor: Dashboard.card,
     borderBottomWidth: 1,
     borderBottomColor: Dashboard.cardBorder,
   },
   backBtn:      { width: 60 },
-  backText:     { fontSize: 14, color: Dashboard.accent, fontWeight: '600' },
+  backText:     { fontSize: 14, color: Dashboard.accent, fontWeight: '700' },
   headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle:  { fontSize: 13, fontWeight: '800', color: Dashboard.textPrimary, letterSpacing: 1.5 },
+  headerTitle:  { fontSize: 15, fontWeight: '800', color: Dashboard.textPrimary, letterSpacing: 0.3 },
   headerCrumb:  { fontSize: 11, color: Dashboard.textSecondary, marginTop: 2 },
   closeBtn:     { width: 60, alignItems: 'flex-end' },
   closeText:    { fontSize: 18, color: Dashboard.textSecondary },
 
   body:        { flex: 1 },
-  bodyContent: { padding: 24, paddingBottom: 48, gap: 0 },
+  bodyContent: { padding: 20, paddingBottom: 48, gap: 0 },
 
   errorBox: {
     color: Severity.red,
     fontSize: 13,
     marginBottom: 16,
     padding: 12,
-    backgroundColor: Severity.red + '11',
-    borderRadius: 8,
+    backgroundColor: SeveritySoft.red,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: Severity.red + '44',
   },
@@ -698,16 +710,72 @@ const s = StyleSheet.create({
     color: Severity.yellow,
     fontSize: 13,
     lineHeight: 18,
+    textAlign: 'center',
   },
 
-  section:      { gap: 12 },
-  sectionLabel: { fontSize: 11, color: Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 2 },
-  sectionHint:  { fontSize: 12, color: Dashboard.textSecondary, lineHeight: 17, marginTop: -6 },
+  section:      { gap: 14 },
+  sectionLabel: { fontSize: 12, color: Dashboard.textSecondary, fontWeight: '700', letterSpacing: 1.2, marginBottom: 2 },
+  sectionHint:  { fontSize: 13, color: Dashboard.textSecondary, lineHeight: 19, marginTop: -8 },
+
+  // Plate-step hero
+  plateHero:       { alignItems: 'center', paddingTop: 16, gap: 4 },
+  plateHeroCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: Dashboard.accentSoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  plateHeroIcon: { fontSize: 40 },
+  plateHeadline: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: Dashboard.textPrimary,
+    letterSpacing: -0.3,
+  },
+  plateSub: {
+    fontSize: 14,
+    color: Dashboard.textSecondary,
+    textAlign: 'center',
+    lineHeight: 21,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+
+  // Israeli license-plate input
+  plateWrap: {
+    flexDirection: 'row',
+    borderWidth: 2.5,
+    borderColor: Plate.border,
+    borderRadius: 12,
+    overflow: 'hidden',
+    height: 74,
+  },
+  plateTab: {
+    width: 46,
+    backgroundColor: Plate.tabBlue,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  plateTabStar: { color: '#fff', fontSize: 16, lineHeight: 20 },
+  plateTabIL:   { color: '#fff', fontSize: 13, fontWeight: '800', letterSpacing: 1 },
+  plateInput: {
+    flex: 1,
+    backgroundColor: Plate.yellow,
+    color: Plate.border,
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: 4,
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
+  },
 
   input: {
     backgroundColor: Dashboard.card,
-    borderRadius: 10,
-    borderWidth: 1,
+    borderRadius: 12,
+    borderWidth: 1.5,
     borderColor: Dashboard.cardBorder,
     padding: 14,
     fontSize: 16,
@@ -715,37 +783,30 @@ const s = StyleSheet.create({
   },
 
   primaryBtn: {
-    backgroundColor: Dashboard.accent,
-    borderRadius: 10,
-    paddingVertical: 15,
+    backgroundColor: Dashboard.accentDeep,
+    borderRadius: 14,
+    paddingVertical: 16,
     alignItems: 'center',
     marginTop: 4,
+    shadowColor: Dashboard.accentDeep,
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4,
   },
   btnDisabled:    { opacity: 0.4 },
-  primaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 15, letterSpacing: 1 },
-
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginVertical: 4,
-  },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Dashboard.cardBorder },
-  dividerText: { fontSize: 12, color: Dashboard.textSecondary },
+  primaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 
   secondaryBtn: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
-    paddingVertical: 13,
+    paddingVertical: 12,
     alignItems: 'center',
   },
-  secondaryBtnText: { fontSize: 14, color: Dashboard.textSecondary, fontWeight: '500' },
+  secondaryBtnText: { fontSize: 15, color: Dashboard.accent, fontWeight: '700' },
 
   searchInput: {
-    backgroundColor: Dashboard.bg,
-    borderRadius: 10,
-    borderWidth: 1,
+    backgroundColor: Dashboard.card,
+    borderRadius: 12,
+    borderWidth: 1.5,
     borderColor: Dashboard.accent + '55',
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -757,21 +818,33 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Dashboard.card,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: Dashboard.cardBorder,
     paddingHorizontal: 16,
     paddingVertical: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   listText:  { flex: 1, fontSize: 15, color: Dashboard.textPrimary },
   listArrow: { fontSize: 20, color: Dashboard.textSecondary, marginLeft: 8 },
 
   vehicleSummaryCard: {
-    backgroundColor: Dashboard.accent + '15',
-    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Dashboard.card,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: Dashboard.accent + '44',
-    padding: 14,
+    borderColor: Dashboard.cardBorder,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
   },
   vehicleSummaryLabel: {
     fontSize: 10,
@@ -782,25 +855,35 @@ const s = StyleSheet.create({
   },
   vehicleSummaryName: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '800',
     color: Dashboard.textPrimary,
   },
+  checkCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: SeveritySoft.green,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 10,
+  },
+  checkMark: { color: Severity.green, fontSize: 17, fontWeight: '800' },
 
   infoCard: {
     backgroundColor: Dashboard.card,
-    borderRadius: 10,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: Dashboard.cardBorder,
     padding: 16,
     gap: 8,
   },
   infoCardSuccess: {
-    borderColor: Severity.green + '66',
-    backgroundColor: Severity.green + '0A',
+    borderColor: Severity.green + '55',
+    backgroundColor: SeveritySoft.green,
   },
   infoCardWarning: {
-    borderColor: Severity.yellow + '66',
-    backgroundColor: Severity.yellow + '0A',
+    borderColor: Severity.yellow + '55',
+    backgroundColor: SeveritySoft.yellow,
   },
   infoCardLabel: {
     fontSize: 10,
@@ -820,6 +903,7 @@ const s = StyleSheet.create({
   fieldLabel: {
     fontSize: 11,
     color: Dashboard.textSecondary,
+    fontWeight: '700',
     letterSpacing: 1.5,
     marginTop: 4,
   },

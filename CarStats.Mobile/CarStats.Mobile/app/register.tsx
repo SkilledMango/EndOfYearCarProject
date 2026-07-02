@@ -10,17 +10,34 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { AddVehicleModal } from '@/components/AddVehicleModal';
-import { Dashboard, Severity } from '@/constants/theme';
+import { Dashboard, Severity, SeveritySoft } from '@/constants/theme';
 
 // Simple but solid email-format check (mirrors the backend MailAddress check)
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type Step = 'account' | 'verify' | 'vehicle';
 const STEP_ORDER: Step[] = ['account', 'verify', 'vehicle'];
-const STEP_LABELS = ['Account', 'Verify', 'Your car'];
+const STEP_LABELS = ['Account', 'Verify', 'Car'];
+
+/** Outlined input with a floating label cut into the top border (Stitch style). */
+function OutlinedField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.fieldOuter}>
+      <View style={styles.fieldBox}>{children}</View>
+      <Text style={styles.fieldLabel}>{label}</Text>
+    </View>
+  );
+}
 
 export default function RegisterScreen() {
   const { register, verifyCode, resendCode, refreshUser } = useAuth();
@@ -44,16 +61,16 @@ export default function RegisterScreen() {
   const [showConfirm, setShowConfirm] = useState(false);
 
   // ── Verify ──
-  const [code, setCode]               = useState('');
-  const [resendMsg, setResendMsg]     = useState<string | null>(null);
+  const [code, setCode]           = useState('');
+  const [resendMsg, setResendMsg] = useState<string | null>(null);
 
   // ── First-vehicle step ──
-  const [newUserId, setNewUserId]     = useState<number | null>(null);
-  const [addCarVisible, setAddCar]    = useState(false);
+  const [newUserId, setNewUserId]  = useState<number | null>(null);
+  const [addCarVisible, setAddCar] = useState(false);
 
   // ── Shared UI ──
-  const [loading, setLoading]         = useState(false);
-  const [error, setError]             = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState<string | null>(null);
 
   const emailRef   = useRef<TextInput>(null);
   const passRef    = useRef<TextInput>(null);
@@ -90,8 +107,7 @@ export default function RegisterScreen() {
     try {
       const user = await verifyCode(email.trim(), code.trim());
       if (fromLogin) {
-        // Was just confirming an existing account → straight into the app.
-        goToApp();
+        goToApp();   // was just confirming an existing account
       } else {
         setNewUserId(user.id);
         setStep('vehicle');
@@ -123,80 +139,95 @@ export default function RegisterScreen() {
     goToApp();
   };
 
+  const handleBackHeader = () => {
+    if (step === 'verify' && !fromLogin) { setStep('account'); return; }
+    if (fromLogin) { router.replace('/login'); return; }
+    router.back();
+  };
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <KeyboardAvoidingView
       style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        {/* Branding */}
-        <View style={styles.brand}>
-          <View style={styles.logoCircle}><Text style={styles.logoText}>CS</Text></View>
-          <Text style={styles.appName}>CarStats</Text>
-          <Text style={styles.tagline}>
-            {step === 'account' ? 'Create your account'
-              : step === 'verify' ? 'Confirm your email'
-              : `Welcome aboard, ${firstName}!`}
-          </Text>
-        </View>
+      {/* Header: circular back button + centered title */}
+      <View style={styles.header}>
+        <Pressable style={styles.backCircle} onPress={handleBackHeader} hitSlop={8}>
+          <MaterialIcons name="arrow-back" size={22} color={Dashboard.textPrimary} />
+        </Pressable>
+        <Text style={styles.headerTitle}>REGISTRATION</Text>
+        <View style={styles.backCircleSpacer} />
+      </View>
 
-        {/* Step indicator */}
-        <View style={styles.stepper}>
-          {STEP_ORDER.map((s, i) => (
-            <React.Fragment key={s}>
-              {i > 0 && <View style={[styles.stepBar, i <= currentIndex && styles.stepBarActive]} />}
-              <View style={[styles.stepDot, i <= currentIndex && styles.stepDotActive]} />
-            </React.Fragment>
-          ))}
-        </View>
-        <View style={styles.stepLabels}>
-          {STEP_LABELS.map((label, i) => (
-            <Text key={label} style={[styles.stepLabel, i <= currentIndex && styles.stepLabelActive]}>
-              {label}
-            </Text>
-          ))}
-        </View>
+      {/* Numbered step indicator */}
+      <View style={styles.stepper}>
+        {STEP_LABELS.map((label, i) => (
+          <React.Fragment key={label}>
+            {i > 0 && (
+              <View style={[styles.stepLine, i <= currentIndex && styles.stepLineActive]} />
+            )}
+            <View style={styles.stepItem}>
+              <View style={[styles.stepCircle, i <= currentIndex && styles.stepCircleActive]}>
+                <Text style={[styles.stepNum, i <= currentIndex && styles.stepNumActive]}>
+                  {i + 1}
+                </Text>
+              </View>
+              <Text style={[styles.stepLabel, i <= currentIndex && styles.stepLabelActive]}>
+                {label}
+              </Text>
+            </View>
+          </React.Fragment>
+        ))}
+      </View>
+
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
 
         {/* ─────────── STEP 1: account ─────────── */}
         {step === 'account' && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>CREATE ACCOUNT</Text>
+          <>
+            <Text style={styles.headline}>Create Account</Text>
+            <Text style={styles.subhead}>
+              Enter your details to start managing your vehicle's health.
+            </Text>
 
-            <Text style={styles.label}>FULL NAME</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="John Smith"
-              placeholderTextColor={Dashboard.textSecondary}
-              value={fullName}
-              onChangeText={t => { setFullName(t); setError(null); }}
-              autoCapitalize="words"
-              returnKeyType="next"
-              onSubmitEditing={() => emailRef.current?.focus()}
-              editable={!loading}
-            />
+            <OutlinedField label="Full Name">
+              <TextInput
+                style={styles.fieldInput}
+                placeholder="e.g. John Doe"
+                placeholderTextColor={Dashboard.textSecondary}
+                value={fullName}
+                onChangeText={t => { setFullName(t); setError(null); }}
+                autoCapitalize="words"
+                returnKeyType="next"
+                onSubmitEditing={() => emailRef.current?.focus()}
+                editable={!loading}
+              />
+            </OutlinedField>
 
-            <Text style={styles.label}>EMAIL</Text>
-            <TextInput
-              ref={emailRef}
-              style={styles.input}
-              placeholder="you@example.com"
-              placeholderTextColor={Dashboard.textSecondary}
-              value={email}
-              onChangeText={t => { setEmail(t); setError(null); }}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              returnKeyType="next"
-              onSubmitEditing={() => passRef.current?.focus()}
-              editable={!loading}
-            />
+            <OutlinedField label="Email Address">
+              <MaterialIcons name="mail-outline" size={20} color={Dashboard.textSecondary} />
+              <TextInput
+                ref={emailRef}
+                style={styles.fieldInput}
+                placeholder="name@example.com"
+                placeholderTextColor={Dashboard.textSecondary}
+                value={email}
+                onChangeText={t => { setEmail(t); setError(null); }}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                returnKeyType="next"
+                onSubmitEditing={() => passRef.current?.focus()}
+                editable={!loading}
+              />
+            </OutlinedField>
 
-            <Text style={styles.label}>PASSWORD</Text>
-            <View style={styles.inputWrap}>
+            <OutlinedField label="Password">
+              <MaterialIcons name="lock-outline" size={20} color={Dashboard.textSecondary} />
               <TextInput
                 ref={passRef}
-                style={styles.inputFlex}
+                style={styles.fieldInput}
                 placeholder="Min. 6 characters"
                 placeholderTextColor={Dashboard.textSecondary}
                 value={password}
@@ -207,15 +238,19 @@ export default function RegisterScreen() {
                 editable={!loading}
               />
               <Pressable onPress={() => setShowPass(s => !s)} hitSlop={8}>
-                <Text style={styles.toggleText}>{showPass ? 'HIDE' : 'SHOW'}</Text>
+                <MaterialIcons
+                  name={showPass ? 'visibility' : 'visibility-off'}
+                  size={20}
+                  color={Dashboard.textSecondary}
+                />
               </Pressable>
-            </View>
+            </OutlinedField>
 
-            <Text style={styles.label}>CONFIRM PASSWORD</Text>
-            <View style={styles.inputWrap}>
+            <OutlinedField label="Confirm Password">
+              <MaterialIcons name="lock-outline" size={20} color={Dashboard.textSecondary} />
               <TextInput
                 ref={confirmRef}
-                style={styles.inputFlex}
+                style={styles.fieldInput}
                 placeholder="Re-enter your password"
                 placeholderTextColor={Dashboard.textSecondary}
                 value={confirmPassword}
@@ -226,25 +261,47 @@ export default function RegisterScreen() {
                 editable={!loading}
               />
               <Pressable onPress={() => setShowConfirm(s => !s)} hitSlop={8}>
-                <Text style={styles.toggleText}>{showConfirm ? 'HIDE' : 'SHOW'}</Text>
+                <MaterialIcons
+                  name={showConfirm ? 'visibility' : 'visibility-off'}
+                  size={20}
+                  color={Dashboard.textSecondary}
+                />
               </Pressable>
-            </View>
+            </OutlinedField>
 
             {error && <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View>}
 
-            <Pressable style={[styles.button, loading && styles.buttonDisabled]} onPress={handleRegister} disabled={loading}>
-              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>CREATE ACCOUNT</Text>}
+            <Pressable
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={handleRegister}
+              disabled={loading}
+            >
+              {loading
+                ? <ActivityIndicator color="#fff" />
+                : (
+                  <View style={styles.buttonRow}>
+                    <Text style={styles.buttonText}>Continue</Text>
+                    <MaterialIcons name="arrow-forward" size={20} color="#fff" />
+                  </View>
+                )}
             </Pressable>
-          </View>
+
+            <Pressable onPress={() => router.back()} style={styles.footerLink}>
+              <Text style={styles.footerLinkText}>
+                Already have an account?{'  '}
+                <Text style={{ color: Dashboard.accent, fontWeight: '700' }}>Log in</Text>
+              </Text>
+            </Pressable>
+          </>
         )}
 
         {/* ─────────── STEP 2: verify code ─────────── */}
         {step === 'verify' && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>CHECK YOUR EMAIL</Text>
-            <Text style={styles.verifyHint}>
-              We sent a 6-digit code to{'\n'}
-              <Text style={styles.verifyEmail}>{email}</Text>
+          <>
+            <Text style={styles.headline}>Check your email</Text>
+            <Text style={styles.subhead}>
+              We sent a 6-digit code to{' '}
+              <Text style={{ color: Dashboard.textPrimary, fontWeight: '700' }}>{email}</Text>
             </Text>
 
             <TextInput
@@ -265,58 +322,42 @@ export default function RegisterScreen() {
             {error && <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View>}
             {resendMsg && <Text style={styles.resendOk}>{resendMsg}</Text>}
 
-            <Pressable style={[styles.button, loading && styles.buttonDisabled]} onPress={handleVerify} disabled={loading}>
-              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>VERIFY</Text>}
+            <Pressable
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={handleVerify}
+              disabled={loading}
+            >
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Verify</Text>}
             </Pressable>
 
-            <Pressable style={styles.resendBtn} onPress={handleResend} disabled={loading}>
-              <Text style={styles.resendText}>
+            <Pressable style={styles.footerLink} onPress={handleResend} disabled={loading}>
+              <Text style={styles.footerLinkText}>
                 Didn't get it?{'  '}
-                <Text style={{ color: Dashboard.accent, fontWeight: '600' }}>Resend code</Text>
+                <Text style={{ color: Dashboard.accent, fontWeight: '700' }}>Resend code</Text>
               </Text>
             </Pressable>
-          </View>
+          </>
         )}
 
         {/* ─────────── STEP 3: first car ─────────── */}
         {step === 'vehicle' && (
-          <View style={styles.card}>
-            <Text style={styles.successIcon}>🚗</Text>
-            <Text style={styles.successTitle}>Email verified!</Text>
+          <View style={styles.successCard}>
+            <View style={styles.successIconCircle}>
+              <MaterialIcons name="directions-car" size={36} color={Dashboard.accent} />
+            </View>
+            <Text style={styles.successTitle}>Welcome aboard, {firstName}!</Text>
             <Text style={styles.successSub}>
               Add your first car to start tracking fuel economy and fault codes.
               You can always add more later.
             </Text>
 
-            <Pressable style={styles.button} onPress={() => setAddCar(true)}>
-              <Text style={styles.buttonText}>ADD MY CAR</Text>
+            <Pressable style={[styles.button, { alignSelf: 'stretch' }]} onPress={() => setAddCar(true)}>
+              <Text style={styles.buttonText}>Add My Car</Text>
             </Pressable>
-            <Pressable style={styles.skipBtn} onPress={goToApp}>
-              <Text style={styles.skipText}>Skip for now</Text>
+            <Pressable style={styles.footerLink} onPress={goToApp}>
+              <Text style={styles.footerLinkText}>Skip for now</Text>
             </Pressable>
           </View>
-        )}
-
-        {/* Footer link */}
-        {step === 'account' && (
-          <Pressable onPress={() => router.back()} style={styles.loginLink}>
-            <Text style={styles.loginLinkText}>
-              Already have an account?{'  '}
-              <Text style={{ color: Dashboard.accent, fontWeight: '600' }}>Sign in</Text>
-            </Text>
-          </Pressable>
-        )}
-        {step === 'verify' && (
-          <Pressable
-            onPress={() => (fromLogin ? router.replace('/login') : setStep('account'))}
-            style={styles.loginLink}
-          >
-            <Text style={styles.loginLinkText}>
-              <Text style={{ color: Dashboard.accent, fontWeight: '600' }}>
-                {fromLogin ? '← Back to sign in' : '← Use a different email'}
-              </Text>
-            </Text>
-          </Pressable>
         )}
       </ScrollView>
 
@@ -334,64 +375,201 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  root:      { flex: 1, backgroundColor: Dashboard.bg },
-  container: { flexGrow: 1, justifyContent: 'center', padding: 24, paddingBottom: 48 },
+  root: { flex: 1, backgroundColor: Dashboard.bg },
 
-  brand:      { alignItems: 'center', marginBottom: 24 },
-  logoCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: Dashboard.accent, justifyContent: 'center', alignItems: 'center', marginBottom: 14 },
-  logoText:   { fontSize: 26, fontWeight: '800', color: '#fff' },
-  appName:    { fontSize: 30, fontWeight: '800', color: Dashboard.textPrimary, letterSpacing: 1 },
-  tagline:    { fontSize: 13, color: Dashboard.textSecondary, marginTop: 6 },
-
-  // Step indicator
-  stepper:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
-  stepDot:    { width: 12, height: 12, borderRadius: 6, backgroundColor: Dashboard.cardBorder },
-  stepDotActive: { backgroundColor: Dashboard.accent },
-  stepBar:    { width: 44, height: 2, backgroundColor: Dashboard.cardBorder, marginHorizontal: 6 },
-  stepBarActive: { backgroundColor: Dashboard.accent },
-  stepLabels: { flexDirection: 'row', justifyContent: 'center', gap: 30, marginBottom: 22 },
-  stepLabel:  { fontSize: 10, color: Dashboard.textSecondary, letterSpacing: 1, fontWeight: '600' },
-  stepLabelActive: { color: Dashboard.textPrimary },
-
-  // Card
-  card:       { backgroundColor: Dashboard.card, borderRadius: 16, borderWidth: 1, borderColor: Dashboard.cardBorder, padding: 24, gap: 6 },
-  cardTitle:  { fontSize: 11, fontWeight: '700', color: Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 10 },
-  label:      { fontSize: 11, color: Dashboard.textSecondary, letterSpacing: 1.2, marginTop: 10, marginBottom: 4 },
-  input:      { backgroundColor: Dashboard.bg, borderRadius: 8, borderWidth: 1, borderColor: Dashboard.cardBorder, color: Dashboard.textPrimary, fontSize: 15, paddingHorizontal: 14, paddingVertical: 12 },
-
-  // Password input + show/hide
-  inputWrap:  { flexDirection: 'row', alignItems: 'center', backgroundColor: Dashboard.bg, borderRadius: 8, borderWidth: 1, borderColor: Dashboard.cardBorder, paddingHorizontal: 14 },
-  inputFlex:  { flex: 1, color: Dashboard.textPrimary, fontSize: 15, paddingVertical: 12 },
-  toggleText: { color: Dashboard.accent, fontSize: 11, fontWeight: '700', letterSpacing: 1, paddingLeft: 10 },
-
-  // Verify
-  verifyHint:  { fontSize: 13, color: Dashboard.textSecondary, lineHeight: 20, textAlign: 'center', marginBottom: 4 },
-  verifyEmail: { color: Dashboard.textPrimary, fontWeight: '700' },
-  codeInput:   {
-    backgroundColor: Dashboard.bg, borderRadius: 10, borderWidth: 1, borderColor: Dashboard.accent + '66',
-    color: Dashboard.textPrimary, fontSize: 28, fontWeight: '800', letterSpacing: 8,
-    paddingVertical: 16, marginTop: 14,
+  // Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 60,
+    paddingHorizontal: 20,
+    paddingBottom: 8,
   },
-  resendBtn:  { alignItems: 'center', paddingVertical: 14, marginTop: 2 },
-  resendText: { fontSize: 13, color: Dashboard.textSecondary },
-  resendOk:   { fontSize: 12, color: Severity.green, textAlign: 'center', marginTop: 8 },
+  backCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Dashboard.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  backCircleSpacer: { width: 44 },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '800',
+    color: Dashboard.textPrimary,
+    letterSpacing: 2,
+  },
+
+  // Stepper
+  stepper: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: 28,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  stepItem:   { alignItems: 'center', width: 56 },
+  stepCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Dashboard.cardBorder,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stepCircleActive: { backgroundColor: Dashboard.accentDeep },
+  stepNum:          { fontSize: 14, fontWeight: '700', color: Dashboard.textSecondary },
+  stepNumActive:    { color: '#fff' },
+  stepLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Dashboard.textSecondary,
+    marginTop: 6,
+  },
+  stepLabelActive: { color: Dashboard.accentDeep },
+  stepLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: Dashboard.cardBorder,
+    marginTop: 17,
+    marginHorizontal: 4,
+  },
+  stepLineActive: { backgroundColor: Dashboard.accentDeep },
+
+  container: { flexGrow: 1, padding: 20, paddingTop: 12, paddingBottom: 48 },
+
+  headline: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: Dashboard.textPrimary,
+    letterSpacing: -0.5,
+    marginTop: 8,
+  },
+  subhead: {
+    fontSize: 16,
+    color: Dashboard.textSecondary,
+    lineHeight: 24,
+    marginTop: 6,
+    marginBottom: 18,
+  },
+
+  // Outlined fields with floating labels
+  fieldOuter: { marginTop: 14 },
+  fieldBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1.5,
+    borderColor: Dashboard.cardBorder,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    backgroundColor: 'transparent',
+  },
+  fieldLabel: {
+    position: 'absolute',
+    top: -9,
+    left: 14,
+    backgroundColor: Dashboard.bg,
+    paddingHorizontal: 5,
+    fontSize: 13,
+    fontWeight: '700',
+    color: Dashboard.textPrimary,
+  },
+  fieldInput: {
+    flex: 1,
+    color: Dashboard.textPrimary,
+    fontSize: 16,
+    paddingVertical: 16,
+  },
+
+  // Verify code
+  codeInput: {
+    backgroundColor: Dashboard.card,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: Dashboard.accent + '66',
+    color: Dashboard.textPrimary,
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: 8,
+    paddingVertical: 18,
+    marginTop: 10,
+  },
+  resendOk: { fontSize: 13, color: Severity.green, textAlign: 'center', marginTop: 10 },
 
   // Error
-  errorBox:   { backgroundColor: Severity.red + '18', borderWidth: 1, borderColor: Severity.red + '55', borderRadius: 8, padding: 12, marginTop: 8 },
-  errorText:  { color: Severity.red, fontSize: 13, lineHeight: 18 },
+  errorBox: {
+    backgroundColor: SeveritySoft.red,
+    borderWidth: 1,
+    borderColor: Severity.red + '55',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 14,
+  },
+  errorText: { color: Severity.red, fontSize: 13, lineHeight: 18 },
 
   // Button
-  button:     { backgroundColor: Dashboard.accent, borderRadius: 8, paddingVertical: 14, alignItems: 'center', marginTop: 20 },
+  button: {
+    backgroundColor: Dashboard.accentDeep,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 24,
+    shadowColor: Dashboard.accentDeep,
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4,
+  },
   buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: '#fff', fontWeight: '700', fontSize: 15, letterSpacing: 1.5 },
+  buttonRow:      { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  buttonText:     { color: '#fff', fontWeight: '700', fontSize: 18 },
 
-  // Step 3 success
-  successIcon:  { fontSize: 44, textAlign: 'center', marginTop: 4 },
-  successTitle: { fontSize: 20, fontWeight: '800', color: Dashboard.textPrimary, textAlign: 'center', marginTop: 8 },
-  successSub:   { fontSize: 13, color: Dashboard.textSecondary, textAlign: 'center', lineHeight: 19, marginTop: 8, paddingHorizontal: 4 },
-  skipBtn:      { alignItems: 'center', paddingVertical: 14, marginTop: 4 },
-  skipText:     { fontSize: 14, color: Dashboard.textSecondary, fontWeight: '500' },
+  footerLink:     { alignItems: 'center', marginTop: 20, paddingVertical: 6 },
+  footerLinkText: { fontSize: 15, color: Dashboard.textSecondary },
 
-  loginLink:     { alignItems: 'center', marginTop: 24 },
-  loginLinkText: { fontSize: 13, color: Dashboard.textSecondary },
+  // Step 3
+  successCard: {
+    backgroundColor: Dashboard.card,
+    borderRadius: 24,
+    padding: 28,
+    alignItems: 'center',
+    marginTop: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  successIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Dashboard.accentSoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  successTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Dashboard.textPrimary,
+    textAlign: 'center',
+  },
+  successSub: {
+    fontSize: 14,
+    color: Dashboard.textSecondary,
+    textAlign: 'center',
+    lineHeight: 21,
+    marginTop: 10,
+    marginBottom: 8,
+  },
 });

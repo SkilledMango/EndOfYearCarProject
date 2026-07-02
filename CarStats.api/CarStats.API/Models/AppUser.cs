@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace CarStats.API.Models
 {
@@ -22,6 +23,8 @@ namespace CarStats.API.Models
         [Required]
         public string Email { get; set; } = string.Empty;
 
+        // Never serialized to clients — write-only via NewPassword + BCrypt.
+        [JsonIgnore]
         public string PasswordHash { get; set; } = string.Empty;
 
         [NotMapped]
@@ -35,9 +38,13 @@ namespace CarStats.API.Models
         // --- EMAIL VERIFICATION ---
         public bool IsEmailVerified { get; set; } = false;
 
+        // The active code must never reach any client — otherwise verification
+        // could be bypassed by reading it from the users endpoint.
+        [JsonIgnore]
         [MaxLength(6)]
         public string? EmailVerificationCode { get; set; }
 
+        [JsonIgnore]
         public DateTime? VerificationCodeExpiresAt { get; set; }
 
         // --- RELATIONSHIPS ---

@@ -1,4 +1,4 @@
-import { DarkTheme, ThemeProvider } from '@react-navigation/native';
+import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -45,15 +45,28 @@ function RootNavigator() {
     );
   }
 
+  // Light "Soft Tech" theme — match the app background so navigation
+  // transitions don't flash a mismatched color.
+  const navTheme = {
+    ...DefaultTheme,
+    colors: {
+      ...DefaultTheme.colors,
+      background: Dashboard.bg,
+      card: Dashboard.card,
+      primary: Dashboard.accent,
+      text: Dashboard.textPrimary,
+      border: Dashboard.cardBorder,
+    },
+  };
+
   return (
-    <ThemeProvider value={DarkTheme}>
+    <ThemeProvider value={navTheme}>
       <Stack>
         <Stack.Screen name="(tabs)"    options={{ headerShown: false }} />
         <Stack.Screen name="login"     options={{ headerShown: false }} />
         <Stack.Screen name="register"  options={{ headerShown: false }} />
-        <Stack.Screen name="modal"     options={{ presentation: 'modal', headerShown: false }} />
       </Stack>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
     </ThemeProvider>
   );
 }

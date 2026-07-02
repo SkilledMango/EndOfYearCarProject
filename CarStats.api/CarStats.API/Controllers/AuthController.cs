@@ -69,19 +69,15 @@ namespace CarStats.API.Controllers
             // Create the new user — unverified until they confirm the emailed code.
             var newUser = new AppUser
             {
-                FullName                  = request.FullName.Trim(),
-                Email                     = email,
-                PasswordHash              = BCrypt.Net.BCrypt.HashPassword(request.Password),
-                Role                      = UserRole.User,
-                IsEmailVerified           = false,
-                EmailVerificationCode     = GenerateCode(),
-                VerificationCodeExpiresAt = DateTime.UtcNow.AddMinutes(CodeLifetimeMinutes),
+                FullName        = request.FullName.Trim(),
+                Email           = email,
+                PasswordHash    = BCrypt.Net.BCrypt.HashPassword(request.Password),
+                Role            = UserRole.User,
+                IsEmailVerified = false,
             };
-
             _context.Users.Add(newUser);
-            await _context.SaveChangesAsync();
 
-            await _email.SendVerificationCodeAsync(newUser.Email, newUser.FullName, newUser.EmailVerificationCode!);
+            await IssueVerificationCodeAsync(newUser);
 
             // Do NOT return a session — the client must verify the code first.
             newUser.PasswordHash          = string.Empty;
@@ -143,11 +139,7 @@ namespace CarStats.API.Controllers
             if (user.IsEmailVerified)
                 return BadRequest("This email is already verified.");
 
-            user.EmailVerificationCode     = GenerateCode();
-            user.VerificationCodeExpiresAt = DateTime.UtcNow.AddMinutes(CodeLifetimeMinutes);
-            await _context.SaveChangesAsync();
-
-            await _email.SendVerificationCodeAsync(user.Email, user.FullName, user.EmailVerificationCode!);
+            await IssueVerificationCodeAsync(user);
             return Ok(new { message = "A new code has been sent." });
         }
 
@@ -174,11 +166,7 @@ namespace CarStats.API.Controllers
             // Block unverified accounts — resend a fresh code so they can finish.
             if (!user.IsEmailVerified)
             {
-                user.EmailVerificationCode     = GenerateCode();
-                user.VerificationCodeExpiresAt = DateTime.UtcNow.AddMinutes(CodeLifetimeMinutes);
-                await _context.SaveChangesAsync();
-                await _email.SendVerificationCodeAsync(user.Email, user.FullName, user.EmailVerificationCode!);
-
+                await IssueVerificationCodeAsync(user);
                 return StatusCode(StatusCodes.Status403Forbidden, new
                 {
                     code  = "EMAIL_NOT_VERIFIED",
@@ -191,6 +179,18 @@ namespace CarStats.API.Controllers
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Generates a fresh verification code for the user, saves it, and
+        /// emails it. Shared by register, resend-code, and unverified login.
+        /// </summary>
+        private async Task IssueVerificationCodeAsync(AppUser user)
+        {
+            user.EmailVerificationCode     = GenerateCode();
+            user.VerificationCodeExpiresAt = DateTime.UtcNow.AddMinutes(CodeLifetimeMinutes);
+            await _context.SaveChangesAsync();
+            await _email.SendVerificationCodeAsync(user.Email, user.FullName, user.EmailVerificationCode!);
+        }
 
         /// <summary>Random 6-digit numeric code, e.g. "048213".</summary>
         private static string GenerateCode() =>

@@ -89,9 +89,6 @@ export interface ReportDtcResponse {
 
 // ----- API Functions -----
 
-// TODO: Replace CURRENT_USER_ID with real auth session when login is implemented
-export const CURRENT_USER_ID = 1;
-
 export const getUser = async (userId: number): Promise<AppUser> => {
   const { data } = await api.get<AppUser>(`/users/${userId}`);
   return data;
@@ -115,11 +112,6 @@ export const getUserEvents = async (userId: number): Promise<VehicleEventEnriche
   return data;
 };
 
-export const getVehiclesForUser = async (userId: number): Promise<Vehicle[]> => {
-  const { data } = await api.get<Vehicle[]>(`/vehicles/user/${userId}`);
-  return data;
-};
-
 export interface CreateVehicleDto {
   make: string;
   model: string;
@@ -132,8 +124,4 @@ export interface CreateVehicleDto {
 export const createVehicle = async (dto: CreateVehicleDto): Promise<Vehicle> => {
   const { data } = await api.post<Vehicle>('/vehicles', dto);
   return data;
-};
-
-export const deleteVehicle = async (vehicleId: number): Promise<void> => {
-  await api.delete(`/vehicles/${vehicleId}`);
 };
