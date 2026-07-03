@@ -195,10 +195,12 @@ export async function getNRCanL100km(
 
 // ─── Gemini AI fuel lookup ────────────────────────────────────────────────────
 //
-// Uses Google Gemini 2.0 Flash (free tier) to look up WLTP combined fuel
+// Uses Google Gemini 2.5 Flash-Lite (free tier) to look up WLTP combined fuel
 // consumption for any car model worldwide. Works for European diesels,
 // obscure trims, and cars not in EPA/NRCan.
-// (gemini-1.5-flash was retired by Google for new API projects — do not use.)
+// (gemini-1.5-flash and gemini-2.0-flash no longer have free-tier quota —
+// do not use. Avoid non-lite 2.5+ models: "thinking" tokens eat the small
+// maxOutputTokens budget unless thinkingConfig.thinkingBudget is set to 0.)
 //
 // Get a free key at: https://aistudio.google.com  (takes ~30 seconds)
 
@@ -207,7 +209,7 @@ export async function getNRCanL100km(
 const GEMINI_API_KEY: string = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
 
 const GEMINI_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
 
 /**
  * Asks Gemini for the WLTP combined fuel consumption (L/100km) of a specific car.
