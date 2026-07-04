@@ -310,7 +310,7 @@ export default function FuelScreen() {
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>⛽</Text>
             <Text style={styles.emptyText}>No vehicles yet.</Text>
-            <Text style={styles.emptySubtext}>Add a vehicle in your garage to start tracking c.fuel.</Text>
+            <Text style={styles.emptySubtext}>Add a vehicle in your garage to start tracking fuel.</Text>
           </View>
         ) : (
           <>
