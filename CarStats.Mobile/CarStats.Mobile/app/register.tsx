@@ -14,7 +14,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { AddVehicleModal } from '@/components/AddVehicleModal';
-import { Dashboard, Severity, SeveritySoft } from '@/constants/theme';
+import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 
 // Simple but solid email-format check (mirrors the backend MailAddress check)
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -31,6 +31,7 @@ function OutlinedField({
   label: string;
   children: React.ReactNode;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.fieldOuter}>
       <View style={styles.fieldBox}>{children}</View>
@@ -41,6 +42,8 @@ function OutlinedField({
 
 export default function RegisterScreen() {
   const { register, verifyCode, resendCode, refreshUser } = useAuth();
+  const { colors: c } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
 
   // When arriving from the login screen for an unverified account, we jump
@@ -154,7 +157,7 @@ export default function RegisterScreen() {
       {/* Header: circular back button + centered title */}
       <View style={styles.header}>
         <Pressable style={styles.backCircle} onPress={handleBackHeader} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={22} color={Dashboard.textPrimary} />
+          <MaterialIcons name="arrow-back" size={22} color={c.Dashboard.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>REGISTRATION</Text>
         <View style={styles.backCircleSpacer} />
@@ -195,7 +198,7 @@ export default function RegisterScreen() {
               <TextInput
                 style={styles.fieldInput}
                 placeholder="e.g. John Doe"
-                placeholderTextColor={Dashboard.textSecondary}
+                placeholderTextColor={c.Dashboard.textSecondary}
                 value={fullName}
                 onChangeText={t => { setFullName(t); setError(null); }}
                 autoCapitalize="words"
@@ -206,12 +209,12 @@ export default function RegisterScreen() {
             </OutlinedField>
 
             <OutlinedField label="Email Address">
-              <MaterialIcons name="mail-outline" size={20} color={Dashboard.textSecondary} />
+              <MaterialIcons name="mail-outline" size={20} color={c.Dashboard.textSecondary} />
               <TextInput
                 ref={emailRef}
                 style={styles.fieldInput}
                 placeholder="name@example.com"
-                placeholderTextColor={Dashboard.textSecondary}
+                placeholderTextColor={c.Dashboard.textSecondary}
                 value={email}
                 onChangeText={t => { setEmail(t); setError(null); }}
                 autoCapitalize="none"
@@ -224,12 +227,12 @@ export default function RegisterScreen() {
             </OutlinedField>
 
             <OutlinedField label="Password">
-              <MaterialIcons name="lock-outline" size={20} color={Dashboard.textSecondary} />
+              <MaterialIcons name="lock-outline" size={20} color={c.Dashboard.textSecondary} />
               <TextInput
                 ref={passRef}
                 style={styles.fieldInput}
                 placeholder="Min. 6 characters"
-                placeholderTextColor={Dashboard.textSecondary}
+                placeholderTextColor={c.Dashboard.textSecondary}
                 value={password}
                 onChangeText={t => { setPassword(t); setError(null); }}
                 secureTextEntry={!showPass}
@@ -241,18 +244,18 @@ export default function RegisterScreen() {
                 <MaterialIcons
                   name={showPass ? 'visibility' : 'visibility-off'}
                   size={20}
-                  color={Dashboard.textSecondary}
+                  color={c.Dashboard.textSecondary}
                 />
               </Pressable>
             </OutlinedField>
 
             <OutlinedField label="Confirm Password">
-              <MaterialIcons name="lock-outline" size={20} color={Dashboard.textSecondary} />
+              <MaterialIcons name="lock-outline" size={20} color={c.Dashboard.textSecondary} />
               <TextInput
                 ref={confirmRef}
                 style={styles.fieldInput}
                 placeholder="Re-enter your password"
-                placeholderTextColor={Dashboard.textSecondary}
+                placeholderTextColor={c.Dashboard.textSecondary}
                 value={confirmPassword}
                 onChangeText={t => { setConfirm(t); setError(null); }}
                 secureTextEntry={!showConfirm}
@@ -264,7 +267,7 @@ export default function RegisterScreen() {
                 <MaterialIcons
                   name={showConfirm ? 'visibility' : 'visibility-off'}
                   size={20}
-                  color={Dashboard.textSecondary}
+                  color={c.Dashboard.textSecondary}
                 />
               </Pressable>
             </OutlinedField>
@@ -277,11 +280,11 @@ export default function RegisterScreen() {
               disabled={loading}
             >
               {loading
-                ? <ActivityIndicator color="#fff" />
+                ? <ActivityIndicator color={c.Dashboard.onAccent} />
                 : (
                   <View style={styles.buttonRow}>
                     <Text style={styles.buttonText}>Continue</Text>
-                    <MaterialIcons name="arrow-forward" size={20} color="#fff" />
+                    <MaterialIcons name="arrow-forward" size={20} color={c.Dashboard.onAccent} />
                   </View>
                 )}
             </Pressable>
@@ -289,7 +292,7 @@ export default function RegisterScreen() {
             <Pressable onPress={() => router.back()} style={styles.footerLink}>
               <Text style={styles.footerLinkText}>
                 Already have an account?{'  '}
-                <Text style={{ color: Dashboard.accent, fontWeight: '700' }}>Log in</Text>
+                <Text style={{ color: c.Dashboard.accent, fontWeight: '700' }}>Log in</Text>
               </Text>
             </Pressable>
           </>
@@ -301,13 +304,13 @@ export default function RegisterScreen() {
             <Text style={styles.headline}>Check your email</Text>
             <Text style={styles.subhead}>
               We sent a 6-digit code to{' '}
-              <Text style={{ color: Dashboard.textPrimary, fontWeight: '700' }}>{email}</Text>
+              <Text style={{ color: c.Dashboard.textPrimary, fontWeight: '700' }}>{email}</Text>
             </Text>
 
             <TextInput
               style={styles.codeInput}
               placeholder="● ● ● ● ● ●"
-              placeholderTextColor={Dashboard.textSecondary}
+              placeholderTextColor={c.Dashboard.textSecondary}
               value={code}
               onChangeText={t => { setCode(t.replace(/\D/g, '').slice(0, 6)); setError(null); }}
               keyboardType="number-pad"
@@ -327,13 +330,13 @@ export default function RegisterScreen() {
               onPress={handleVerify}
               disabled={loading}
             >
-              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Verify</Text>}
+              {loading ? <ActivityIndicator color={c.Dashboard.onAccent} /> : <Text style={styles.buttonText}>Verify</Text>}
             </Pressable>
 
             <Pressable style={styles.footerLink} onPress={handleResend} disabled={loading}>
               <Text style={styles.footerLinkText}>
                 Didn't get it?{'  '}
-                <Text style={{ color: Dashboard.accent, fontWeight: '700' }}>Resend code</Text>
+                <Text style={{ color: c.Dashboard.accent, fontWeight: '700' }}>Resend code</Text>
               </Text>
             </Pressable>
           </>
@@ -343,7 +346,7 @@ export default function RegisterScreen() {
         {step === 'vehicle' && (
           <View style={styles.successCard}>
             <View style={styles.successIconCircle}>
-              <MaterialIcons name="directions-car" size={36} color={Dashboard.accent} />
+              <MaterialIcons name="directions-car" size={36} color={c.Dashboard.accent} />
             </View>
             <Text style={styles.successTitle}>Welcome aboard, {firstName}!</Text>
             <Text style={styles.successSub}>
@@ -374,8 +377,8 @@ export default function RegisterScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Dashboard.bg },
+const useStyles = createThemedStyles((c) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: c.Dashboard.bg },
 
   // Header
   header: {
@@ -389,7 +392,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -404,7 +407,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 13,
     fontWeight: '800',
-    color: Dashboard.textPrimary,
+    color: c.Dashboard.textPrimary,
     letterSpacing: 2,
   },
 
@@ -421,41 +424,41 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Dashboard.cardBorder,
+    backgroundColor: c.Dashboard.cardBorder,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  stepCircleActive: { backgroundColor: Dashboard.accentDeep },
-  stepNum:          { fontSize: 14, fontWeight: '700', color: Dashboard.textSecondary },
-  stepNumActive:    { color: '#fff' },
+  stepCircleActive: { backgroundColor: c.Dashboard.accentDeep },
+  stepNum:          { fontSize: 14, fontWeight: '700', color: c.Dashboard.textSecondary },
+  stepNumActive:    { color: c.Dashboard.onAccent },
   stepLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: Dashboard.textSecondary,
+    color: c.Dashboard.textSecondary,
     marginTop: 6,
   },
-  stepLabelActive: { color: Dashboard.accentDeep },
+  stepLabelActive: { color: c.Dashboard.accentDeep },
   stepLine: {
     flex: 1,
     height: 2,
-    backgroundColor: Dashboard.cardBorder,
+    backgroundColor: c.Dashboard.cardBorder,
     marginTop: 17,
     marginHorizontal: 4,
   },
-  stepLineActive: { backgroundColor: Dashboard.accentDeep },
+  stepLineActive: { backgroundColor: c.Dashboard.accentDeep },
 
   container: { flexGrow: 1, padding: 20, paddingTop: 12, paddingBottom: 48 },
 
   headline: {
     fontSize: 30,
     fontWeight: '800',
-    color: Dashboard.textPrimary,
+    color: c.Dashboard.textPrimary,
     letterSpacing: -0.5,
     marginTop: 8,
   },
   subhead: {
     fontSize: 16,
-    color: Dashboard.textSecondary,
+    color: c.Dashboard.textSecondary,
     lineHeight: 24,
     marginTop: 6,
     marginBottom: 18,
@@ -468,7 +471,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     borderWidth: 1.5,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     borderRadius: 12,
     paddingHorizontal: 14,
     backgroundColor: 'transparent',
@@ -477,53 +480,53 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -9,
     left: 14,
-    backgroundColor: Dashboard.bg,
+    backgroundColor: c.Dashboard.bg,
     paddingHorizontal: 5,
     fontSize: 13,
     fontWeight: '700',
-    color: Dashboard.textPrimary,
+    color: c.Dashboard.textPrimary,
   },
   fieldInput: {
     flex: 1,
-    color: Dashboard.textPrimary,
+    color: c.Dashboard.textPrimary,
     fontSize: 16,
     paddingVertical: 16,
   },
 
   // Verify code
   codeInput: {
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: Dashboard.accent + '66',
-    color: Dashboard.textPrimary,
+    borderColor: c.Dashboard.accent + '66',
+    color: c.Dashboard.textPrimary,
     fontSize: 28,
     fontWeight: '800',
     letterSpacing: 8,
     paddingVertical: 18,
     marginTop: 10,
   },
-  resendOk: { fontSize: 13, color: Severity.green, textAlign: 'center', marginTop: 10 },
+  resendOk: { fontSize: 13, color: c.Severity.green, textAlign: 'center', marginTop: 10 },
 
   // Error
   errorBox: {
-    backgroundColor: SeveritySoft.red,
+    backgroundColor: c.SeveritySoft.red,
     borderWidth: 1,
-    borderColor: Severity.red + '55',
+    borderColor: c.Severity.red + '55',
     borderRadius: 12,
     padding: 12,
     marginTop: 14,
   },
-  errorText: { color: Severity.red, fontSize: 13, lineHeight: 18 },
+  errorText: { color: c.Severity.red, fontSize: 13, lineHeight: 18 },
 
   // Button
   button: {
-    backgroundColor: Dashboard.accentDeep,
+    backgroundColor: c.Dashboard.accentDeep,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 24,
-    shadowColor: Dashboard.accentDeep,
+    shadowColor: c.Dashboard.accentDeep,
     shadowOpacity: 0.2,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 5 },
@@ -531,14 +534,14 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.5 },
   buttonRow:      { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  buttonText:     { color: '#fff', fontWeight: '700', fontSize: 18 },
+  buttonText:     { color: c.Dashboard.onAccent, fontWeight: '700', fontSize: 18 },
 
   footerLink:     { alignItems: 'center', marginTop: 20, paddingVertical: 6 },
-  footerLinkText: { fontSize: 15, color: Dashboard.textSecondary },
+  footerLinkText: { fontSize: 15, color: c.Dashboard.textSecondary },
 
   // Step 3
   successCard: {
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 24,
     padding: 28,
     alignItems: 'center',
@@ -553,7 +556,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: Dashboard.accentSoft,
+    backgroundColor: c.Dashboard.accentSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -561,15 +564,15 @@ const styles = StyleSheet.create({
   successTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: Dashboard.textPrimary,
+    color: c.Dashboard.textPrimary,
     textAlign: 'center',
   },
   successSub: {
     fontSize: 14,
-    color: Dashboard.textSecondary,
+    color: c.Dashboard.textSecondary,
     textAlign: 'center',
     lineHeight: 21,
     marginTop: 10,
     marginBottom: 8,
   },
-});
+}));

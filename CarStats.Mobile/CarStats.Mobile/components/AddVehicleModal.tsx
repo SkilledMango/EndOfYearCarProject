@@ -31,7 +31,8 @@ import {
 import { lookupByPlate }                          from '@/services/vehiclelookup';
 import { FEMenuItem, getMakes, getModels, getTrims, getVehicleDetails, mpgToL100km, getNRCanL100km, getGeminiL100km, suggestL100kmByFuelType } from '@/services/fueleconomy';
 import { CreateVehicleDto, Vehicle, createVehicle } from '@/services/api';
-import { Dashboard, Plate, Severity, SeveritySoft } from '@/constants/theme';
+import { createThemedStyles, useTheme } from '@/context/ThemeContext';
+import { Plate } from '@/constants/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,6 +56,8 @@ interface Props {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: Props) {
+  const { colors: c } = useTheme();
+  const s = useStyles();
   // ── Navigation ──
   const [step, setStep] = useState<Step>('plate');
 
@@ -441,7 +444,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                 disabled={loading || plateText.length < 5}
               >
                 {loading
-                  ? <ActivityIndicator color="#fff" />
+                  ? <ActivityIndicator color={c.Dashboard.onAccent} />
                   : <Text style={s.primaryBtnText}>🔍  Look Up My Car</Text>}
               </Pressable>
 
@@ -463,7 +466,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                 keyboardType="numeric"
                 maxLength={4}
                 placeholder="e.g. 2018"
-                placeholderTextColor={Dashboard.textSecondary}
+                placeholderTextColor={c.Dashboard.textSecondary}
                 returnKeyType="done"
                 onSubmitEditing={handleFindMakes}
                 autoFocus
@@ -474,7 +477,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                 disabled={loading || yearText.length < 4}
               >
                 {loading
-                  ? <ActivityIndicator color="#fff" />
+                  ? <ActivityIndicator color={c.Dashboard.onAccent} />
                   : <Text style={s.primaryBtnText}>FIND MAKES →</Text>}
               </Pressable>
             </View>
@@ -490,13 +493,13 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                   value={search}
                   onChangeText={setSearch}
                   placeholder="Search makes…"
-                  placeholderTextColor={Dashboard.textSecondary}
+                  placeholderTextColor={c.Dashboard.textSecondary}
                   clearButtonMode="while-editing"
                   autoCorrect={false}
                 />
               )}
               {loading
-                ? <ActivityIndicator color={Dashboard.accent} style={{ marginTop: 32 }} />
+                ? <ActivityIndicator color={c.Dashboard.accent} style={{ marginTop: 32 }} />
                 : makes
                     .filter(m => m.text.toLowerCase().includes(search.toLowerCase()))
                     .map(m => (
@@ -518,13 +521,13 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                   value={search}
                   onChangeText={setSearch}
                   placeholder="Search models…"
-                  placeholderTextColor={Dashboard.textSecondary}
+                  placeholderTextColor={c.Dashboard.textSecondary}
                   clearButtonMode="while-editing"
                   autoCorrect={false}
                 />
               )}
               {loading
-                ? <ActivityIndicator color={Dashboard.accent} style={{ marginTop: 32 }} />
+                ? <ActivityIndicator color={c.Dashboard.accent} style={{ marginTop: 32 }} />
                 : models
                     .filter(m => m.text.toLowerCase().includes(search.toLowerCase()))
                     .map(m => (
@@ -547,13 +550,13 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                   value={search}
                   onChangeText={setSearch}
                   placeholder="Search trims…"
-                  placeholderTextColor={Dashboard.textSecondary}
+                  placeholderTextColor={c.Dashboard.textSecondary}
                   clearButtonMode="while-editing"
                   autoCorrect={false}
                 />
               )}
               {loading
-                ? <ActivityIndicator color={Dashboard.accent} style={{ marginTop: 32 }} />
+                ? <ActivityIndicator color={c.Dashboard.accent} style={{ marginTop: 32 }} />
                 : trims
                     .filter(t => t.text.toLowerCase().includes(search.toLowerCase()))
                     .map(t => (
@@ -617,13 +620,13 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                   </Text>
                 )}
                 {fuelSource === 'suggested' && (
-                  <Text style={[s.infoCardNote, { color: Severity.yellow }]}>
+                  <Text style={[s.infoCardNote, { color: c.Severity.yellow }]}>
                     ⚡ No database entry found for this model. Pre-filled with a typical
                     figure for its fuel type — edit to match your actual consumption.
                   </Text>
                 )}
                 {(fuelSource === 'manual' || fuelSource === null) && (
-                  <Text style={[s.infoCardNote, { color: Severity.yellow }]}>
+                  <Text style={[s.infoCardNote, { color: c.Severity.yellow }]}>
                     ⚠ No fuel data found for this vehicle. Enter your average
                     consumption below (check your car manual or fuel log).
                   </Text>
@@ -635,7 +638,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                     onChangeText={setFuelL100km}
                     keyboardType="decimal-pad"
                     placeholder="e.g. 8.7"
-                    placeholderTextColor={Dashboard.textSecondary}
+                    placeholderTextColor={c.Dashboard.textSecondary}
                   />
                   <Text style={s.fuelUnit}>L / 100km</Text>
                 </View>
@@ -648,7 +651,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                 value={plate}
                 onChangeText={setPlate}
                 placeholder="e.g. 12-345-67"
-                placeholderTextColor={Dashboard.textSecondary}
+                placeholderTextColor={c.Dashboard.textSecondary}
                 autoCapitalize="characters"
               />
 
@@ -658,7 +661,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                 disabled={saving || !plate.trim()}
               >
                 {saving
-                  ? <ActivityIndicator color="#fff" />
+                  ? <ActivityIndicator color={c.Dashboard.onAccent} />
                   : <Text style={s.primaryBtnText}>＋  Add to Garage</Text>}
               </Pressable>
             </View>
@@ -670,10 +673,10 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
   );
 }
 
-// ─── Styles (Soft Tech light theme) ──────────────────────────────────────────
+// ─── Styles (Soft Tech design system, theme-aware) ────────────────────────────
 
-const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Dashboard.bg },
+const useStyles = createThemedStyles((c) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: c.Dashboard.bg },
 
   header: {
     flexDirection: 'row',
@@ -681,41 +684,41 @@ const s = StyleSheet.create({
     paddingTop: 56,
     paddingHorizontal: 20,
     paddingBottom: 14,
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderBottomWidth: 1,
-    borderBottomColor: Dashboard.cardBorder,
+    borderBottomColor: c.Dashboard.cardBorder,
   },
   backBtn:      { width: 60 },
-  backText:     { fontSize: 14, color: Dashboard.accent, fontWeight: '700' },
+  backText:     { fontSize: 14, color: c.Dashboard.accent, fontWeight: '700' },
   headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle:  { fontSize: 15, fontWeight: '800', color: Dashboard.textPrimary, letterSpacing: 0.3 },
-  headerCrumb:  { fontSize: 11, color: Dashboard.textSecondary, marginTop: 2 },
+  headerTitle:  { fontSize: 15, fontWeight: '800', color: c.Dashboard.textPrimary, letterSpacing: 0.3 },
+  headerCrumb:  { fontSize: 11, color: c.Dashboard.textSecondary, marginTop: 2 },
   closeBtn:     { width: 60, alignItems: 'flex-end' },
-  closeText:    { fontSize: 18, color: Dashboard.textSecondary },
+  closeText:    { fontSize: 18, color: c.Dashboard.textSecondary },
 
   body:        { flex: 1 },
   bodyContent: { padding: 20, paddingBottom: 48, gap: 0 },
 
   errorBox: {
-    color: Severity.red,
+    color: c.Severity.red,
     fontSize: 13,
     marginBottom: 16,
     padding: 12,
-    backgroundColor: SeveritySoft.red,
+    backgroundColor: c.SeveritySoft.red,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Severity.red + '44',
+    borderColor: c.Severity.red + '44',
   },
   lookupError: {
-    color: Severity.yellow,
+    color: c.Severity.yellow,
     fontSize: 13,
     lineHeight: 18,
     textAlign: 'center',
   },
 
   section:      { gap: 14 },
-  sectionLabel: { fontSize: 12, color: Dashboard.textSecondary, fontWeight: '700', letterSpacing: 1.2, marginBottom: 2 },
-  sectionHint:  { fontSize: 13, color: Dashboard.textSecondary, lineHeight: 19, marginTop: -8 },
+  sectionLabel: { fontSize: 12, color: c.Dashboard.textSecondary, fontWeight: '700', letterSpacing: 1.2, marginBottom: 2 },
+  sectionHint:  { fontSize: 13, color: c.Dashboard.textSecondary, lineHeight: 19, marginTop: -8 },
 
   // Plate-step hero
   plateHero:       { alignItems: 'center', paddingTop: 16, gap: 4 },
@@ -723,7 +726,7 @@ const s = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: Dashboard.accentSoft,
+    backgroundColor: c.Dashboard.accentSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 10,
@@ -732,12 +735,12 @@ const s = StyleSheet.create({
   plateHeadline: {
     fontSize: 24,
     fontWeight: '800',
-    color: Dashboard.textPrimary,
+    color: c.Dashboard.textPrimary,
     letterSpacing: -0.3,
   },
   plateSub: {
     fontSize: 14,
-    color: Dashboard.textSecondary,
+    color: c.Dashboard.textSecondary,
     textAlign: 'center',
     lineHeight: 21,
     paddingHorizontal: 12,
@@ -773,54 +776,54 @@ const s = StyleSheet.create({
   },
 
   input: {
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     padding: 14,
     fontSize: 16,
-    color: Dashboard.textPrimary,
+    color: c.Dashboard.textPrimary,
   },
 
   primaryBtn: {
-    backgroundColor: Dashboard.accentDeep,
+    backgroundColor: c.Dashboard.accentDeep,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 4,
-    shadowColor: Dashboard.accentDeep,
+    shadowColor: c.Dashboard.accentDeep,
     shadowOpacity: 0.2,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 5 },
     elevation: 4,
   },
   btnDisabled:    { opacity: 0.4 },
-  primaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  primaryBtnText: { color: c.Dashboard.onAccent, fontWeight: '700', fontSize: 16 },
 
   secondaryBtn: {
     paddingVertical: 12,
     alignItems: 'center',
   },
-  secondaryBtnText: { fontSize: 15, color: Dashboard.accent, fontWeight: '700' },
+  secondaryBtnText: { fontSize: 15, color: c.Dashboard.accent, fontWeight: '700' },
 
   searchInput: {
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: Dashboard.accent + '55',
+    borderColor: c.Dashboard.accent + '55',
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontSize: 15,
-    color: Dashboard.textPrimary,
+    color: c.Dashboard.textPrimary,
   },
 
   listItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     paddingHorizontal: 16,
     paddingVertical: 14,
     shadowColor: '#000',
@@ -829,16 +832,16 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 1,
   },
-  listText:  { flex: 1, fontSize: 15, color: Dashboard.textPrimary },
-  listArrow: { fontSize: 20, color: Dashboard.textSecondary, marginLeft: 8 },
+  listText:  { flex: 1, fontSize: 15, color: c.Dashboard.textPrimary },
+  listArrow: { fontSize: 20, color: c.Dashboard.textSecondary, marginLeft: 8 },
 
   vehicleSummaryCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     padding: 16,
     shadowColor: '#000',
     shadowOpacity: 0.05,
@@ -848,7 +851,7 @@ const s = StyleSheet.create({
   },
   vehicleSummaryLabel: {
     fontSize: 10,
-    color: Dashboard.accent,
+    color: c.Dashboard.accent,
     fontWeight: '700',
     letterSpacing: 1.2,
     marginBottom: 4,
@@ -856,55 +859,55 @@ const s = StyleSheet.create({
   vehicleSummaryName: {
     fontSize: 18,
     fontWeight: '800',
-    color: Dashboard.textPrimary,
+    color: c.Dashboard.textPrimary,
   },
   checkCircle: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: SeveritySoft.green,
+    backgroundColor: c.SeveritySoft.green,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 10,
   },
-  checkMark: { color: Severity.green, fontSize: 17, fontWeight: '800' },
+  checkMark: { color: c.Severity.green, fontSize: 17, fontWeight: '800' },
 
   infoCard: {
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     padding: 16,
     gap: 8,
   },
   infoCardSuccess: {
-    borderColor: Severity.green + '55',
-    backgroundColor: SeveritySoft.green,
+    borderColor: c.Severity.green + '55',
+    backgroundColor: c.SeveritySoft.green,
   },
   infoCardWarning: {
-    borderColor: Severity.yellow + '55',
-    backgroundColor: SeveritySoft.yellow,
+    borderColor: c.Severity.yellow + '55',
+    backgroundColor: c.SeveritySoft.yellow,
   },
   infoCardLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: Dashboard.textSecondary,
+    color: c.Dashboard.textSecondary,
     letterSpacing: 1.2,
   },
   infoCardNote: {
     fontSize: 12,
-    color: Dashboard.textSecondary,
+    color: c.Dashboard.textSecondary,
     lineHeight: 18,
   },
   fuelRow:   { flexDirection: 'row', alignItems: 'center', gap: 10 },
   fuelInput: { flex: 1 },
-  fuelUnit:  { fontSize: 14, color: Dashboard.textSecondary, fontWeight: '600' },
+  fuelUnit:  { fontSize: 14, color: c.Dashboard.textSecondary, fontWeight: '600' },
 
   fieldLabel: {
     fontSize: 11,
-    color: Dashboard.textSecondary,
+    color: c.Dashboard.textSecondary,
     fontWeight: '700',
     letterSpacing: 1.5,
     marginTop: 4,
   },
-});
+}));

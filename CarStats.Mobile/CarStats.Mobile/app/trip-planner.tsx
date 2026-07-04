@@ -14,7 +14,8 @@ import {
 import * as Location from 'expo-location';
 import { useAuth } from '@/context/AuthContext';
 import { getUser, Vehicle } from '@/services/api';
-import { Dashboard, Severity } from '@/constants/theme';
+import { createThemedStyles, useTheme } from '@/context/ThemeContext';
+import { ThemeColors } from '@/constants/theme';
 
 // Loaded from .env (gitignored) — see .env.example
 const GOOGLE_API_KEY      = process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY ?? '';
@@ -42,11 +43,11 @@ interface PlaceSuggestion {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function trafficMeta(ratio: number): { label: string; color: string } {
-  if (ratio < 1.1) return { label: 'CLEAR',    color: Severity.green  };
-  if (ratio < 1.3) return { label: 'MODERATE', color: Severity.yellow };
+function trafficMeta(c: ThemeColors, ratio: number): { label: string; color: string } {
+  if (ratio < 1.1) return { label: 'CLEAR',    color: c.Severity.green  };
+  if (ratio < 1.3) return { label: 'MODERATE', color: c.Severity.yellow };
   if (ratio < 1.6) return { label: 'HEAVY',    color: '#F97316'       };
-  return               { label: 'SEVERE',   color: Severity.red    };
+  return               { label: 'SEVERE',   color: c.Severity.red    };
 }
 
 function calcFuelWithTraffic(
@@ -65,6 +66,8 @@ function calcFuelWithTraffic(
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function TripPlannerScreen() {
   const { user: authUser }            = useAuth();
+  const { colors: c } = useTheme();
+  const styles = useStyles();
   const [vehicle, setVehicle]         = useState<Vehicle | null>(null);
   const [destination, setDestination] = useState('');
   const [fuelInput, setFuelInput]     = useState('8.0');
@@ -178,7 +181,7 @@ export default function TripPlannerScreen() {
       const durationSec     = leg.duration.value as number;
       const durationTraffic = (leg.duration_in_traffic?.value ?? durationSec) as number;
       const fuel            = calcFuelWithTraffic(distanceKm, durationSec, durationTraffic, avgL100);
-      const tm              = trafficMeta(fuel.trafficRatio);
+      const tm              = trafficMeta(c, fuel.trafficRatio);
 
       setResult({
         distanceKm,
@@ -224,7 +227,7 @@ export default function TripPlannerScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: Dashboard.bg }}
+      style={{ flex: 1, backgroundColor: c.Dashboard.bg }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
@@ -256,7 +259,7 @@ export default function TripPlannerScreen() {
               ref={inputRef}
               style={styles.input}
               placeholder="e.g. Tel Aviv, Dizengoff Center"
-              placeholderTextColor={Dashboard.textSecondary}
+              placeholderTextColor={c.Dashboard.textSecondary}
               value={destination}
               onChangeText={onDestinationChange}
               onSubmitEditing={handleCalculate}
@@ -285,7 +288,7 @@ export default function TripPlannerScreen() {
             disabled={loading || !destination.trim()}
           >
             {loading
-              ? <ActivityIndicator color="#fff" />
+              ? <ActivityIndicator color={c.Dashboard.onAccent} />
               : <Text style={styles.calcButtonText}>CALCULATE ROUTE</Text>}
           </Pressable>
           {error && <Text style={styles.errorText}>{error}</Text>}
@@ -380,68 +383,68 @@ export default function TripPlannerScreen() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((c) => StyleSheet.create({
   container:   { flex: 1 },
   content:     { padding: 24, paddingBottom: 48 }, // native header supplies the top spacing
 
   vehicleRow:  {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: Dashboard.card,
-    borderRadius: 12, borderWidth: 1, borderColor: Dashboard.cardBorder,
+    backgroundColor: c.Dashboard.card,
+    borderRadius: 12, borderWidth: 1, borderColor: c.Dashboard.cardBorder,
     padding: 14, marginBottom: 16,
   },
-  vehicleDot:  { width: 10, height: 10, borderRadius: 5, backgroundColor: Dashboard.accent, flexShrink: 0 },
-  vehicleName: { fontSize: 14, fontWeight: '600', color: Dashboard.textPrimary, flex: 1 },
+  vehicleDot:  { width: 10, height: 10, borderRadius: 5, backgroundColor: c.Dashboard.accent, flexShrink: 0 },
+  vehicleName: { fontSize: 14, fontWeight: '600', color: c.Dashboard.textPrimary, flex: 1 },
   fuelInputRow:  { flexDirection: 'row', alignItems: 'center', gap: 6 },
   fuelInputBox:  {
-    backgroundColor: Dashboard.bg,
-    borderRadius: 8, borderWidth: 1, borderColor: Dashboard.accent + '88',
+    backgroundColor: c.Dashboard.bg,
+    borderRadius: 8, borderWidth: 1, borderColor: c.Dashboard.accent + '88',
     paddingHorizontal: 10, paddingVertical: 6,
-    fontSize: 16, fontWeight: '700', color: Dashboard.accent,
+    fontSize: 16, fontWeight: '700', color: c.Dashboard.accent,
     minWidth: 52, textAlign: 'center',
   },
-  fuelInputLabel: { fontSize: 12, color: Dashboard.textSecondary },
+  fuelInputLabel: { fontSize: 12, color: c.Dashboard.textSecondary },
 
   card:        {
-    backgroundColor: Dashboard.card,
-    borderRadius: 12, borderWidth: 1, borderColor: Dashboard.cardBorder,
+    backgroundColor: c.Dashboard.card,
+    borderRadius: 12, borderWidth: 1, borderColor: c.Dashboard.cardBorder,
     padding: 20, marginBottom: 16,
   },
-  fuelCard:    { borderColor: Dashboard.accent + '44' },
-  cardLabel:   { fontSize: 11, color: Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 14 },
+  fuelCard:    { borderColor: c.Dashboard.accent + '44' },
+  cardLabel:   { fontSize: 11, color: c.Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 14 },
 
   input:       {
-    backgroundColor: Dashboard.bg,
-    borderRadius: 10, borderWidth: 1, borderColor: Dashboard.cardBorder,
+    backgroundColor: c.Dashboard.bg,
+    borderRadius: 10, borderWidth: 1, borderColor: c.Dashboard.cardBorder,
     paddingHorizontal: 14, paddingVertical: 12,
-    fontSize: 15, color: Dashboard.textPrimary, marginBottom: 12,
+    fontSize: 15, color: c.Dashboard.textPrimary, marginBottom: 12,
   },
 
   dropdown:      {
     position: 'absolute', top: 50, left: 0, right: 0,
-    backgroundColor: Dashboard.card,
-    borderRadius: 10, borderWidth: 1, borderColor: Dashboard.cardBorder,
+    backgroundColor: c.Dashboard.card,
+    borderRadius: 10, borderWidth: 1, borderColor: c.Dashboard.cardBorder,
     zIndex: 999, elevation: 8,
     shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
   },
   dropdownItem:  { paddingHorizontal: 14, paddingVertical: 13 },
-  dropdownDivider: { borderBottomWidth: 1, borderBottomColor: Dashboard.cardBorder },
-  dropdownText:  { fontSize: 13, color: Dashboard.textPrimary },
+  dropdownDivider: { borderBottomWidth: 1, borderBottomColor: c.Dashboard.cardBorder },
+  dropdownText:  { fontSize: 13, color: c.Dashboard.textPrimary },
 
-  calcButton:        { backgroundColor: Dashboard.accent, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
+  calcButton:        { backgroundColor: c.Dashboard.accent, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
   calcButtonDisabled:{ opacity: 0.4 },
-  calcButtonText:    { color: '#fff', fontWeight: '700', fontSize: 14, letterSpacing: 1.5 },
-  errorText:         { color: Severity.yellow, fontSize: 12, marginTop: 10, lineHeight: 17 },
+  calcButtonText:    { color: c.Dashboard.onAccent, fontWeight: '700', fontSize: 14, letterSpacing: 1.5 },
+  errorText:         { color: c.Severity.yellow, fontSize: 12, marginTop: 10, lineHeight: 17 },
 
   statsGrid:   { flexDirection: 'row', gap: 10, marginBottom: 14 },
   statBox:     {
     flex: 1, alignItems: 'center',
-    backgroundColor: Dashboard.bg,
-    borderRadius: 10, borderWidth: 1, borderColor: Dashboard.cardBorder,
+    backgroundColor: c.Dashboard.bg,
+    borderRadius: 10, borderWidth: 1, borderColor: c.Dashboard.cardBorder,
     paddingVertical: 12,
   },
-  statValue:   { fontSize: 22, fontWeight: '700', color: Dashboard.textPrimary },
-  statUnit:    { fontSize: 10, color: Dashboard.textSecondary, marginTop: 2, textAlign: 'center' },
+  statValue:   { fontSize: 22, fontWeight: '700', color: c.Dashboard.textPrimary },
+  statUnit:    { fontSize: 10, color: c.Dashboard.textSecondary, marginTop: 2, textAlign: 'center' },
 
   trafficBadge:  { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 8, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 14 },
   trafficDot:    { width: 8, height: 8, borderRadius: 4 },
@@ -449,23 +452,23 @@ const styles = StyleSheet.create({
   trafficDelay:  { fontSize: 12, fontWeight: '600' },
 
   mapsButton:    {
-    borderRadius: 10, borderWidth: 1, borderColor: Dashboard.accent,
+    borderRadius: 10, borderWidth: 1, borderColor: c.Dashboard.accent,
     paddingVertical: 12, alignItems: 'center',
   },
-  mapsButtonText: { color: Dashboard.accent, fontWeight: '700', fontSize: 14 },
+  mapsButtonText: { color: c.Dashboard.accent, fontWeight: '700', fontSize: 14 },
 
   fuelMain:    { flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginBottom: 4 },
-  fuelValue:   { fontSize: 52, fontWeight: '800', color: Dashboard.textPrimary, lineHeight: 56 },
-  fuelUnit:    { fontSize: 18, color: Dashboard.textSecondary, marginBottom: 8 },
-  fuelCost:    { fontSize: 20, fontWeight: '600', color: Dashboard.accent, marginBottom: 16 },
-  fuelDivider: { height: 1, backgroundColor: Dashboard.cardBorder, marginBottom: 14 },
+  fuelValue:   { fontSize: 52, fontWeight: '800', color: c.Dashboard.textPrimary, lineHeight: 56 },
+  fuelUnit:    { fontSize: 18, color: c.Dashboard.textSecondary, marginBottom: 8 },
+  fuelCost:    { fontSize: 20, fontWeight: '600', color: c.Dashboard.accent, marginBottom: 16 },
+  fuelDivider: { height: 1, backgroundColor: c.Dashboard.cardBorder, marginBottom: 14 },
   fuelBreakdown: { gap: 8 },
   fuelRow:     { flexDirection: 'row', justifyContent: 'space-between' },
-  fuelRowLabel:{ fontSize: 13, color: Dashboard.textSecondary },
-  fuelRowValue:{ fontSize: 13, fontWeight: '600', color: Dashboard.textPrimary },
+  fuelRowLabel:{ fontSize: 13, color: c.Dashboard.textSecondary },
+  fuelRowValue:{ fontSize: 13, fontWeight: '600', color: c.Dashboard.textPrimary },
 
   emptyState:  { alignItems: 'center', paddingTop: 60 },
   emptyIcon:   { fontSize: 48, marginBottom: 16 },
-  emptyText:   { fontSize: 17, fontWeight: '600', color: Dashboard.textPrimary, marginBottom: 8 },
-  emptySubtext:{ fontSize: 13, color: Dashboard.textSecondary, textAlign: 'center', lineHeight: 19 },
-});
+  emptyText:   { fontSize: 17, fontWeight: '600', color: c.Dashboard.textPrimary, marginBottom: 8 },
+  emptySubtext:{ fontSize: 13, color: c.Dashboard.textSecondary, textAlign: 'center', lineHeight: 19 },
+}));

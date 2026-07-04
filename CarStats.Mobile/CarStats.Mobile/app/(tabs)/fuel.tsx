@@ -17,7 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Circle, Defs, LinearGradient, Polyline, Stop } from 'react-native-svg';
 import { Vehicle, getUser, updateVehicle } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
-import { Dashboard, Fuel, Severity } from '@/constants/theme';
+import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 // ─── Fill-up log (stored in AsyncStorage per vehicle) ─────────────────────────
@@ -87,6 +87,8 @@ const formatDay = (iso: string) =>
 // ─── Trend chart (Stitch: SVG polyline in a 100×100 viewBox, stretched) ───────
 
 function TrendChart({ values }: { values: number[] }) {
+  const { colors: c } = useTheme();
+  const styles = useStyles();
   // Y bounds: symmetric window around the data, at least ±1 like the design's
   // 6.0 / 7.0 / 8.0 rails, widened when readings spread further apart.
   const min  = Math.min(...values);
@@ -124,8 +126,8 @@ function TrendChart({ values }: { values: number[] }) {
         >
           <Defs>
             <LinearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <Stop offset="0%" stopColor={Dashboard.accentDeep} />
-              <Stop offset="100%" stopColor={Dashboard.accent} />
+              <Stop offset="0%" stopColor={c.Dashboard.accentDeep} />
+              <Stop offset="100%" stopColor={c.Dashboard.accent} />
             </LinearGradient>
           </Defs>
           {values.length > 1 && (
@@ -144,8 +146,8 @@ function TrendChart({ values }: { values: number[] }) {
               cx={x(i)}
               cy={y(v)}
               r={3}
-              fill={Dashboard.card}
-              stroke={Dashboard.accentDeep}
+              fill={c.Dashboard.card}
+              stroke={c.Dashboard.accentDeep}
               strokeWidth={2}
             />
           ))}
@@ -159,6 +161,8 @@ function TrendChart({ values }: { values: number[] }) {
 
 export default function FuelScreen() {
   const { user: authUser } = useAuth();
+  const { colors: c } = useTheme();
+  const styles = useStyles();
   const [vehicles, setVehicles]       = useState<Vehicle[]>([]);
   const [vehicleIdx, setVehicleIdx]   = useState(0);
   const [fillUps, setFillUps]         = useState<FillUp[]>([]);
@@ -269,7 +273,7 @@ export default function FuelScreen() {
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color={Dashboard.accent} />
+        <ActivityIndicator size="large" color={c.Dashboard.accent} />
       </View>
     );
   }
@@ -279,7 +283,7 @@ export default function FuelScreen() {
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={Dashboard.accent} />
+          <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={c.Dashboard.accent} />
         }
       >
         {/* ── Header: title + vehicle switcher ── */}
@@ -297,7 +301,7 @@ export default function FuelScreen() {
               style={styles.switcherBtn}
               onPress={() => setVehicleIdx(i => (i + 1) % vehicles.length)}
             >
-              <IconSymbol name="car.fill" size={24} color={Dashboard.accentDeep} />
+              <IconSymbol name="car.fill" size={24} color={c.Dashboard.accentDeep} />
             </Pressable>
           )}
         </View>
@@ -306,7 +310,7 @@ export default function FuelScreen() {
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>⛽</Text>
             <Text style={styles.emptyText}>No vehicles yet.</Text>
-            <Text style={styles.emptySubtext}>Add a vehicle in your garage to start tracking fuel.</Text>
+            <Text style={styles.emptySubtext}>Add a vehicle in your garage to start tracking c.fuel.</Text>
           </View>
         ) : (
           <>
@@ -323,9 +327,9 @@ export default function FuelScreen() {
                   <IconSymbol
                     name={trend <= 0 ? 'arrow.down' : 'arrow.up'}
                     size={16}
-                    color={trend <= 0 ? Fuel.trendGreen : Severity.red}
+                    color={trend <= 0 ? c.Fuel.trendGreen : c.Severity.red}
                   />
-                  <Text style={[styles.trendText, { color: trend <= 0 ? Fuel.trendGreen : Severity.red }]}>
+                  <Text style={[styles.trendText, { color: trend <= 0 ? c.Fuel.trendGreen : c.Severity.red }]}>
                     {Math.abs(trend).toFixed(0)}% from last month
                   </Text>
                 </View>
@@ -366,7 +370,7 @@ export default function FuelScreen() {
                   <Pressable key={entry.id} style={styles.entryCard} onLongPress={() => handleDelete(entry)}>
                     <View style={styles.entryLeft}>
                       <View style={styles.entryIconChip}>
-                        <IconSymbol name="fuelpump.fill" size={20} color={Dashboard.accentDeep} />
+                        <IconSymbol name="fuelpump.fill" size={20} color={c.Dashboard.accentDeep} />
                       </View>
                       <View>
                         <Text style={styles.entryDate}>{formatDay(entry.date)}</Text>
@@ -385,7 +389,7 @@ export default function FuelScreen() {
       {/* ── FAB: log fill-up ── */}
       {vehicle && (
         <Pressable style={styles.fab} onPress={() => setModalVisible(true)}>
-          <IconSymbol name="plus" size={28} color="#FFFFFF" />
+          <IconSymbol name="plus" size={28} color={c.Dashboard.onAccent} />
         </Pressable>
       )}
 
@@ -402,7 +406,7 @@ export default function FuelScreen() {
             <TextInput
               style={styles.modalInput}
               placeholder="e.g. 45"
-              placeholderTextColor={Dashboard.textSecondary}
+              placeholderTextColor={c.Dashboard.textSecondary}
               keyboardType="decimal-pad"
               value={liters}
               onChangeText={setLiters}
@@ -412,7 +416,7 @@ export default function FuelScreen() {
             <TextInput
               style={styles.modalInput}
               placeholder="e.g. 320"
-              placeholderTextColor={Dashboard.textSecondary}
+              placeholderTextColor={c.Dashboard.textSecondary}
               keyboardType="decimal-pad"
               value={price}
               onChangeText={setPrice}
@@ -421,7 +425,7 @@ export default function FuelScreen() {
             <TextInput
               style={styles.modalInput}
               placeholder="e.g. 650 — used to compute L/100km"
-              placeholderTextColor={Dashboard.textSecondary}
+              placeholderTextColor={c.Dashboard.textSecondary}
               keyboardType="number-pad"
               value={km}
               onChangeText={setKm}
@@ -432,7 +436,7 @@ export default function FuelScreen() {
               disabled={saving}
             >
               {saving
-                ? <ActivityIndicator color="#fff" size="small" />
+                ? <ActivityIndicator color={c.Dashboard.onAccent} size="small" />
                 : <Text style={styles.modalSaveText}>Save Fill-up</Text>}
             </Pressable>
           </View>
@@ -444,14 +448,14 @@ export default function FuelScreen() {
 
 // ─── Styles (values from design/stitch_carstats_diagnostic_suite/fuel_tracking) ─
 
-const styles = StyleSheet.create({
-  container:      { flex: 1, backgroundColor: Dashboard.bg },
+const useStyles = createThemedStyles((c) => StyleSheet.create({
+  container:      { flex: 1, backgroundColor: c.Dashboard.bg },
   centered:       { justifyContent: 'center', alignItems: 'center' },
   content:        { paddingHorizontal: 20, paddingTop: 64, paddingBottom: 120 },
 
   header:         { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  screenTitle:    { fontSize: 20, lineHeight: 28, fontWeight: '700', color: Dashboard.accentDeep },
-  screenSubtitle: { fontSize: 13, color: Dashboard.textSecondary, marginTop: 2 },
+  screenTitle:    { fontSize: 20, lineHeight: 28, fontWeight: '700', color: c.Dashboard.accentDeep },
+  screenSubtitle: { fontSize: 13, color: c.Dashboard.textSecondary, marginTop: 2 },
   switcherBtn:    {
     width: 40, height: 40, borderRadius: 20,
     alignItems: 'center', justifyContent: 'center',
@@ -459,10 +463,10 @@ const styles = StyleSheet.create({
 
   // Hero card
   heroCard:       {
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     padding: 24,
     marginBottom: 24,
     overflow: 'hidden',
@@ -474,22 +478,22 @@ const styles = StyleSheet.create({
   },
   heroAccentBar:  {
     position: 'absolute', left: 0, top: 0, bottom: 0, width: 2,
-    backgroundColor: Fuel.mintBar,
+    backgroundColor: c.Fuel.mintBar,
   },
-  heroLabel:      { fontSize: 16, lineHeight: 24, color: Dashboard.textSecondary, marginBottom: 4 },
+  heroLabel:      { fontSize: 16, lineHeight: 24, color: c.Dashboard.textSecondary, marginBottom: 4 },
   heroValueRow:   { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 4 },
-  heroValue:      { fontSize: 28, lineHeight: 34, fontWeight: '700', color: Dashboard.textPrimary },
-  heroUnit:       { fontSize: 16, color: Dashboard.textSecondary },
+  heroValue:      { fontSize: 28, lineHeight: 34, fontWeight: '700', color: c.Dashboard.textPrimary },
+  heroUnit:       { fontSize: 16, color: c.Dashboard.textSecondary },
   trendRow:       { flexDirection: 'row', alignItems: 'center', gap: 4 },
   trendText:      { fontSize: 14, lineHeight: 20, fontWeight: '500' },
-  trendHint:      { fontSize: 13, color: Dashboard.textSecondary },
+  trendHint:      { fontSize: 13, color: c.Dashboard.textSecondary },
 
   // Chart card
   chartCard:      {
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     padding: 16,
     marginBottom: 24,
     shadowColor: '#000',
@@ -499,26 +503,26 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   chartHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  chartTitle:     { fontSize: 16, fontWeight: '600', color: Dashboard.textPrimary },
-  chartCaption:   { fontSize: 12, fontWeight: '600', letterSpacing: 0.6, color: Dashboard.textSecondary },
+  chartTitle:     { fontSize: 16, fontWeight: '600', color: c.Dashboard.textPrimary },
+  chartCaption:   { fontSize: 12, fontWeight: '600', letterSpacing: 0.6, color: c.Dashboard.textSecondary },
   chartArea:      { height: 160, flexDirection: 'row' },
   chartYAxis:     { width: 32, justifyContent: 'space-between', paddingVertical: 8 },
-  chartYLabel:    { fontSize: 12, fontWeight: '600', color: Fuel.axisLabel },
+  chartYLabel:    { fontSize: 12, fontWeight: '600', color: c.Fuel.axisLabel },
   chartPlot:      { flex: 1 },
   chartGrid:      { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between', paddingVertical: 8 },
-  chartGridLine:  { height: 1, backgroundColor: Fuel.gridLine },
+  chartGridLine:  { height: 1, backgroundColor: c.Fuel.gridLine },
   chartEmpty:     { height: 160, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
-  chartEmptyText: { fontSize: 13, color: Dashboard.textSecondary, textAlign: 'center', lineHeight: 18 },
+  chartEmptyText: { fontSize: 13, color: c.Dashboard.textSecondary, textAlign: 'center', lineHeight: 18 },
 
   // History
-  historyTitle:   { fontSize: 16, fontWeight: '600', color: Dashboard.textPrimary, marginBottom: 16, paddingHorizontal: 4 },
-  historyEmpty:   { fontSize: 13, color: Dashboard.textSecondary, paddingHorizontal: 4 },
+  historyTitle:   { fontSize: 16, fontWeight: '600', color: c.Dashboard.textPrimary, marginBottom: 16, paddingHorizontal: 4 },
+  historyEmpty:   { fontSize: 13, color: c.Dashboard.textSecondary, paddingHorizontal: 4 },
   historyList:    { gap: 8 },
   entryCard:      {
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -532,20 +536,20 @@ const styles = StyleSheet.create({
   entryLeft:      { flexDirection: 'row', alignItems: 'center', gap: 16 },
   entryIconChip:  {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: Fuel.chipBg,
+    backgroundColor: c.Fuel.chipBg,
     alignItems: 'center', justifyContent: 'center',
   },
-  entryDate:      { fontSize: 16, lineHeight: 24, fontWeight: '500', color: Dashboard.textPrimary },
-  entryLiters:    { fontSize: 14, lineHeight: 20, color: Dashboard.textSecondary },
-  entryPrice:     { fontSize: 16, fontWeight: '600', color: Dashboard.textPrimary },
+  entryDate:      { fontSize: 16, lineHeight: 24, fontWeight: '500', color: c.Dashboard.textPrimary },
+  entryLiters:    { fontSize: 14, lineHeight: 20, color: c.Dashboard.textSecondary },
+  entryPrice:     { fontSize: 16, fontWeight: '600', color: c.Dashboard.textPrimary },
 
   // FAB
   fab:            {
     position: 'absolute', right: 20, bottom: 24,
     width: 56, height: 56, borderRadius: 12,
-    backgroundColor: Dashboard.accentDeep,
+    backgroundColor: c.Dashboard.accentDeep,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: Dashboard.accentDeep,
+    shadowColor: c.Dashboard.accentDeep,
     shadowOpacity: 0.3,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 8 },
@@ -555,37 +559,37 @@ const styles = StyleSheet.create({
   // Add fill-up modal
   modalBackdrop:  { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(25,27,35,0.4)' },
   modalSheet:     {
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 24,
     paddingBottom: 40,
   },
-  modalTitle:     { fontSize: 20, fontWeight: '700', color: Dashboard.textPrimary, marginBottom: 16 },
-  modalLabel:     { fontSize: 13, fontWeight: '600', color: Dashboard.textSecondary, marginBottom: 6 },
+  modalTitle:     { fontSize: 20, fontWeight: '700', color: c.Dashboard.textPrimary, marginBottom: 16 },
+  modalLabel:     { fontSize: 13, fontWeight: '600', color: c.Dashboard.textSecondary, marginBottom: 6 },
   modalInput:     {
-    backgroundColor: Dashboard.bg,
+    backgroundColor: c.Dashboard.bg,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
-    color: Dashboard.textPrimary,
+    borderColor: c.Dashboard.cardBorder,
+    color: c.Dashboard.textPrimary,
     fontSize: 16,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 14,
   },
   modalSaveBtn:   {
-    backgroundColor: Dashboard.accentDeep,
+    backgroundColor: c.Dashboard.accentDeep,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 6,
   },
-  modalSaveText:  { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  modalSaveText:  { color: c.Dashboard.onAccent, fontSize: 15, fontWeight: '700' },
 
   // Empty state
   emptyState:     { alignItems: 'center', paddingTop: 80 },
   emptyIcon:      { fontSize: 48 },
-  emptyText:      { fontSize: 17, fontWeight: '600', color: Dashboard.textPrimary, marginTop: 12 },
-  emptySubtext:   { fontSize: 13, color: Dashboard.textSecondary, marginTop: 6, textAlign: 'center' },
-});
+  emptyText:      { fontSize: 17, fontWeight: '600', color: c.Dashboard.textPrimary, marginTop: 12 },
+  emptySubtext:   { fontSize: 13, color: c.Dashboard.textSecondary, marginTop: 6, textAlign: 'center' },
+}));

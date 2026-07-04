@@ -7,7 +7,7 @@
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
-import { Dashboard } from '@/constants/theme';
+import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import type { ShopMapProps } from './ShopMap.types';
 
@@ -20,6 +20,8 @@ const DEFAULT_REGION = {
 };
 
 export default function ShopMap({ shops, userPos }: ShopMapProps) {
+  const { colors: c } = useTheme();
+  const styles = useStyles();
   const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
@@ -54,7 +56,7 @@ export default function ShopMap({ shops, userPos }: ShopMapProps) {
             <IconSymbol
               name="wrench.fill"
               size={18}
-              color={i % 2 === 1 ? Dashboard.accentDeep : '#FFFFFF'}
+              color={i % 2 === 1 ? c.Dashboard.accentDeep : c.Dashboard.onAccent}
             />
           </View>
         </Marker>
@@ -63,19 +65,19 @@ export default function ShopMap({ shops, userPos }: ShopMapProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((c) => StyleSheet.create({
   map: { flex: 1 },
 
   // 40px circles — filled primary / outlined white variants
   pin: {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: Dashboard.accentDeep,
+    backgroundColor: c.Dashboard.accentDeep,
     alignItems: 'center', justifyContent: 'center',
     shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 20, shadowOffset: { width: 0, height: 8 },
     elevation: 5,
   },
   pinOutlined: {
-    backgroundColor: Dashboard.card,
-    borderWidth: 2, borderColor: Dashboard.accentDeep,
+    backgroundColor: c.Dashboard.card,
+    borderWidth: 2, borderColor: c.Dashboard.accentDeep,
   },
-});
+}));

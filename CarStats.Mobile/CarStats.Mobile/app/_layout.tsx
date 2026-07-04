@@ -1,4 +1,4 @@
-import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -6,7 +6,10 @@ import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/context/AuthContext';
-import { Dashboard } from '@/constants/theme';
+import { ThemeProvider, useTheme } from '@/context/ThemeContext';
+// Side-effect import: registers the child-reminder geofence task + the
+// notification handler on every launch (including background launches).
+import '@/services/notifications';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -15,6 +18,7 @@ export const unstable_settings = {
 // ─── Inner navigator — has access to AuthContext ───────────────────────────────
 function RootNavigator() {
   const { user, isLoading } = useAuth();
+  const { colors: c, isDark } = useTheme();
   const router   = useRouter();
   const segments = useSegments();
 
@@ -39,44 +43,47 @@ function RootNavigator() {
   // Splash while restoring session from storage
   if (isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: Dashboard.bg, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={Dashboard.accent} />
+      <View style={{ flex: 1, backgroundColor: c.Dashboard.bg, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={c.Dashboard.accent} />
       </View>
     );
   }
 
-  // Light "Soft Tech" theme — match the app background so navigation
-  // transitions don't flash a mismatched color.
+  // Match the navigation chrome to the active palette so transitions
+  // don't flash a mismatched color.
   const navTheme = {
-    ...DefaultTheme,
+    ...(isDark ? DarkTheme : DefaultTheme),
     colors: {
-      ...DefaultTheme.colors,
-      background: Dashboard.bg,
-      card: Dashboard.card,
-      primary: Dashboard.accent,
-      text: Dashboard.textPrimary,
-      border: Dashboard.cardBorder,
+      ...(isDark ? DarkTheme : DefaultTheme).colors,
+      background: c.Dashboard.bg,
+      card: c.Dashboard.card,
+      primary: c.Dashboard.accent,
+      text: c.Dashboard.textPrimary,
+      border: c.Dashboard.cardBorder,
     },
   };
 
   return (
-    <ThemeProvider value={navTheme}>
+    <NavThemeProvider value={navTheme}>
       <Stack>
         <Stack.Screen name="(tabs)"    options={{ headerShown: false }} />
         <Stack.Screen name="login"     options={{ headerShown: false }} />
         <Stack.Screen name="register"  options={{ headerShown: false }} />
         <Stack.Screen name="trip-planner" options={{ title: 'Trip Fuel Planner' }} />
+        <Stack.Screen name="settings"  options={{ title: 'Settings' }} />
       </Stack>
-      <StatusBar style="dark" />
-    </ThemeProvider>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+    </NavThemeProvider>
   );
 }
 
-// ─── Root layout — provides AuthContext to the whole app ──────────────────────
+// ─── Root layout — provides Theme + Auth contexts to the whole app ────────────
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <RootNavigator />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <RootNavigator />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

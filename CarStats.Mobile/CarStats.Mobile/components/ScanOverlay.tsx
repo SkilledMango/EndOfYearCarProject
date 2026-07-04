@@ -11,7 +11,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import Svg, { Circle } from 'react-native-svg';
 import { ReportDtcResponse, SeverityLevel } from '@/services/api';
 import { LiveData } from '@/services/scanner';
-import { Dashboard, Fuel, Scan, Severity, SeveritySoft } from '@/constants/theme';
+import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 const RING_R = 44;
@@ -39,6 +39,8 @@ export default function ScanOverlay({
   estimatedFuelPct,
   onClose,
 }: Props) {
+  const { colors: c } = useTheme();
+  const styles = useStyles();
   // Simulated progress while the hardware scan runs (the design's own script
   // does the same) — creeps to 90%, then snaps to 100% when results land.
   const [progress, setProgress] = useState(0);
@@ -91,13 +93,13 @@ export default function ScanOverlay({
               <Circle
                 cx={50} cy={50} r={RING_R}
                 fill="none"
-                stroke={Scan.ringTrack}
+                stroke={c.Scan.ringTrack}
                 strokeWidth={8}
               />
               <Circle
                 cx={50} cy={50} r={RING_R}
                 fill="none"
-                stroke={Dashboard.accentDeep}
+                stroke={c.Dashboard.accentDeep}
                 strokeWidth={8}
                 strokeLinecap="round"
                 strokeDasharray={`${RING_CIRCUMFERENCE}`}
@@ -106,7 +108,7 @@ export default function ScanOverlay({
               />
             </Svg>
             <View style={styles.ringCenter}>
-              <IconSymbol name="qrcode.viewfinder" size={36} color={Dashboard.accentDeep} />
+              <IconSymbol name="qrcode.viewfinder" size={36} color={c.Dashboard.accentDeep} />
               <Text style={styles.ringPct}>{Math.round(progress)}%</Text>
             </View>
           </View>
@@ -128,16 +130,16 @@ export default function ScanOverlay({
             <View style={styles.faultsCard}>
               <View style={[
                 styles.faultsAccentBar,
-                { backgroundColor: urgent ? Severity.red : Severity.yellow },
+                { backgroundColor: urgent ? c.Severity.red : c.Severity.yellow },
               ]} />
               <View style={styles.faultsBody}>
                 <View style={styles.faultsHeader}>
                   <Text style={styles.faultsTitle}>Found Faults</Text>
                   <View style={[
                     styles.faultsChip,
-                    { backgroundColor: urgent ? Severity.red : Severity.yellow },
+                    { backgroundColor: urgent ? c.Severity.red : c.Severity.yellow },
                   ]}>
-                    <IconSymbol name="exclamationmark.triangle.fill" size={14} color="#FFFFFF" />
+                    <IconSymbol name="exclamationmark.triangle.fill" size={14} color={c.Dashboard.card} />
                     <Text style={styles.faultsChipText}>{urgent ? 'URGENT' : 'CAUTION'}</Text>
                   </View>
                 </View>
@@ -149,11 +151,11 @@ export default function ScanOverlay({
           {/* ── Clean result / error ── */}
           {done && results.length === 0 && finishedMessage && (
             <View style={styles.faultsCard}>
-              <View style={[styles.faultsAccentBar, { backgroundColor: Severity.green }]} />
+              <View style={[styles.faultsAccentBar, { backgroundColor: c.Severity.green }]} />
               <View style={styles.faultsBody}>
                 <Text style={styles.faultsTitle}>Scan Result</Text>
-                <View style={[styles.faultRow, { backgroundColor: SeveritySoft.green }]}>
-                  <Text style={[styles.faultRowDesc, { color: Scan.greenInk, flex: 1 }]}>
+                <View style={[styles.faultRow, { backgroundColor: c.SeveritySoft.green }]}>
+                  <Text style={[styles.faultRowDesc, { color: c.Scan.greenInk, flex: 1 }]}>
                     {finishedMessage}
                   </Text>
                 </View>
@@ -179,10 +181,12 @@ function Tile({ icon, label, value, unit }: {
   value: string;
   unit?: string;
 }) {
+  const { colors: c } = useTheme();
+  const styles = useStyles();
   return (
     <View style={styles.tile}>
       <View style={styles.tileHeader}>
-        <IconSymbol name={icon} size={18} color={Dashboard.textSecondary} />
+        <IconSymbol name={icon} size={18} color={c.Dashboard.textSecondary} />
         <Text style={styles.tileLabel}>{label}</Text>
       </View>
       <View style={styles.tileValueRow}>
@@ -194,14 +198,16 @@ function Tile({ icon, label, value, unit }: {
 }
 
 function FaultRow({ result }: { result: ReportDtcResponse }) {
+  const { colors: c } = useTheme();
+  const styles = useStyles();
   const severity = result.translation?.severity ?? result.severity ?? SeverityLevel.Yellow;
   const red  = severity === SeverityLevel.Red;
   const code = result.translation?.errorCode
     ?? result.message?.match(/Code (\w+)/)?.[1]
     ?? 'Unknown';
   const desc = result.translation?.humanTitle ?? result.message ?? 'No description available';
-  const bg   = red ? SeveritySoft.red : SeveritySoft.yellow;
-  const ink  = red ? Scan.errorDeep : Scan.amberInk;
+  const bg   = red ? c.SeveritySoft.red : c.SeveritySoft.yellow;
+  const ink  = red ? c.Scan.errorDeep : c.Scan.amberInk;
 
   return (
     <View style={[styles.faultRow, { backgroundColor: bg }]}>
@@ -216,20 +222,20 @@ function FaultRow({ result }: { result: ReportDtcResponse }) {
 
 // ─── Styles (values from the live_scan Stitch export) ─────────────────────────
 
-const styles = StyleSheet.create({
-  container:      { flex: 1, backgroundColor: Dashboard.bg },
+const useStyles = createThemedStyles((c) => StyleSheet.create({
+  container:      { flex: 1, backgroundColor: c.Dashboard.bg },
   content:        { alignItems: 'center', paddingHorizontal: 20, paddingTop: 72, paddingBottom: 48 },
 
-  title:          { fontSize: 24, lineHeight: 32, fontWeight: '700', color: Dashboard.textPrimary },
+  title:          { fontSize: 24, lineHeight: 32, fontWeight: '700', color: c.Dashboard.textPrimary },
   statusPill:     {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingHorizontal: 12, paddingVertical: 4,
     borderRadius: 999, marginTop: 8,
-    backgroundColor: Fuel.chipBg,
-    borderWidth: 1, borderColor: Dashboard.cardBorder,
+    backgroundColor: c.Fuel.chipBg,
+    borderWidth: 1, borderColor: c.Dashboard.cardBorder,
   },
-  statusDot:      { width: 10, height: 10, borderRadius: 5, backgroundColor: Severity.green },
-  statusText:     { fontSize: 12, fontWeight: '600', letterSpacing: 0.6, color: Dashboard.textSecondary },
+  statusDot:      { width: 10, height: 10, borderRadius: 5, backgroundColor: c.Severity.green },
+  statusText:     { fontSize: 12, fontWeight: '600', letterSpacing: 0.6, color: c.Dashboard.textSecondary },
 
   // Ring
   ringWrap:       {
@@ -239,47 +245,47 @@ const styles = StyleSheet.create({
   },
   ringOuterDecor: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 150, borderWidth: 16, borderColor: Scan.ringTrack, opacity: 0.2,
+    borderRadius: 150, borderWidth: 16, borderColor: c.Scan.ringTrack, opacity: 0.2,
   },
   ringMidDecor:   {
     position: 'absolute', left: 16, right: 16, top: 16, bottom: 16,
-    borderRadius: 150, borderWidth: 1, borderColor: Dashboard.cardBorder, opacity: 0.3,
+    borderRadius: 150, borderWidth: 1, borderColor: c.Dashboard.cardBorder, opacity: 0.3,
   },
   ringInnerDecor: {
     position: 'absolute', left: 40, right: 40, top: 40, bottom: 40,
-    borderRadius: 150, borderWidth: 1, borderColor: Scan.ringGlow, opacity: 0.4,
+    borderRadius: 150, borderWidth: 1, borderColor: c.Scan.ringGlow, opacity: 0.4,
   },
   ringCenter:     {
     width: 160, height: 160, borderRadius: 80,
-    backgroundColor: Dashboard.card,
-    borderWidth: 1, borderColor: Dashboard.cardBorder,
+    backgroundColor: c.Dashboard.card,
+    borderWidth: 1, borderColor: c.Dashboard.cardBorder,
     alignItems: 'center', justifyContent: 'center',
     shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, shadowOffset: { width: 0, height: 8 },
     elevation: 6,
   },
-  ringPct:        { fontSize: 28, lineHeight: 34, fontWeight: '700', color: Dashboard.accentDeep, marginTop: 4 },
+  ringPct:        { fontSize: 28, lineHeight: 34, fontWeight: '700', color: c.Dashboard.accentDeep, marginTop: 4 },
 
   // Tiles
   tileGrid:       { width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 32 },
   tile:           {
     flexBasis: '45%', flexGrow: 1,
-    backgroundColor: Dashboard.card,
-    borderRadius: 12, borderWidth: 1, borderColor: Dashboard.cardBorder,
+    backgroundColor: c.Dashboard.card,
+    borderRadius: 12, borderWidth: 1, borderColor: c.Dashboard.cardBorder,
     padding: 16,
     shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
   tileHeader:     { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  tileLabel:      { fontSize: 12, fontWeight: '600', letterSpacing: 0.6, color: Dashboard.textSecondary },
+  tileLabel:      { fontSize: 12, fontWeight: '600', letterSpacing: 0.6, color: c.Dashboard.textSecondary },
   tileValueRow:   { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  tileValue:      { fontSize: 24, lineHeight: 32, fontWeight: '700', color: Dashboard.textPrimary },
-  tileUnit:       { fontSize: 12, fontWeight: '600', color: Fuel.axisLabel },
+  tileValue:      { fontSize: 24, lineHeight: 32, fontWeight: '700', color: c.Dashboard.textPrimary },
+  tileUnit:       { fontSize: 12, fontWeight: '600', color: c.Fuel.axisLabel },
 
   // Faults card
   faultsCard:     {
     width: '100%',
-    backgroundColor: Dashboard.card,
-    borderRadius: 12, borderWidth: 1, borderColor: Dashboard.cardBorder,
+    backgroundColor: c.Dashboard.card,
+    borderRadius: 12, borderWidth: 1, borderColor: c.Dashboard.cardBorder,
     overflow: 'hidden',
     marginBottom: 24,
     shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, shadowOffset: { width: 0, height: 8 },
@@ -288,12 +294,12 @@ const styles = StyleSheet.create({
   faultsAccentBar:{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
   faultsBody:     { padding: 16, paddingLeft: 20 },
   faultsHeader:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  faultsTitle:    { fontSize: 20, lineHeight: 28, fontWeight: '600', color: Dashboard.textPrimary },
+  faultsTitle:    { fontSize: 20, lineHeight: 28, fontWeight: '600', color: c.Dashboard.textPrimary },
   faultsChip:     {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4,
   },
-  faultsChipText: { fontSize: 12, fontWeight: '600', letterSpacing: 0.6, color: '#FFFFFF' },
+  faultsChipText: { fontSize: 12, fontWeight: '600', letterSpacing: 0.6, color: c.Dashboard.card },
   faultRow:       {
     flexDirection: 'row', alignItems: 'flex-start', gap: 12,
     borderRadius: 8, padding: 12, marginTop: 8,
@@ -304,8 +310,8 @@ const styles = StyleSheet.create({
   // Done
   doneBtn:        {
     width: '100%',
-    backgroundColor: Dashboard.accentDeep,
+    backgroundColor: c.Dashboard.accentDeep,
     borderRadius: 12, paddingVertical: 14, alignItems: 'center',
   },
-  doneBtnText:    { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
-});
+  doneBtnText:    { color: c.Dashboard.onAccent, fontSize: 15, fontWeight: '700' },
+}));

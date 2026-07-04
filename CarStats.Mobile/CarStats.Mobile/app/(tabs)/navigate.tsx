@@ -22,7 +22,7 @@ import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ShopMap from '@/components/ShopMap';
 import { MechanicShop, getShops } from '@/services/api';
-import { Dashboard, Fuel, Severity } from '@/constants/theme';
+import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 const GEOCODE_CACHE_KEY = 'shop_geocode_cache_v1';
@@ -43,6 +43,8 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
 }
 
 export default function MechanicFinderScreen() {
+  const { colors: c } = useTheme();
+  const styles = useStyles();
   const [shops, setShops]         = useState<LocatedShop[]>([]);
   const [loading, setLoading]     = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -139,7 +141,7 @@ export default function MechanicFinderScreen() {
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color={Dashboard.accent} />
+        <ActivityIndicator size="large" color={c.Dashboard.accent} />
       </View>
     );
   }
@@ -161,7 +163,7 @@ export default function MechanicFinderScreen() {
         <ScrollView
           contentContainerStyle={styles.sheetList}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={Dashboard.accent} />
+            <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={c.Dashboard.accent} />
           }
         >
           {shops.length === 0 ? (
@@ -175,7 +177,7 @@ export default function MechanicFinderScreen() {
               <View key={shop.id} style={styles.shopCard}>
                 <View style={[
                   styles.shopAccentBar,
-                  { backgroundColor: i % 2 === 0 ? Dashboard.accentDeep : Severity.green },
+                  { backgroundColor: i % 2 === 0 ? c.Dashboard.accentDeep : c.Severity.green },
                 ]} />
                 <View style={styles.shopHeader}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
@@ -184,7 +186,7 @@ export default function MechanicFinderScreen() {
                   </View>
                   {shop.rating > 0 && (
                     <View style={styles.ratingChip}>
-                      <IconSymbol name="star.fill" size={14} color={Fuel.starAmber} />
+                      <IconSymbol name="star.fill" size={14} color={c.Fuel.starAmber} />
                       <Text style={styles.ratingValue}>
                         {shop.rating.toFixed(1)}{' '}
                         <Text style={styles.ratingCount}>({shop.reviewCount})</Text>
@@ -193,7 +195,7 @@ export default function MechanicFinderScreen() {
                   )}
                 </View>
                 <View style={styles.distanceRow}>
-                  <IconSymbol name="location.fill" size={14} color={Dashboard.textSecondary} />
+                  <IconSymbol name="location.fill" size={14} color={c.Dashboard.textSecondary} />
                   <Text style={styles.distanceText}>
                     {shop.distanceKm != null
                       ? `${shop.distanceKm.toFixed(1)} km away`
@@ -202,11 +204,11 @@ export default function MechanicFinderScreen() {
                 </View>
                 <View style={styles.actionsRow}>
                   <Pressable style={styles.callBtn} onPress={() => call(shop)}>
-                    <IconSymbol name="phone.fill" size={20} color={Dashboard.accentDeep} />
+                    <IconSymbol name="phone.fill" size={20} color={c.Dashboard.accentDeep} />
                     <Text style={styles.callBtnText}>Call</Text>
                   </Pressable>
                   <Pressable style={styles.directionsBtn} onPress={() => directions(shop)}>
-                    <IconSymbol name="arrow.triangle.turn.up.right.diamond.fill" size={20} color="#FFFFFF" />
+                    <IconSymbol name="arrow.triangle.turn.up.right.diamond.fill" size={20} color={c.Dashboard.onAccent} />
                     <Text style={styles.directionsBtnText}>Directions</Text>
                   </Pressable>
                 </View>
@@ -221,37 +223,37 @@ export default function MechanicFinderScreen() {
 
 // ─── Styles (values from the mechanic_finder Stitch export) ───────────────────
 
-const styles = StyleSheet.create({
-  container:      { flex: 1, backgroundColor: Dashboard.bg },
+const useStyles = createThemedStyles((c) => StyleSheet.create({
+  container:      { flex: 1, backgroundColor: c.Dashboard.bg },
   centered:       { justifyContent: 'center', alignItems: 'center' },
   mapArea:        { flex: 1 },
 
   // Bottom sheet
   sheet:          {
     height: '52%',
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderTopLeftRadius: 12, borderTopRightRadius: 12,
     shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 24, shadowOffset: { width: 0, height: -8 },
     elevation: 12,
   },
   sheetHandle:    {
     width: 48, height: 4, borderRadius: 2,
-    backgroundColor: Dashboard.cardBorder,
+    backgroundColor: c.Dashboard.cardBorder,
     alignSelf: 'center', marginVertical: 12,
   },
   sheetHeader:    {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end',
     paddingHorizontal: 20, paddingBottom: 16,
   },
-  sheetTitle:     { fontSize: 20, lineHeight: 28, fontWeight: '600', color: Dashboard.textPrimary },
-  sheetCount:     { fontSize: 14, lineHeight: 20, color: Dashboard.textSecondary },
+  sheetTitle:     { fontSize: 20, lineHeight: 28, fontWeight: '600', color: c.Dashboard.textPrimary },
+  sheetCount:     { fontSize: 14, lineHeight: 20, color: c.Dashboard.textSecondary },
   sheetList:      { paddingHorizontal: 20, paddingBottom: 32, gap: 16 },
 
   // Shop cards
   shopCard:       {
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 8,
-    borderWidth: 1, borderColor: Dashboard.cardBorder,
+    borderWidth: 1, borderColor: c.Dashboard.cardBorder,
     padding: 16,
     overflow: 'hidden',
     shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
@@ -259,37 +261,37 @@ const styles = StyleSheet.create({
   },
   shopAccentBar:  { position: 'absolute', left: 0, top: 0, bottom: 0, width: 2 },
   shopHeader:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
-  shopName:       { fontSize: 24, lineHeight: 26, fontWeight: '700', color: Dashboard.textPrimary, marginBottom: 4 },
-  shopSpecialty:  { fontSize: 14, lineHeight: 20, color: Dashboard.textSecondary },
+  shopName:       { fontSize: 24, lineHeight: 26, fontWeight: '700', color: c.Dashboard.textPrimary, marginBottom: 4 },
+  shopSpecialty:  { fontSize: 14, lineHeight: 20, color: c.Dashboard.textSecondary },
   ratingChip:     {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: Dashboard.bg,
+    backgroundColor: c.Dashboard.bg,
     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4,
   },
-  ratingValue:    { fontSize: 12, fontWeight: '600', color: Dashboard.textPrimary },
-  ratingCount:    { fontWeight: '400', color: Dashboard.textSecondary },
+  ratingValue:    { fontSize: 12, fontWeight: '600', color: c.Dashboard.textPrimary },
+  ratingCount:    { fontWeight: '400', color: c.Dashboard.textSecondary },
   distanceRow:    { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 16 },
-  distanceText:   { fontSize: 14, lineHeight: 20, color: Dashboard.textSecondary, flex: 1 },
+  distanceText:   { fontSize: 14, lineHeight: 20, color: c.Dashboard.textSecondary, flex: 1 },
 
   actionsRow:     { flexDirection: 'row', gap: 12 },
   callBtn:        {
     flex: 1, height: 48, borderRadius: 8,
-    backgroundColor: Fuel.chipBg,
+    backgroundColor: c.Fuel.chipBg,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
   },
-  callBtnText:    { fontSize: 15, fontWeight: '700', color: Dashboard.accentDeep },
+  callBtnText:    { fontSize: 15, fontWeight: '700', color: c.Dashboard.accentDeep },
   directionsBtn:  {
     flex: 1, height: 48, borderRadius: 8,
-    backgroundColor: Dashboard.accentDeep,
+    backgroundColor: c.Dashboard.accentDeep,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, shadowOffset: { width: 0, height: 8 },
     elevation: 3,
   },
-  directionsBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
+  directionsBtnText: { fontSize: 15, fontWeight: '700', color: c.Dashboard.onAccent },
 
   // Empty state
   emptyState:     { alignItems: 'center', paddingTop: 40 },
   emptyIcon:      { fontSize: 48 },
-  emptyText:      { fontSize: 17, fontWeight: '600', color: Dashboard.textPrimary, marginTop: 12 },
-  emptySubtext:   { fontSize: 13, color: Dashboard.textSecondary, marginTop: 6, textAlign: 'center' },
-});
+  emptyText:      { fontSize: 17, fontWeight: '600', color: c.Dashboard.textPrimary, marginTop: 12 },
+  emptySubtext:   { fontSize: 13, color: c.Dashboard.textSecondary, marginTop: 6, textAlign: 'center' },
+}));

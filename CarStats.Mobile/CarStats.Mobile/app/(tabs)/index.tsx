@@ -34,15 +34,17 @@ import {
   scanDtcs,
 } from '@/services/scanner';
 import { decodeVin, VinDecodeResult, vinMatchesVehicle } from '@/services/vindecode';
-import { Dashboard, Plate, Severity, SeveritySoft } from '@/constants/theme';
+import { sendFaultAlert } from '@/services/notifications';
+import { createThemedStyles, useTheme } from '@/context/ThemeContext';
+import { Plate, ThemeColors } from '@/constants/theme';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const severityColor = (s: SeverityLevel | undefined) => {
+const severityColor = (c: ThemeColors, s: SeverityLevel | undefined) => {
   switch (s) {
-    case SeverityLevel.Green:  return Severity.green;
-    case SeverityLevel.Red:    return Severity.red;
-    default:                   return Severity.yellow;
+    case SeverityLevel.Green:  return c.Severity.green;
+    case SeverityLevel.Red:    return c.Severity.red;
+    default:                   return c.Severity.yellow;
   }
 };
 
@@ -62,6 +64,8 @@ function fuelKey(vehicleId?: number) {
 
 export default function HomeScreen() {
   const { user: authUser } = useAuth();
+  const { colors: c } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
 
   // ── User / vehicle state ──
@@ -269,6 +273,15 @@ export default function HomeScreen() {
       );
       setDtcResults(responses);
       loadData();
+
+      // Local notification (Settings → "Fault scan alerts")
+      const worst = responses.reduce<SeverityLevel>((w, r) => {
+        const sev = (r.translation?.severity ?? r.severity ?? SeverityLevel.Yellow) as SeverityLevel;
+        return sev > w ? sev : w;
+      }, SeverityLevel.Green);
+      const worstLabel =
+        worst === SeverityLevel.Red ? 'CRITICAL' : worst === SeverityLevel.Yellow ? 'WARNING' : 'OK';
+      sendFaultAlert(responses.length, worstLabel);
     } catch {
       setScanError('Scan failed. Check that the adapter is connected to the car.');
     } finally {
@@ -280,7 +293,7 @@ export default function HomeScreen() {
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color={Dashboard.accent} />
+        <ActivityIndicator size="large" color={c.Dashboard.accent} />
       </View>
     );
   }
@@ -421,7 +434,7 @@ export default function HomeScreen() {
         <View style={styles.statCard}>
           <Text style={[
             styles.statValue,
-            (user?.totalFaultsLogged ?? 0) > 0 && { color: Severity.yellow },
+            (user?.totalFaultsLogged ?? 0) > 0 && { color: c.Severity.yellow },
           ]}>
             {user?.totalFaultsLogged ?? 0}
           </Text>
@@ -465,7 +478,7 @@ export default function HomeScreen() {
           disabled={scanning}
         >
           {scanning
-            ? <ActivityIndicator color="#fff" />
+            ? <ActivityIndicator color={c.Dashboard.onAccent} />
             : <Text style={styles.scanButtonText}>🔍  Scan My Car</Text>}
         </Pressable>
         {scanError && (
@@ -491,7 +504,7 @@ export default function HomeScreen() {
             <View key={ev.id} style={styles.alertRow}>
               <View style={[
                 styles.severityDot,
-                { backgroundColor: severityColor(ev.translation?.severity) },
+                { backgroundColor: severityColor(c, ev.translation?.severity) },
               ]} />
               <View style={styles.alertText}>
                 <Text style={styles.alertCode}>{ev.rawErrorCode}</Text>
@@ -551,9 +564,11 @@ function ScannerBanner({
   status: ScannerStatus | null;
   onRetry: () => void;
 }) {
+  const { colors: c } = useTheme();
+  const bannerStyles = useBannerStyles();
   return (
     <View style={[bannerStyles.row, online ? bannerStyles.online : bannerStyles.offline]}>
-      <View style={[bannerStyles.dot, { backgroundColor: online ? Severity.green : Severity.unknown }]} />
+      <View style={[bannerStyles.dot, { backgroundColor: online ? c.Severity.green : c.Severity.unknown }]} />
       <View style={{ flex: 1 }}>
         <Text style={bannerStyles.title}>
           {online ? 'OBD-II Adapter Connected' : 'Adapter Not Found'}
@@ -576,7 +591,7 @@ function ScannerBanner({
   );
 }
 
-const bannerStyles = StyleSheet.create({
+const useBannerStyles = createThemedStyles((c) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -586,14 +601,14 @@ const bannerStyles = StyleSheet.create({
     marginBottom: 20,
     gap: 10,
   },
-  online:    { borderColor: Severity.green  + '55', backgroundColor: Severity.green  + '11' },
-  offline:   { borderColor: Dashboard.cardBorder,   backgroundColor: Dashboard.card },
+  online:    { borderColor: c.Severity.green  + '55', backgroundColor: c.Severity.green  + '11' },
+  offline:   { borderColor: c.Dashboard.cardBorder,   backgroundColor: c.Dashboard.card },
   dot:       { width: 8, height: 8, borderRadius: 4 },
-  title:     { fontSize: 13, fontWeight: '600', color: Dashboard.textPrimary },
-  sub:       { fontSize: 11, color: Dashboard.textSecondary, marginTop: 2 },
-  retryBtn:  { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: Dashboard.accent },
-  retryText: { fontSize: 11, fontWeight: '700', color: Dashboard.accent, letterSpacing: 1 },
-});
+  title:     { fontSize: 13, fontWeight: '600', color: c.Dashboard.textPrimary },
+  sub:       { fontSize: 11, color: c.Dashboard.textSecondary, marginTop: 2 },
+  retryBtn:  { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: c.Dashboard.accent },
+  retryText: { fontSize: 11, fontWeight: '700', color: c.Dashboard.accent, letterSpacing: 1 },
+}));
 
 // ─── Live gauges ───────────────────────────────────────────────────────────────
 
@@ -606,6 +621,8 @@ function LiveGauges({
   estimatedFuel: number | null;
   onSetFuel: () => void;
 }) {
+  const { colors: c } = useTheme();
+  const gaugeStyles = useGaugeStyles();
   const rpmPct  = Math.min(data.rpm / 7000, 1);
 
   // Determine which fuel value to display
@@ -622,21 +639,21 @@ function LiveGauges({
           value={data.rpm.toLocaleString()}
           subValue={`${data.engineLoadPct}% load`}
           barPct={rpmPct}
-          barColor={rpmPct > 0.8 ? Severity.red : rpmPct > 0.6 ? Severity.yellow : Severity.green}
+          barColor={rpmPct > 0.8 ? c.Severity.red : rpmPct > 0.6 ? c.Severity.yellow : c.Severity.green}
         />
         <GaugeTile
           label="SPEED"
           value={`${data.speedKmh}`}
           subValue="km/h"
           barPct={Math.min(data.speedKmh / 200, 1)}
-          barColor={Dashboard.accent}
+          barColor={c.Dashboard.accent}
         />
         <GaugeTile
           label="COOLANT"
           value={`${data.coolantCelsius}°`}
           subValue="Celsius"
           barPct={Math.min((data.coolantCelsius + 40) / 160, 1)}
-          barColor={data.coolantCelsius > 110 ? Severity.red : data.coolantCelsius > 95 ? Severity.yellow : Severity.green}
+          barColor={data.coolantCelsius > 110 ? c.Severity.red : data.coolantCelsius > 95 ? c.Severity.yellow : c.Severity.green}
         />
         {/* ── Fuel tile — tap to set level when OBD doesn't report it ── */}
         <Pressable
@@ -668,11 +685,11 @@ function LiveGauges({
               gaugeStyles.barFill,
               {
                 width: `${Math.round((fuelValue ?? 0) / 100 * 100)}%`,
-                backgroundColor: fuelValue == null  ? Dashboard.cardBorder
-                  : fuelValue < 15 ? Severity.red
-                  : fuelValue < 30 ? Severity.yellow
-                  : fuelIsEst      ? Dashboard.accent + 'AA'  // dimmed for estimates
-                  : Severity.green,
+                backgroundColor: fuelValue == null  ? c.Dashboard.cardBorder
+                  : fuelValue < 15 ? c.Severity.red
+                  : fuelValue < 30 ? c.Severity.yellow
+                  : fuelIsEst      ? c.Dashboard.accent + 'AA'  // dimmed for estimates
+                  : c.Severity.green,
               },
             ]} />
           </View>
@@ -695,6 +712,7 @@ function GaugeTile({
   barPct: number;
   barColor: string;
 }) {
+  const gaugeStyles = useGaugeStyles();
   return (
     <View style={gaugeStyles.tile}>
       <Text style={gaugeStyles.tileLabel}>{label}</Text>
@@ -707,18 +725,18 @@ function GaugeTile({
   );
 }
 
-const gaugeStyles = StyleSheet.create({
+const useGaugeStyles = createThemedStyles((c) => StyleSheet.create({
   card: {
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     padding: 16,
     marginBottom: 20,
   },
   cardTitle: {
     fontSize: 11,
-    color: Dashboard.textSecondary,
+    color: c.Dashboard.textSecondary,
     letterSpacing: 1.5,
     marginBottom: 14,
   },
@@ -729,14 +747,14 @@ const gaugeStyles = StyleSheet.create({
   },
   tile: {
     width: '47%',
-    backgroundColor: Dashboard.bg,
+    backgroundColor: c.Dashboard.bg,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     padding: 12,
   },
   tileTappable: {
-    borderColor: Dashboard.accent + '66',
+    borderColor: c.Dashboard.accent + '66',
     borderStyle: 'dashed',
   },
   tileLabelRow: {
@@ -747,34 +765,34 @@ const gaugeStyles = StyleSheet.create({
   },
   tileLabel: {
     fontSize: 10,
-    color: Dashboard.textSecondary,
+    color: c.Dashboard.textSecondary,
     letterSpacing: 1.5,
   },
   tileSetBtn: {
     fontSize: 9,
-    color: Dashboard.accent,
+    color: c.Dashboard.accent,
     fontWeight: '700',
     letterSpacing: 1,
   },
   tileValue: {
     fontSize: 26,
     fontWeight: '700',
-    color: Dashboard.textPrimary,
+    color: c.Dashboard.textPrimary,
   },
   tileSub: {
     fontSize: 11,
-    color: Dashboard.textSecondary,
+    color: c.Dashboard.textSecondary,
     marginBottom: 6,
   },
   tileNote: {
     fontSize: 9,
-    color: Severity.yellow,
+    color: c.Severity.yellow,
     lineHeight: 13,
     marginBottom: 6,
   },
   barTrack: {
     height: 4,
-    backgroundColor: Dashboard.cardBorder,
+    backgroundColor: c.Dashboard.cardBorder,
     borderRadius: 2,
     overflow: 'hidden',
   },
@@ -782,7 +800,7 @@ const gaugeStyles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
   },
-});
+}));
 
 // ─── Fuel set modal ────────────────────────────────────────────────────────────
 
@@ -804,6 +822,8 @@ function FuelSetModal({
   onSave: (pct: number, tankL: number) => void;
   onCancel: () => void;
 }) {
+  const { colors: c } = useTheme();
+  const modalStyles = useModalStyles();
   const [pctText,  setPctText]  = useState(String(currentEstimate ?? 100));
   const [tankText, setTankText] = useState('55');
 
@@ -857,7 +877,7 @@ function FuelSetModal({
               onChangeText={setPctText}
               keyboardType="numeric"
               maxLength={3}
-              placeholderTextColor={Dashboard.textSecondary}
+              placeholderTextColor={c.Dashboard.textSecondary}
               placeholder="0–100"
             />
           </View>
@@ -871,7 +891,7 @@ function FuelSetModal({
               onChangeText={setTankText}
               keyboardType="numeric"
               maxLength={4}
-              placeholderTextColor={Dashboard.textSecondary}
+              placeholderTextColor={c.Dashboard.textSecondary}
               placeholder="e.g. 55"
             />
           </View>
@@ -892,7 +912,7 @@ function FuelSetModal({
   );
 }
 
-const modalStyles = StyleSheet.create({
+const useModalStyles = createThemedStyles((c) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: '#000000BB',
@@ -900,22 +920,22 @@ const modalStyles = StyleSheet.create({
     padding: 24,
   },
   sheet: {
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     padding: 24,
     gap: 16,
   },
   title: {
     fontSize: 13,
     fontWeight: '800',
-    color: Dashboard.textPrimary,
+    color: c.Dashboard.textPrimary,
     letterSpacing: 1.5,
   },
   sub: {
     fontSize: 13,
-    color: Dashboard.textSecondary,
+    color: c.Dashboard.textSecondary,
     lineHeight: 19,
   },
   quickRow: {
@@ -927,21 +947,21 @@ const modalStyles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     alignItems: 'center',
-    backgroundColor: Dashboard.bg,
+    backgroundColor: c.Dashboard.bg,
   },
   quickBtnActive: {
-    borderColor: Dashboard.accent,
-    backgroundColor: Dashboard.accent + '22',
+    borderColor: c.Dashboard.accent,
+    backgroundColor: c.Dashboard.accent + '22',
   },
   quickLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: Dashboard.textSecondary,
+    color: c.Dashboard.textSecondary,
   },
   quickLabelActive: {
-    color: Dashboard.accent,
+    color: c.Dashboard.accent,
   },
   inputRow: {
     flexDirection: 'row',
@@ -951,23 +971,23 @@ const modalStyles = StyleSheet.create({
   inputLabel: {
     flex: 1,
     fontSize: 13,
-    color: Dashboard.textSecondary,
+    color: c.Dashboard.textSecondary,
   },
   input: {
     width: 80,
-    backgroundColor: Dashboard.bg,
+    backgroundColor: c.Dashboard.bg,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     padding: 10,
     fontSize: 16,
     fontWeight: '600',
-    color: Dashboard.textPrimary,
+    color: c.Dashboard.textPrimary,
     textAlign: 'center',
   },
   hint: {
     fontSize: 11,
-    color: Dashboard.textSecondary,
+    color: c.Dashboard.textSecondary,
     marginTop: -8,
   },
   btnRow: {
@@ -980,42 +1000,46 @@ const modalStyles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     alignItems: 'center',
   },
   cancelText: {
     fontSize: 13,
     fontWeight: '700',
-    color: Dashboard.textSecondary,
+    color: c.Dashboard.textSecondary,
     letterSpacing: 1,
   },
   saveBtn: {
     flex: 2,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: Dashboard.accent,
+    backgroundColor: c.Dashboard.accent,
     alignItems: 'center',
   },
   saveText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#fff',
+    color: c.Dashboard.onAccent,
     letterSpacing: 1,
   },
-});
+}));
 
 // ─── DTC Result card ───────────────────────────────────────────────────────────
 
-const SEVERITY_META: Record<SeverityLevel, { label: string; accent: string }> = {
-  [SeverityLevel.Green]:  { label: 'ALL CLEAR', accent: Severity.green },
-  [SeverityLevel.Yellow]: { label: 'WARNING',   accent: Severity.yellow },
-  [SeverityLevel.Red]:    { label: 'CRITICAL',  accent: Severity.red },
+const severityMetaFor = (c: ThemeColors, sev: SeverityLevel): { label: string; accent: string } => {
+  switch (sev) {
+    case SeverityLevel.Green: return { label: 'ALL CLEAR', accent: c.Severity.green };
+    case SeverityLevel.Red:   return { label: 'CRITICAL',  accent: c.Severity.red };
+    default:                  return { label: 'WARNING',   accent: c.Severity.yellow };
+  }
 };
 
 function DtcResultCard({ result }: { result: ReportDtcResponse }) {
+  const { colors: c } = useTheme();
+  const styles = useStyles();
   const t   = result.translation;
   const sev = (t?.severity ?? result.severity ?? SeverityLevel.Yellow) as SeverityLevel;
-  const meta = SEVERITY_META[sev];
+  const meta = severityMetaFor(c, sev);
 
   return (
     <View style={[styles.resultCard, { borderColor: meta.accent }]}>
@@ -1041,8 +1065,8 @@ function DtcResultCard({ result }: { result: ReportDtcResponse }) {
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  container:             { flex: 1, backgroundColor: Dashboard.bg },
+const useStyles = createThemedStyles((c) => StyleSheet.create({
+  container:             { flex: 1, backgroundColor: c.Dashboard.bg },
   centered:              { justifyContent: 'center', alignItems: 'center' },
   content:               { padding: 24, paddingTop: 64, paddingBottom: 40 },
 
@@ -1050,32 +1074,32 @@ const styles = StyleSheet.create({
 
   plannerCard:           {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: Dashboard.card,
-    borderRadius: 12, borderWidth: 1, borderColor: Dashboard.cardBorder,
+    backgroundColor: c.Dashboard.card,
+    borderRadius: 12, borderWidth: 1, borderColor: c.Dashboard.cardBorder,
     padding: 16, marginBottom: 16,
   },
   plannerIcon:           { fontSize: 24 },
-  plannerTitle:          { fontSize: 15, fontWeight: '700', color: Dashboard.textPrimary },
-  plannerSub:            { fontSize: 12, color: Dashboard.textSecondary, marginTop: 2 },
-  plannerChevron:        { fontSize: 26, color: Dashboard.textSecondary, marginTop: -2 },
+  plannerTitle:          { fontSize: 15, fontWeight: '700', color: c.Dashboard.textPrimary },
+  plannerSub:            { fontSize: 12, color: c.Dashboard.textSecondary, marginTop: 2 },
+  plannerChevron:        { fontSize: 26, color: c.Dashboard.textSecondary, marginTop: -2 },
   avatar: {
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: Dashboard.accent,
+    backgroundColor: c.Dashboard.accent,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarText:            { color: '#fff', fontSize: 18, fontWeight: '800' },
-  greetingSmall:         { fontSize: 13, color: Dashboard.textSecondary },
-  greeting:              { fontSize: 22, fontWeight: '800', color: Dashboard.textPrimary, letterSpacing: -0.3 },
+  avatarText:            { color: c.Dashboard.onAccent, fontSize: 18, fontWeight: '800' },
+  greetingSmall:         { fontSize: 13, color: c.Dashboard.textSecondary },
+  greeting:              { fontSize: 22, fontWeight: '800', color: c.Dashboard.textPrimary, letterSpacing: -0.3 },
 
   // Vehicle card with Israeli plate
   vehicleCard: {
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     padding: 16,
     marginBottom: 16,
     gap: 12,
@@ -1086,19 +1110,19 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   vehicleCardTop:  { flexDirection: 'row', alignItems: 'center' },
-  vehicleCardName: { fontSize: 19, fontWeight: '800', color: Dashboard.textPrimary },
-  vehicleCardSub:  { fontSize: 13, color: Dashboard.textSecondary, marginTop: 2 },
+  vehicleCardName: { fontSize: 19, fontWeight: '800', color: c.Dashboard.textPrimary },
+  vehicleCardSub:  { fontSize: 13, color: c.Dashboard.textSecondary, marginTop: 2 },
   healthChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: SeveritySoft.green,
+    backgroundColor: c.SeveritySoft.green,
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  healthChipDot:  { width: 8, height: 8, borderRadius: 4, backgroundColor: Severity.green },
-  healthChipText: { fontSize: 12, fontWeight: '700', color: Severity.green },
+  healthChipDot:  { width: 8, height: 8, borderRadius: 4, backgroundColor: c.Severity.green },
+  healthChipText: { fontSize: 12, fontWeight: '700', color: c.Severity.green },
   miniPlate: {
     flexDirection: 'row',
     alignSelf: 'flex-start',
@@ -1128,32 +1152,32 @@ const styles = StyleSheet.create({
 
   // Health status card
   healthCard: {
-    backgroundColor: SeveritySoft.green,
+    backgroundColor: c.SeveritySoft.green,
     borderRadius: 16,
     padding: 22,
     alignItems: 'center',
     marginBottom: 16,
   },
-  healthCardWarn:   { backgroundColor: SeveritySoft.yellow },
+  healthCardWarn:   { backgroundColor: c.SeveritySoft.yellow },
   healthCircle: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: Severity.green + '33',
+    backgroundColor: c.Severity.green + '33',
     borderWidth: 3,
-    borderColor: Severity.green,
+    borderColor: c.Severity.green,
     marginBottom: 12,
   },
-  healthCircleWarn: { backgroundColor: Severity.yellow + '33', borderColor: Severity.yellow },
+  healthCircleWarn: { backgroundColor: c.Severity.yellow + '33', borderColor: c.Severity.yellow },
   healthTitle: {
     fontSize: 19,
     fontWeight: '800',
-    color: Dashboard.textPrimary,
+    color: c.Dashboard.textPrimary,
     textAlign: 'center',
   },
   healthSub: {
     fontSize: 13,
-    color: Dashboard.textSecondary,
+    color: c.Dashboard.textSecondary,
     textAlign: 'center',
     lineHeight: 19,
     marginTop: 4,
@@ -1163,23 +1187,23 @@ const styles = StyleSheet.create({
   vehicleScrollContent:  { gap: 8, paddingVertical: 4 },
   vehicleChip:           {
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 6,
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
   },
-  vehicleChipActive:     { borderColor: Dashboard.accent, backgroundColor: Dashboard.accent + '22' },
-  vehicleChipText:       { fontSize: 13, color: Dashboard.textSecondary },
-  vehicleChipTextActive: { color: Dashboard.accent, fontWeight: '600' },
+  vehicleChipActive:     { borderColor: c.Dashboard.accent, backgroundColor: c.Dashboard.accent + '22' },
+  vehicleChipText:       { fontSize: 13, color: c.Dashboard.textSecondary },
+  vehicleChipTextActive: { color: c.Dashboard.accent, fontWeight: '600' },
 
   detectionBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Dashboard.accent + '15',
+    backgroundColor: c.Dashboard.accent + '15',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Dashboard.accent + '55',
+    borderColor: c.Dashboard.accent + '55',
     padding: 14,
     marginBottom: 16,
     gap: 10,
@@ -1187,23 +1211,23 @@ const styles = StyleSheet.create({
   detectionTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: Dashboard.accent,
+    color: c.Dashboard.accent,
   },
   detectionSub: {
     fontSize: 12,
-    color: Dashboard.textSecondary,
+    color: c.Dashboard.textSecondary,
     marginTop: 2,
   },
   detectionAddBtn: {
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 8,
-    backgroundColor: Dashboard.accent,
+    backgroundColor: c.Dashboard.accent,
   },
   detectionAddText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#fff',
+    color: c.Dashboard.onAccent,
     letterSpacing: 1,
   },
   detectionDismiss: {
@@ -1211,12 +1235,12 @@ const styles = StyleSheet.create({
   },
   detectionDismissText: {
     fontSize: 16,
-    color: Dashboard.textSecondary,
+    color: c.Dashboard.textSecondary,
   },
 
   addVehicleBtn: {
     borderWidth: 1,
-    borderColor: Dashboard.accent + '66',
+    borderColor: c.Dashboard.accent + '66',
     borderStyle: 'dashed',
     borderRadius: 10,
     paddingVertical: 10,
@@ -1225,7 +1249,7 @@ const styles = StyleSheet.create({
   },
   addVehicleBtnText: {
     fontSize: 13,
-    color: Dashboard.accent,
+    color: c.Dashboard.accent,
     fontWeight: '600',
     letterSpacing: 0.5,
   },
@@ -1233,43 +1257,43 @@ const styles = StyleSheet.create({
   statsRow:              { flexDirection: 'row', gap: 12, marginBottom: 20 },
   statCard:              {
     flex: 1,
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     padding: 16,
     alignItems: 'center',
   },
-  statValue:             { fontSize: 28, fontWeight: '700', color: Dashboard.textPrimary },
-  statLabel:             { fontSize: 12, color: Dashboard.textSecondary, marginTop: 4, textAlign: 'center' },
+  statValue:             { fontSize: 28, fontWeight: '700', color: c.Dashboard.textPrimary },
+  statLabel:             { fontSize: 12, color: c.Dashboard.textSecondary, marginTop: 4, textAlign: 'center' },
 
   scanCard:              {
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     padding: 20,
     marginBottom: 24,
   },
-  scanLabel:             { fontSize: 11, color: Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 8 },
-  scanHint:              { fontSize: 13, color: Dashboard.textSecondary, lineHeight: 18, marginBottom: 14 },
+  scanLabel:             { fontSize: 11, color: c.Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 8 },
+  scanHint:              { fontSize: 13, color: c.Dashboard.textSecondary, lineHeight: 18, marginBottom: 14 },
   scanButton: {
-    backgroundColor: Dashboard.accentDeep,
+    backgroundColor: c.Dashboard.accentDeep,
     borderRadius: 999,
     paddingVertical: 16,
     alignItems: 'center',
-    shadowColor: Dashboard.accentDeep,
+    shadowColor: c.Dashboard.accentDeep,
     shadowOpacity: 0.25,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 5 },
     elevation: 4,
   },
   scanButtonDisabled:    { opacity: 0.5 },
-  scanButtonText:        { color: '#fff', fontWeight: '700', fontSize: 16 },
-  scanErrorText:         { color: Severity.yellow, fontSize: 12, marginTop: 10, lineHeight: 17 },
+  scanButtonText:        { color: c.Dashboard.onAccent, fontWeight: '700', fontSize: 16 },
+  scanErrorText:         { color: c.Severity.yellow, fontSize: 12, marginTop: 10, lineHeight: 17 },
 
   resultCard:            {
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 12,
     borderWidth: 1,
     padding: 20,
@@ -1278,9 +1302,9 @@ const styles = StyleSheet.create({
   },
   resultHeader:          { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   resultBadge:           { fontSize: 11, fontWeight: '800', letterSpacing: 1.5 },
-  resultCode:            { fontSize: 13, fontWeight: '700', color: Dashboard.textSecondary, letterSpacing: 1 },
-  resultTitle:           { fontSize: 20, fontWeight: '700', color: Dashboard.textPrimary },
-  resultBody:            { fontSize: 14, color: Dashboard.textSecondary, lineHeight: 20 },
+  resultCode:            { fontSize: 13, fontWeight: '700', color: c.Dashboard.textSecondary, letterSpacing: 1 },
+  resultTitle:           { fontSize: 20, fontWeight: '700', color: c.Dashboard.textPrimary },
+  resultBody:            { fontSize: 14, color: c.Dashboard.textSecondary, lineHeight: 20 },
   costPill:              {
     borderWidth: 1,
     borderRadius: 8,
@@ -1288,22 +1312,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 4,
   },
-  costLabel:             { fontSize: 10, color: Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 4 },
+  costLabel:             { fontSize: 10, color: c.Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 4 },
   costValue:             { fontSize: 22, fontWeight: '700' },
 
-  sectionTitle:          { fontSize: 11, color: Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 12 },
+  sectionTitle:          { fontSize: 11, color: c.Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 12 },
   alertRow:              {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     padding: 14,
     marginBottom: 8,
   },
   severityDot:           { width: 10, height: 10, borderRadius: 5, marginRight: 12 },
   alertText:             { flex: 1 },
-  alertCode:             { fontSize: 12, color: Dashboard.textSecondary, fontWeight: '600', letterSpacing: 1 },
-  alertTitle:            { fontSize: 14, color: Dashboard.textPrimary, marginTop: 2 },
-});
+  alertCode:             { fontSize: 12, color: c.Dashboard.textSecondary, fontWeight: '600', letterSpacing: 1 },
+  alertTitle:            { fontSize: 14, color: c.Dashboard.textPrimary, marginTop: 2 },
+}));

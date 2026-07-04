@@ -15,12 +15,16 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
+import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { UserRole } from '@/services/api';
-import { Dashboard, Severity } from '@/constants/theme';
 
 export default function ProfileScreen() {
   const { user, logout, refreshUser } = useAuth();
+  const { colors: c } = useTheme();
+  const s = useStyles();
+  const router = useRouter();
   const [refreshing, setRefreshing]   = useState(false);
   const [loggingOut, setLoggingOut]   = useState(false);
 
@@ -64,7 +68,7 @@ export default function ProfileScreen() {
       style={s.screen}
       contentContainerStyle={s.content}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Dashboard.accent} />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.Dashboard.accent} />
       }
     >
       <Text style={s.pageTitle}>PROFILE</Text>
@@ -121,9 +125,17 @@ export default function ProfileScreen() {
 
       {/* Account actions */}
       <Text style={s.sectionLabel}>ACCOUNT</Text>
+      <Pressable style={s.settingsRow} onPress={() => router.push('/settings')}>
+        <Text style={s.settingsIcon}>⚙️</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={s.settingsTitle}>Settings</Text>
+          <Text style={s.settingsSub}>Dark mode, notifications, child safety reminder</Text>
+        </View>
+        <Text style={s.settingsChevron}>›</Text>
+      </Pressable>
       <Pressable style={s.logoutBtn} onPress={confirmLogout} disabled={loggingOut}>
         {loggingOut
-          ? <ActivityIndicator color={Severity.red} />
+          ? <ActivityIndicator color={c.Severity.red} />
           : <Text style={s.logoutText}>LOG OUT</Text>}
       </Pressable>
 
@@ -132,23 +144,23 @@ export default function ProfileScreen() {
   );
 }
 
-const s = StyleSheet.create({
-  screen:  { flex: 1, backgroundColor: Dashboard.bg },
+const useStyles = createThemedStyles((c) => StyleSheet.create({
+  screen:  { flex: 1, backgroundColor: c.Dashboard.bg },
   content: { padding: 20, paddingTop: 64, paddingBottom: 48, gap: 12 },
 
   pageTitle: {
     fontSize: 13,
     fontWeight: '800',
-    color: Dashboard.textPrimary,
+    color: c.Dashboard.textPrimary,
     letterSpacing: 1.5,
     marginBottom: 4,
   },
 
   card: {
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     padding: 18,
     gap: 12,
   },
@@ -158,70 +170,85 @@ const s = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: Dashboard.accent,
+    backgroundColor: c.Dashboard.accent,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarText: { fontSize: 20, fontWeight: '800', color: '#fff' },
-  name:  { fontSize: 18, fontWeight: '700', color: Dashboard.textPrimary },
-  email: { fontSize: 13, color: Dashboard.textSecondary, marginTop: 2 },
+  avatarText: { fontSize: 20, fontWeight: '800', color: c.Dashboard.onAccent },
+  name:  { fontSize: 18, fontWeight: '700', color: c.Dashboard.textPrimary },
+  email: { fontSize: 13, color: c.Dashboard.textSecondary, marginTop: 2 },
 
   roleChip: {
     alignSelf: 'flex-start',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     paddingHorizontal: 12,
     paddingVertical: 5,
   },
-  roleChipPremium:     { borderColor: Severity.yellow + '88', backgroundColor: Severity.yellow + '14' },
-  roleChipText:        { fontSize: 10, fontWeight: '700', letterSpacing: 1.2, color: Dashboard.textSecondary },
-  roleChipTextPremium: { color: Severity.yellow },
+  roleChipPremium:     { borderColor: c.Severity.yellow + '88', backgroundColor: c.Severity.yellow + '14' },
+  roleChipText:        { fontSize: 10, fontWeight: '700', letterSpacing: 1.2, color: c.Dashboard.textSecondary },
+  roleChipTextPremium: { color: c.Severity.yellow },
 
   statsRow: { flexDirection: 'row', gap: 12 },
   statCard: {
     flex: 1,
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     paddingVertical: 16,
     alignItems: 'center',
   },
-  statValue: { fontSize: 24, fontWeight: '800', color: Dashboard.textPrimary },
-  statLabel: { fontSize: 10, color: Dashboard.textSecondary, letterSpacing: 1.2, marginTop: 4 },
+  statValue: { fontSize: 24, fontWeight: '800', color: c.Dashboard.textPrimary },
+  statLabel: { fontSize: 10, color: c.Dashboard.textSecondary, letterSpacing: 1.2, marginTop: 4 },
 
   sectionLabel: {
     fontSize: 11,
-    color: Dashboard.textSecondary,
+    color: c.Dashboard.textSecondary,
     letterSpacing: 1.5,
     marginTop: 10,
   },
 
-  emptyText: { fontSize: 13, color: Dashboard.textSecondary, lineHeight: 18 },
+  emptyText: { fontSize: 13, color: c.Dashboard.textSecondary, lineHeight: 18 },
 
   vehicleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     padding: 14,
   },
-  vehicleName:  { fontSize: 15, fontWeight: '600', color: Dashboard.textPrimary },
-  vehiclePlate: { fontSize: 12, color: Dashboard.textSecondary, marginTop: 2 },
-  vehicleFuel:  { fontSize: 12, color: Dashboard.textSecondary, fontWeight: '600' },
+  vehicleName:  { fontSize: 15, fontWeight: '600', color: c.Dashboard.textPrimary },
+  vehiclePlate: { fontSize: 12, color: c.Dashboard.textSecondary, marginTop: 2 },
+  vehicleFuel:  { fontSize: 12, color: c.Dashboard.textSecondary, fontWeight: '600' },
+
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: c.Dashboard.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.Dashboard.cardBorder,
+    padding: 14,
+  },
+  settingsIcon:    { fontSize: 20 },
+  settingsTitle:   { fontSize: 15, fontWeight: '600', color: c.Dashboard.textPrimary },
+  settingsSub:     { fontSize: 12, color: c.Dashboard.textSecondary, marginTop: 2 },
+  settingsChevron: { fontSize: 24, color: c.Dashboard.textSecondary, marginTop: -2 },
 
   logoutBtn: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Severity.red + '66',
-    backgroundColor: Severity.red + '10',
+    borderColor: c.Severity.red + '66',
+    backgroundColor: c.Severity.red + '10',
     paddingVertical: 14,
     alignItems: 'center',
   },
-  logoutText: { color: Severity.red, fontWeight: '700', fontSize: 14, letterSpacing: 1.5 },
+  logoutText: { color: c.Severity.red, fontWeight: '700', fontSize: 14, letterSpacing: 1.5 },
 
-  version: { fontSize: 11, color: Dashboard.textSecondary, textAlign: 'center', marginTop: 16 },
-});
+  version: { fontSize: 11, color: c.Dashboard.textSecondary, textAlign: 'center', marginTop: 16 },
+}));

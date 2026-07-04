@@ -13,13 +13,14 @@ import {
   getUserEvents,
 } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
-import { Dashboard, Severity } from '@/constants/theme';
+import { createThemedStyles, useTheme } from '@/context/ThemeContext';
+import { ThemeColors } from '@/constants/theme';
 
-const severityMeta = (s: SeverityLevel | undefined) => {
+const severityMeta = (c: ThemeColors, s: SeverityLevel | undefined) => {
   switch (s) {
-    case SeverityLevel.Green:  return { label: 'OK',       color: Severity.green };
-    case SeverityLevel.Red:    return { label: 'CRITICAL', color: Severity.red };
-    default:                   return { label: 'WARNING',  color: Severity.yellow };
+    case SeverityLevel.Green:  return { label: 'OK',       color: c.Severity.green };
+    case SeverityLevel.Red:    return { label: 'CRITICAL', color: c.Severity.red };
+    default:                   return { label: 'WARNING',  color: c.Severity.yellow };
   }
 };
 
@@ -30,6 +31,8 @@ const formatDate = (iso: string) =>
 
 export default function HistoryScreen() {
   const { user: authUser }      = useAuth();
+  const { colors: c } = useTheme();
+  const styles = useStyles();
   const [events, setEvents]     = useState<VehicleEventEnriched[]>([]);
   const [loading, setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -53,7 +56,7 @@ export default function HistoryScreen() {
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color={Dashboard.accent} />
+        <ActivityIndicator size="large" color={c.Dashboard.accent} />
       </View>
     );
   }
@@ -66,7 +69,7 @@ export default function HistoryScreen() {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={() => load(true)}
-          tintColor={Dashboard.accent}
+          tintColor={c.Dashboard.accent}
         />
       }
     >
@@ -82,7 +85,7 @@ export default function HistoryScreen() {
         </View>
       ) : (
         events.map(ev => {
-          const sev = severityMeta(ev.translation?.severity);
+          const sev = severityMeta(c, ev.translation?.severity);
           return (
             <View key={ev.id} style={styles.card}>
               <View style={styles.cardHeader}>
@@ -106,7 +109,7 @@ export default function HistoryScreen() {
                 <Text style={styles.timestamp}>{formatDate(ev.timestamp)}</Text>
                 {ev.translation && (
                   <Text style={[styles.costRange, { color: sev.color }]}>
-                    ${ev.translation.estimatedCostMin} – ${ev.translation.estimatedCostMax}
+                    ₪{ev.translation.estimatedCostMin} – ₪{ev.translation.estimatedCostMax}
                   </Text>
                 )}
               </View>
@@ -118,35 +121,35 @@ export default function HistoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container:    { flex: 1, backgroundColor: Dashboard.bg },
+const useStyles = createThemedStyles((c) => StyleSheet.create({
+  container:    { flex: 1, backgroundColor: c.Dashboard.bg },
   centered:     { justifyContent: 'center', alignItems: 'center' },
   content:      { padding: 24, paddingTop: 64, paddingBottom: 40 },
 
-  screenTitle:  { fontSize: 11, color: Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 20 },
+  screenTitle:  { fontSize: 11, color: c.Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 20 },
 
   emptyState:   { alignItems: 'center', paddingTop: 80 },
-  emptyIcon:    { fontSize: 48, color: Severity.green },
-  emptyText:    { fontSize: 17, fontWeight: '600', color: Dashboard.textPrimary, marginTop: 12 },
-  emptySubtext: { fontSize: 13, color: Dashboard.textSecondary, marginTop: 6, textAlign: 'center' },
+  emptyIcon:    { fontSize: 48, color: c.Severity.green },
+  emptyText:    { fontSize: 17, fontWeight: '600', color: c.Dashboard.textPrimary, marginTop: 12 },
+  emptySubtext: { fontSize: 13, color: c.Dashboard.textSecondary, marginTop: 6, textAlign: 'center' },
 
   card:         {
-    backgroundColor: Dashboard.card,
+    backgroundColor: c.Dashboard.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Dashboard.cardBorder,
+    borderColor: c.Dashboard.cardBorder,
     padding: 16,
     marginBottom: 12,
   },
   cardHeader:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  rawCode:      { fontSize: 13, fontWeight: '700', color: Dashboard.textSecondary, letterSpacing: 1 },
+  rawCode:      { fontSize: 13, fontWeight: '700', color: c.Dashboard.textSecondary, letterSpacing: 1 },
   badge:        { borderWidth: 1, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 },
   badgeText:    { fontSize: 10, fontWeight: '700', letterSpacing: 1 },
 
-  humanTitle:   { fontSize: 16, fontWeight: '600', color: Dashboard.textPrimary, marginBottom: 6 },
-  description:  { fontSize: 13, color: Dashboard.textSecondary, lineHeight: 18, marginBottom: 12 },
+  humanTitle:   { fontSize: 16, fontWeight: '600', color: c.Dashboard.textPrimary, marginBottom: 6 },
+  description:  { fontSize: 13, color: c.Dashboard.textSecondary, lineHeight: 18, marginBottom: 12 },
 
   cardFooter:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  timestamp:    { fontSize: 12, color: Dashboard.textSecondary },
+  timestamp:    { fontSize: 12, color: c.Dashboard.textSecondary },
   costRange:    { fontSize: 13, fontWeight: '600' },
-});
+}));
