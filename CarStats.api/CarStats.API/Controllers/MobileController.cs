@@ -1,7 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using CarStats.API.Data;
 using CarStats.API.Models;
+using CarStats.API.Services;
 
 namespace CarStats.API.Controllers
 {
@@ -14,6 +16,7 @@ namespace CarStats.API.Controllers
 
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class MobileController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -31,14 +34,21 @@ namespace CarStats.API.Controllers
             if (string.IsNullOrWhiteSpace(request.RawCode))
                 return BadRequest("Error code cannot be empty.");
 
+            // Events are always logged under the CALLER's identity — a client
+            // can't spoof someone else's UserId (admins may, for testing).
+            if (!User.IsAdmin())
+                request.UserId = User.GetUserId();
+
             // Validate FK references — silently clear them if they don't exist
             // so a missing user never causes a 500 crash
             if (request.UserId.HasValue &&
                 !await _context.Users.AnyAsync(u => u.Id == request.UserId.Value))
                 request.UserId = null;
 
+            // The vehicle must exist AND belong to the user the event is logged under
             if (request.VehicleId.HasValue &&
-                !await _context.Vehicles.AnyAsync(v => v.Id == request.VehicleId.Value))
+                !await _context.Vehicles.AnyAsync(v =>
+                    v.Id == request.VehicleId.Value && v.AppUserId == request.UserId))
                 request.VehicleId = null;
 
             // 1. Log the raw event, linking it to the user and specific vehicle
@@ -88,6 +98,8 @@ namespace CarStats.API.Controllers
         [HttpGet("events/{userId}")]
         public async Task<IActionResult> GetUserEvents(int userId)
         {
+            if (!User.CanActFor(userId)) return Forbid();
+
             var userExists = await _context.Users.AnyAsync(u => u.Id == userId);
             if (!userExists) return NotFound("User not found.");
 

@@ -1,12 +1,15 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using CarStats.API.Data;
 using CarStats.API.Models;
+using CarStats.API.Services;
 
 namespace CarStats.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize] // signed-in users only — and each action checks the garage is theirs
     public class VehiclesController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -21,6 +24,8 @@ namespace CarStats.API.Controllers
         [HttpGet("user/{userId}")]
         public async Task<ActionResult<IEnumerable<Vehicle>>> GetVehiclesForUser(int userId)
         {
+            if (!User.CanActFor(userId)) return Forbid();
+
             var userExists = await _context.Users.AnyAsync(u => u.Id == userId);
             if (!userExists) return NotFound("User not found.");
 
@@ -34,6 +39,8 @@ namespace CarStats.API.Controllers
         [HttpPost]
         public async Task<ActionResult<Vehicle>> AddVehicle(Vehicle newVehicle)
         {
+            if (!User.CanActFor(newVehicle.AppUserId)) return Forbid();
+
             var userExists = await _context.Users.AnyAsync(u => u.Id == newVehicle.AppUserId);
             if (!userExists) return BadRequest("The specified user does not exist.");
 
@@ -52,6 +59,7 @@ namespace CarStats.API.Controllers
 
             var existing = await _context.Vehicles.FindAsync(id);
             if (existing == null) return NotFound();
+            if (!User.CanActFor(existing.AppUserId)) return Forbid();
 
             existing.Make = updatedVehicle.Make;
             existing.Model = updatedVehicle.Model;
@@ -70,6 +78,7 @@ namespace CarStats.API.Controllers
         {
             var vehicle = await _context.Vehicles.FindAsync(id);
             if (vehicle == null) return NotFound();
+            if (!User.CanActFor(vehicle.AppUserId)) return Forbid();
 
             _context.Vehicles.Remove(vehicle);
             await _context.SaveChangesAsync();

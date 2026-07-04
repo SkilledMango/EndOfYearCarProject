@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using CarStats.API.Data;
@@ -32,17 +33,30 @@ namespace CarStats.API.Controllers
 
     [Route("api/[controller]")]
     [ApiController]
+    [AllowAnonymous] // the one controller reachable without a token — it hands them out
     public class AuthController : ControllerBase
     {
         private const int CodeLifetimeMinutes = 15;
 
         private readonly AppDbContext _context;
         private readonly IEmailService _email;
+        private readonly ITokenService _tokens;
 
-        public AuthController(AppDbContext context, IEmailService email)
+        public AuthController(AppDbContext context, IEmailService email, ITokenService tokens)
         {
             _context = context;
             _email   = email;
+            _tokens  = tokens;
+        }
+
+        /// <summary>
+        /// The shape both session-granting endpoints (login, verify-code) return:
+        /// the bearer token plus the user it belongs to.
+        /// </summary>
+        private IActionResult Session(AppUser user)
+        {
+            user.PasswordHash = string.Empty;
+            return Ok(new { token = _tokens.CreateToken(user), user });
         }
 
         // POST: api/auth/register
@@ -102,10 +116,7 @@ namespace CarStats.API.Controllers
 
             // Already verified — treat as success (idempotent), log them in.
             if (user.IsEmailVerified)
-            {
-                user.PasswordHash = string.Empty;
-                return Ok(user);
-            }
+                return Session(user);
 
             if (user.VerificationCodeExpiresAt == null || user.VerificationCodeExpiresAt < DateTime.UtcNow)
                 return BadRequest("That code has expired. Request a new one.");
@@ -119,8 +130,7 @@ namespace CarStats.API.Controllers
             user.VerificationCodeExpiresAt = null;
             await _context.SaveChangesAsync();
 
-            user.PasswordHash = string.Empty;
-            return Ok(user);
+            return Session(user);
         }
 
         // POST: api/auth/resend-code
@@ -174,8 +184,7 @@ namespace CarStats.API.Controllers
                 });
             }
 
-            user.PasswordHash = string.Empty;
-            return Ok(user);
+            return Session(user);
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────

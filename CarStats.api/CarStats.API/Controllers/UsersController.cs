@@ -1,10 +1,16 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using CarStats.API.Data;
 using CarStats.API.Models;
+using CarStats.API.Services;
 
 namespace CarStats.API.Controllers
 {
+    // User management is admin-panel territory (each action carries AdminOnly),
+    // except GetUser: any signed-in user may read their OWN profile. The gate
+    // lives per-action because [Authorize] attributes stack — a controller-level
+    // AdminOnly would apply to GetUser too, locking drivers out of their profile.
     [Route("api/[controller]")]
     [ApiController]
     public class UsersController : ControllerBase
@@ -18,6 +24,7 @@ namespace CarStats.API.Controllers
 
         // GET: Fetch all users (with their vehicles) for the admin panel
         [HttpGet]
+        [Authorize(Policy = "AdminOnly")]
         public async Task<ActionResult<IEnumerable<AppUser>>> GetUsers()
         {
             return await _context.Users
@@ -25,10 +32,14 @@ namespace CarStats.API.Controllers
                 .ToListAsync();
         }
 
-        // GET: Fetch a single user's profile (with vehicles) for the mobile app
+        // GET: Fetch a single user's profile (with vehicles) for the mobile app.
+        // Any signed-in user may read their own; admins may read anyone's.
         [HttpGet("{id}")]
+        [Authorize]
         public async Task<ActionResult<AppUser>> GetUser(int id)
         {
+            if (!User.CanActFor(id)) return Forbid();
+
             var user = await _context.Users
                 .Include(u => u.Vehicles)
                 .FirstOrDefaultAsync(u => u.Id == id);
@@ -40,6 +51,7 @@ namespace CarStats.API.Controllers
 
         // POST: Create a brand new user
         [HttpPost]
+        [Authorize(Policy = "AdminOnly")]
         public async Task<ActionResult<AppUser>> CreateUser(AppUser newUser)
         {
             // Secure the password immediately before saving
@@ -61,6 +73,7 @@ namespace CarStats.API.Controllers
 
         // PUT: Edit a user's stats securely
         [HttpPut("{id}")]
+        [Authorize(Policy = "AdminOnly")]
         public async Task<IActionResult> UpdateUser(int id, AppUser updatedUser)
         {
             if (id != updatedUser.Id) return BadRequest();
@@ -87,6 +100,7 @@ namespace CarStats.API.Controllers
         }
         // DELETE: Remove a user
         [HttpDelete("{id}")]
+        [Authorize(Policy = "AdminOnly")]
         public async Task<IActionResult> DeleteUser(int id)
         {
             var user = await _context.Users.FindAsync(id);

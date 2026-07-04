@@ -6,14 +6,18 @@ import Dashboard    from './Components/Dashboard';
 import ShopsManager from './Components/ShopsManager';
 import UsersManager from './Components/UsersManager';
 import LoginPage    from './Components/LoginPage';
+import { logout as clearToken, hasToken } from './Services/api';
 
 const SESSION_KEY = 'carstats_admin_user';
 
-// Restore a saved session (survives page refresh)
+// Restore a saved session (survives page refresh).
+// Both halves must exist: the user object (for display) AND the JWT
+// (api.js attaches it to every request) — one without the other is stale.
 function loadSession() {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw || !hasToken()) return null;
+    return JSON.parse(raw);
   } catch {
     localStorage.removeItem(SESSION_KEY);
     return null;
@@ -31,6 +35,7 @@ function App() {
 
   const handleLogout = () => {
     localStorage.removeItem(SESSION_KEY);
+    clearToken();
     setAdmin(null);
     setTabValue(0);
   };

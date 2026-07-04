@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using CarStats.API.Data;
@@ -6,6 +7,7 @@ namespace CarStats.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Policy = "AdminOnly")] // analytics dashboard is admin-panel only
     public class StatsController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -28,7 +30,11 @@ namespace CarStats.API.Controllers
             var allDtcs = await _context.DiagnosticCodes
                 .Select(d => new { d.ErrorCode, d.HumanTitle, d.Severity })
                 .ToListAsync();
-            var dtcMap = allDtcs.ToDictionary(d => d.ErrorCode);
+            // Group defensively — the dictionary table may contain duplicate
+            // ErrorCode rows (same guard as MobileController).
+            var dtcMap = allDtcs
+                .GroupBy(d => d.ErrorCode)
+                .ToDictionary(g => g.Key, g => g.First());
 
             // ── Most common fault codes (top 6) ───────────────────────────────
             var topCodes = await _context.VehicleEvents

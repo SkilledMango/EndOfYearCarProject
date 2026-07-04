@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using CarStats.API.Data;
@@ -7,6 +8,7 @@ namespace CarStats.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize] // shop list needs a signed-in user; edits are admin-only below
     public class ShopsController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -23,6 +25,7 @@ namespace CarStats.API.Controllers
         }
 
         [HttpPost]
+        [Authorize(Policy = "AdminOnly")]
         public async Task<ActionResult<MechanicShop>> PostShop(MechanicShop shop)
         {
             _context.MechanicShops.Add(shop);
@@ -30,6 +33,7 @@ namespace CarStats.API.Controllers
             return CreatedAtAction(nameof(GetShops), new { id = shop.Id }, shop);
         }
         [HttpDelete("{id}")]
+        [Authorize(Policy = "AdminOnly")]
         public async Task<IActionResult> DeleteShop(int id)
         {
             var shop = await _context.MechanicShops.FindAsync(id);

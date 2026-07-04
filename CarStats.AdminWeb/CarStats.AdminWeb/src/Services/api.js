@@ -1,4 +1,4 @@
-import axios from 'axios';
+﻿import axios from 'axios';
 
 const BASE_URL = 'https://CarProject.somee.com/api';
 const DTC_URL = `${BASE_URL}/dtc`;
@@ -6,20 +6,33 @@ const SHOPS_URL = `${BASE_URL}/shops`;
 const USERS_URL = `${BASE_URL}/users`;
 const VEHICLES_URL = `${BASE_URL}/vehicles`;
 
-// --- AUTH (admin panel login) ---
+// --- AUTH (admin panel login + JWT session token) ---
+
+const TOKEN_KEY = 'carstats_admin_token';
+
+// All panel requests go through this instance, which attaches the JWT the
+// API handed out at login. Without it every endpoint returns 401.
+const http = axios.create({ baseURL: BASE_URL });
+http.interceptors.request.use((config) => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    return config;
+});
 
 // Role values mirror the C# UserRole enum
 export const ROLE_ADMIN = 2;
 export const ROLE_SUPERADMIN = 3;
 
 /**
- * Logs in against the shared /auth/login endpoint.
+ * Logs in against the shared /auth/login endpoint and stores the session
+ * token for all subsequent panel requests.
  * Throws an Error with a user-readable message on failure.
  * Only Admin / SuperAdmin accounts are allowed into the panel.
  */
 export const login = async (email, password) => {
     let response;
     try {
+        // Plain axios - no stale token should ride along on a login attempt
         response = await axios.post(`${BASE_URL}/auth/login`, { email, password });
     } catch (error) {
         const status = error?.response?.status;
@@ -27,18 +40,27 @@ export const login = async (email, password) => {
         if (status === 403) throw new Error('This account has not verified its email yet.');
         throw new Error('Could not reach the server. Please try again.');
     }
-    const user = response.data;
+    const { token, user } = response.data;
     if (user.role !== ROLE_ADMIN && user.role !== ROLE_SUPERADMIN) {
         throw new Error('This account does not have admin access.');
     }
+    localStorage.setItem(TOKEN_KEY, token);
     return user;
 };
+
+/** Clears the stored session token (App calls this on logout). */
+export const logout = () => {
+    localStorage.removeItem(TOKEN_KEY);
+};
+
+/** True if a session token exists - used to restore the session on refresh. */
+export const hasToken = () => Boolean(localStorage.getItem(TOKEN_KEY));
 
 // --- ANALYTICS STATS ---
 
 export const getStats = async () => {
     try {
-        const response = await axios.get(`${BASE_URL}/stats`);
+        const response = await http.get(`${BASE_URL}/stats`);
         return response.data;
     } catch (error) {
         console.error("Error fetching stats:", error);
@@ -50,7 +72,7 @@ export const getStats = async () => {
 
 export const getDiagnosticCodes = async () => {
     try {
-        const response = await axios.get(DTC_URL);
+        const response = await http.get(DTC_URL);
         return response.data;
     } catch (error) {
         console.error("Error fetching DTCs:", error);
@@ -60,7 +82,7 @@ export const getDiagnosticCodes = async () => {
 
 export const addDiagnosticCode = async (dtcData) => {
     try {
-        const response = await axios.post(DTC_URL, dtcData);
+        const response = await http.post(DTC_URL, dtcData);
         return response.data;
     } catch (error) {
         console.error("Error adding new DTC:", error);
@@ -72,7 +94,7 @@ export const addDiagnosticCode = async (dtcData) => {
 
 export const getShops = async () => {
     try {
-        const response = await axios.get(SHOPS_URL);
+        const response = await http.get(SHOPS_URL);
         return response.data;
     } catch (error) {
         console.error("Error fetching shops:", error);
@@ -82,7 +104,7 @@ export const getShops = async () => {
 
 export const addShop = async (shopData) => {
     try {
-        const response = await axios.post(SHOPS_URL, shopData);
+        const response = await http.post(SHOPS_URL, shopData);
         return response.data;
     } catch (error) {
         console.error("Error adding new shop:", error);
@@ -94,7 +116,7 @@ export const addShop = async (shopData) => {
 
 export const getUsers = async () => {
     try {
-        const response = await axios.get(USERS_URL);
+        const response = await http.get(USERS_URL);
         return response.data;
     } catch (error) {
         console.error("Error fetching users:", error);
@@ -104,7 +126,7 @@ export const getUsers = async () => {
 
 export const updateUser = async (id, userData) => {
     try {
-        const response = await axios.put(`${USERS_URL}/${id}`, userData);
+        const response = await http.put(`${USERS_URL}/${id}`, userData);
         return response.data;
     } catch (error) {
         console.error(`Error updating user ${id}:`, error);
@@ -114,7 +136,7 @@ export const updateUser = async (id, userData) => {
 
 export const addUser = async (userData) => {
     try {
-        const response = await axios.post(USERS_URL, userData);
+        const response = await http.post(USERS_URL, userData);
         return response.data;
     } catch (error) {
         console.error("Error creating user:", error);
@@ -125,7 +147,7 @@ export const addUser = async (userData) => {
 
 export const deleteDiagnosticCode = async (id) => {
     try {
-        await axios.delete(`${DTC_URL}/${id}`);
+        await http.delete(`${DTC_URL}/${id}`);
     } catch (error) {
         console.error(`Error deleting DTC ${id}:`, error);
         throw error;
@@ -134,7 +156,7 @@ export const deleteDiagnosticCode = async (id) => {
 
 export const deleteShop = async (id) => {
     try {
-        await axios.delete(`${SHOPS_URL}/${id}`);
+        await http.delete(`${SHOPS_URL}/${id}`);
     } catch (error) {
         console.error(`Error deleting shop ${id}:`, error);
         throw error;
@@ -143,7 +165,7 @@ export const deleteShop = async (id) => {
 
 export const deleteUser = async (id) => {
     try {
-        await axios.delete(`${USERS_URL}/${id}`);
+        await http.delete(`${USERS_URL}/${id}`);
     } catch (error) {
         console.error(`Error deleting user ${id}:`, error);
         throw error;
@@ -154,7 +176,7 @@ export const deleteUser = async (id) => {
 
 export const getVehiclesForUser = async (userId) => {
     try {
-        const response = await axios.get(`${VEHICLES_URL}/user/${userId}`);
+        const response = await http.get(`${VEHICLES_URL}/user/${userId}`);
         return response.data;
     } catch (error) {
         console.error(`Error fetching vehicles for user ${userId}:`, error);
@@ -164,7 +186,7 @@ export const getVehiclesForUser = async (userId) => {
 
 export const addVehicle = async (vehicleData) => {
     try {
-        const response = await axios.post(VEHICLES_URL, vehicleData);
+        const response = await http.post(VEHICLES_URL, vehicleData);
         return response.data;
     } catch (error) {
         console.error("Error adding vehicle:", error);
@@ -174,7 +196,7 @@ export const addVehicle = async (vehicleData) => {
 
 export const updateVehicle = async (id, vehicleData) => {
     try {
-        const response = await axios.put(`${VEHICLES_URL}/${id}`, vehicleData);
+        const response = await http.put(`${VEHICLES_URL}/${id}`, vehicleData);
         return response.data;
     } catch (error) {
         console.error(`Error updating vehicle ${id}:`, error);
@@ -184,7 +206,7 @@ export const updateVehicle = async (id, vehicleData) => {
 
 export const deleteVehicle = async (id) => {
     try {
-        await axios.delete(`${VEHICLES_URL}/${id}`);
+        await http.delete(`${VEHICLES_URL}/${id}`);
     } catch (error) {
         console.error(`Error deleting vehicle ${id}:`, error);
         throw error;

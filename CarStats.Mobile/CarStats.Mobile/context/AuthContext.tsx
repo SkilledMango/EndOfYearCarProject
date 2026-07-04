@@ -5,11 +5,15 @@
  * after closing and reopening the app.
  */
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppUser, api, getUser } from '@/services/api';
+import { AppUser, AuthSession, api, getUser, setAuthToken } from '@/services/api';
 
-const STORAGE_KEY = '@carstats_user';
+// Bumped from '@carstats_user' when sessions gained a JWT — old entries
+// (a bare AppUser with no token) can't call the API anymore, so a stored
+// session without a token is discarded and the user logs in again once.
+const STORAGE_KEY = '@carstats_session';
+const LEGACY_STORAGE_KEY = '@carstats_user';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,13 +62,39 @@ const AuthContext = createContext<AuthContextValue>({
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser]         = useState<AppUser | null>(null);
   const [isLoading, setLoading] = useState(true);
+  // Mirrors whether a token is active, readable inside the 401 interceptor
+  const hasSession = useRef(false);
+
+  const startSession = async (session: AuthSession) => {
+    setAuthToken(session.token);
+    hasSession.current = true;
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    setUser(session.user);
+  };
+
+  const endSession = async () => {
+    setAuthToken(null);
+    hasSession.current = false;
+    await AsyncStorage.removeItem(STORAGE_KEY);
+    setUser(null);
+  };
 
   // On first mount — restore session from storage
   useEffect(() => {
     (async () => {
       try {
+        await AsyncStorage.removeItem(LEGACY_STORAGE_KEY); // pre-JWT sessions
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        if (stored) setUser(JSON.parse(stored));
+        if (stored) {
+          const session: AuthSession = JSON.parse(stored);
+          if (session?.token && session?.user) {
+            setAuthToken(session.token);
+            hasSession.current = true;
+            setUser(session.user);
+          } else {
+            await AsyncStorage.removeItem(STORAGE_KEY);
+          }
+        }
       } catch {
         // Corrupted storage — start fresh
         await AsyncStorage.removeItem(STORAGE_KEY);
@@ -74,12 +104,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
+  // Expired/revoked token → any API call comes back 401 → drop to the login
+  // screen. Auth endpoints themselves are exempt (no session is active yet,
+  // and a wrong password must surface as a form error, not a logout).
+  useEffect(() => {
+    const id = api.interceptors.response.use(
+      (res) => res,
+      async (err) => {
+        if (err?.response?.status === 401 && hasSession.current) {
+          await endSession();
+        }
+        throw err;
+      },
+    );
+    return () => api.interceptors.response.eject(id);
+  }, []);
+
   // ── login ────────────────────────────────────────────────────────────────
   const login = async (email: string, password: string) => {
     try {
-      const { data } = await api.post<AppUser>('/auth/login', { email, password });
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      setUser(data);
+      const { data } = await api.post<AuthSession>('/auth/login', { email, password });
+      await startSession(data);
     } catch (err: any) {
       const status = err?.response?.status;
 
@@ -120,10 +165,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ── verifyCode ───────────────────────────────────────────────────────────
   const verifyCode = async (email: string, code: string): Promise<AppUser> => {
     try {
-      const { data } = await api.post<AppUser>('/auth/verify-code', { email, code });
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      setUser(data);   // verified → start the session
-      return data;
+      const { data } = await api.post<AuthSession>('/auth/verify-code', { email, code });
+      await startSession(data);   // verified → start the session
+      return data.user;
     } catch (err: any) {
       const status = err?.response?.status;
       const message =
@@ -154,7 +198,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
     try {
       const fresh = await getUser(user.id);
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+      // Keep the existing token — only the user snapshot changes
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      const token  = stored ? (JSON.parse(stored) as AuthSession).token : null;
+      if (token) {
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ token, user: fresh }));
+      }
       setUser(fresh);
     } catch {
       // Network hiccup — keep the existing session as-is
@@ -163,8 +212,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ── logout ───────────────────────────────────────────────────────────────
   const logout = async () => {
-    await AsyncStorage.removeItem(STORAGE_KEY);
-    setUser(null);
+    await endSession();
   };
 
   return (

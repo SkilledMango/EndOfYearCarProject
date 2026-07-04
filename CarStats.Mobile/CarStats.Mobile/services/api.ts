@@ -20,6 +20,19 @@ export const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+/**
+ * Attaches (or clears) the JWT session token on every API request.
+ * Called by AuthContext when a session starts, restores, or ends —
+ * nothing else should touch auth headers.
+ */
+export const setAuthToken = (token: string | null) => {
+  if (token) {
+    api.defaults.headers.common.Authorization = `Bearer ${token}`;
+  } else {
+    delete api.defaults.headers.common.Authorization;
+  }
+};
+
 // ----- Enums & Types (mirror the C# models) -----
 
 export enum SeverityLevel {
@@ -52,6 +65,12 @@ export interface AppUser {
   totalFaultsLogged: number;
   isPremiumMember: boolean;
   vehicles: Vehicle[];
+}
+
+/** What /auth/login and /auth/verify-code return: a bearer token + its user. */
+export interface AuthSession {
+  token: string;
+  user: AppUser;
 }
 
 export interface DiagnosticCode {

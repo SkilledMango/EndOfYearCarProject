@@ -1,7 +1,10 @@
-using Microsoft.EntityFrameworkCore;
+using System.Text;
 using System.Text.Json.Serialization;
 using CarStats.API.Data;
 using CarStats.API.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -45,6 +48,41 @@ builder.Services.AddCors(options =>
 
 // Email provider (Brevo HTTP API) for sending verification codes
 builder.Services.AddHttpClient<IEmailService, BrevoEmailService>();
+
+// ── JWT authentication ────────────────────────────────────────────────────────
+// login / verify-code issue a bearer token; every other endpoint requires it.
+builder.Services.AddSingleton<ITokenService, TokenService>();
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(TokenService.GetKeyMaterial(builder.Configuration, builder.Environment))),
+            ValidateIssuer   = true,
+            ValidIssuer      = TokenService.Issuer,
+            ValidateAudience = true,
+            ValidAudience    = TokenService.Audience,
+            ValidateLifetime = true,
+        };
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    // Secure by default: any endpoint without [AllowAnonymous] needs a valid token,
+    // including controllers added in the future.
+    options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+
+    // Admin panel operations (user management, dictionary/shop edits, analytics)
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireRole(nameof(CarStats.API.Models.UserRole.Admin),
+                           nameof(CarStats.API.Models.UserRole.SuperAdmin)));
+});
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -94,6 +132,7 @@ app.UseCors("AllowReactApp");
 // NOTE: No forced HTTPS redirect. Somee terminates SSL at a shared front-end and
 // forwards HTTP internally, so UseHttpsRedirection() can cause redirect loops.
 // The public endpoint (https://<your-site>.somee.com) still serves over HTTPS.
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

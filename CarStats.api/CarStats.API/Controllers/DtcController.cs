@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using CarStats.API.Data;
@@ -7,6 +8,7 @@ namespace CarStats.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize] // dictionary reads need a signed-in user; edits are admin-only below
     public class DtcController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -28,6 +30,7 @@ namespace CarStats.API.Controllers
         // POST: api/dtc
         // This will be used by the Super Admin Panel to add new codes to the database
         [HttpPost]
+        [Authorize(Policy = "AdminOnly")]
         public async Task<ActionResult<DiagnosticCode>> PostDiagnosticCode(DiagnosticCode diagnosticCode)
         {
             _context.DiagnosticCodes.Add(diagnosticCode);
@@ -38,6 +41,7 @@ namespace CarStats.API.Controllers
         }
         // DELETE: Remove a diagnostic code
         [HttpDelete("{id}")]
+        [Authorize(Policy = "AdminOnly")]
         public async Task<IActionResult> DeleteDtc(int id)
         {
             var dtc = await _context.DiagnosticCodes.FindAsync(id);
