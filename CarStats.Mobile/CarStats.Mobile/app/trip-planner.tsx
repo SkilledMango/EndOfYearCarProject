@@ -13,12 +13,13 @@ import {
 } from 'react-native';
 import * as Location from 'expo-location';
 import { useAuth } from '@/context/AuthContext';
-import { getUser, Vehicle } from '@/services/api';
+import { api, getUser, Vehicle } from '@/services/api';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { ThemeColors } from '@/constants/theme';
 
-// Loaded from .env (gitignored) — see .env.example
-const GOOGLE_API_KEY      = process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY ?? '';
+// Google Directions/Places calls go through our API's /navigation proxy:
+// the browser can't call Google's web services directly (no CORS), and the
+// proxy keeps the Google key server-side instead of in this bundle.
 const FUEL_PRICE_PER_LITRE = 7.2; // ₪ per litre
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -96,13 +97,9 @@ export default function TripPlannerScreen() {
 
     autocompleteTimer.current = setTimeout(async () => {
       try {
-        const url =
-          `https://maps.googleapis.com/maps/api/place/autocomplete/json` +
-          `?input=${encodeURIComponent(text)}` +
-          `&types=geocode|establishment` +
-          `&key=${GOOGLE_API_KEY}`;
-        const res  = await fetch(url);
-        const data = await res.json();
+        const { data } = await api.get('/navigation/autocomplete', {
+          params: { input: text },
+        });
         if (data.status === 'OK') {
           setSuggestions(
             (data.predictions as any[]).slice(0, 5).map(p => ({
@@ -156,15 +153,9 @@ export default function TripPlannerScreen() {
       const loc    = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const origin = `${loc.coords.latitude},${loc.coords.longitude}`;
 
-      const url =
-        `https://maps.googleapis.com/maps/api/directions/json` +
-        `?origin=${encodeURIComponent(origin)}` +
-        `&destination=${encodeURIComponent(destination.trim())}` +
-        `&departure_time=now` +
-        `&key=${GOOGLE_API_KEY}`;
-
-      const response = await fetch(url);
-      const data     = await response.json();
+      const { data } = await api.get('/navigation/route', {
+        params: { origin, destination: destination.trim() },
+      });
 
       if (data.status !== 'OK') {
         setError(

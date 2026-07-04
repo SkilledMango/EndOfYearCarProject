@@ -49,6 +49,9 @@ builder.Services.AddCors(options =>
 // Email provider (Brevo HTTP API) for sending verification codes
 builder.Services.AddHttpClient<IEmailService, BrevoEmailService>();
 
+// Plain HttpClient factory (used by the NavigationController Google proxy)
+builder.Services.AddHttpClient();
+
 // ── JWT authentication ────────────────────────────────────────────────────────
 // login / verify-code issue a bearer token; every other endpoint requires it.
 builder.Services.AddSingleton<ITokenService, TokenService>();
