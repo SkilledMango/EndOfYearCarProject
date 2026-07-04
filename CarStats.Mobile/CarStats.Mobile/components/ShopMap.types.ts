@@ -1,7 +1,7 @@
 /** Shared props for the platform-split ShopMap (native map / web placeholder). */
 
 export interface ShopPin {
-  id: number;
+  id: number | string; // Google place_id for live shops
   name: string;
   specialty: string;
   latitude: number;

@@ -1,15 +1,17 @@
 /**
  * Mechanic Finder — map + "Nearby Mechanics" bottom sheet.
- * Layout and values follow design/stitch_carstats_diagnostic_suite/mechanic_finder:
- * full-bleed map with circular wrench pins, and a rounded-top sheet listing
- * shops with specialty, star-rating chip, distance, and Call / Directions.
- * Shops come from the API; distances from the phone's location; coordinates
- * missing in the DB are geocoded from the address on-device.
+ * Layout and values follow design/stitch_carstats_diagnostic_suite/mechanic_finder.
+ *
+ * Shops are LIVE results from Google Places (car_repair near the user),
+ * fetched through the API's /navigation proxy — names, ratings and review
+ * counts are real. Phone numbers are fetched lazily when the user taps Call.
+ * With location denied, results center on Tel Aviv instead.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   Pressable,
   RefreshControl,
@@ -19,15 +21,15 @@ import {
   View,
 } from 'react-native';
 import * as Location from 'expo-location';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import ShopMap from '@/components/ShopMap';
-import { MechanicShop, getShops } from '@/services/api';
+import { NearbyShop, getNearbyShops, getShopPhone } from '@/services/api';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
-const GEOCODE_CACHE_KEY = 'shop_geocode_cache_v1';
+// Search center when location permission is denied
+const FALLBACK_CENTER = { lat: 32.0853, lng: 34.7818 }; // Tel Aviv
 
-interface LocatedShop extends MechanicShop {
+interface LocatedShop extends NearbyShop {
   distanceKm: number | null;
 }
 
@@ -45,15 +47,18 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
 export default function MechanicFinderScreen() {
   const { colors: c } = useTheme();
   const styles = useStyles();
-  const [shops, setShops]         = useState<LocatedShop[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const [shops, setShops]           = useState<LocatedShop[]>([]);
+  const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [myPos, setMyPos]         = useState<{ lat: number; lng: number } | null>(null);
+  const [myPos, setMyPos]           = useState<{ lat: number; lng: number } | null>(null);
+  const [usedFallback, setUsedFallback] = useState(false);
+  // Phone numbers already looked up this session (placeId → phone | null)
+  const phoneCache = useRef<Record<string, string | null>>({});
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
-      // Ask for location first (non-fatal if denied — distances just hide)
+      // Where to search: the user's position, or central Tel Aviv when denied
       let pos: { lat: number; lng: number } | null = null;
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
@@ -64,53 +69,18 @@ export default function MechanicFinderScreen() {
           pos = { lat: loc.coords.latitude, lng: loc.coords.longitude };
           setMyPos(pos);
         }
-      } catch { /* location unavailable */ }
+      } catch { /* location unavailable — fall back */ }
+      setUsedFallback(!pos);
 
-      const raw = await getShops();
+      const center = pos ?? FALLBACK_CENTER;
+      const results = await getNearbyShops(center.lat, center.lng);
 
-      // Fill in missing coordinates by geocoding the address on-device,
-      // cached so each address is only geocoded once.
-      let cache: Record<string, { lat: number; lng: number }> = {};
-      try {
-        cache = JSON.parse((await AsyncStorage.getItem(GEOCODE_CACHE_KEY)) ?? '{}');
-      } catch { /* corrupted cache — rebuild */ }
-      let cacheDirty = false;
-
-      const located: LocatedShop[] = [];
-      for (const shop of raw) {
-        let lat = shop.latitude;
-        let lng = shop.longitude;
-        if (lat === 0 && lng === 0 && shop.address.trim()) {
-          const cached = cache[shop.address];
-          if (cached) {
-            ({ lat, lng } = cached);
-          } else {
-            try {
-              const results = await Location.geocodeAsync(shop.address);
-              if (results[0]) {
-                lat = results[0].latitude;
-                lng = results[0].longitude;
-                cache[shop.address] = { lat, lng };
-                cacheDirty = true;
-              }
-            } catch { /* geocoder unavailable — pin stays hidden */ }
-          }
-        }
-        located.push({
-          ...shop,
-          latitude: lat,
-          longitude: lng,
-          distanceKm: pos && !(lat === 0 && lng === 0)
-            ? haversineKm(pos.lat, pos.lng, lat, lng)
-            : null,
-        });
-      }
-      if (cacheDirty) {
-        try { await AsyncStorage.setItem(GEOCODE_CACHE_KEY, JSON.stringify(cache)); } catch {}
-      }
-
-      located.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
-      setShops(located);
+      // Google returns them nearest-first; distances only mean something
+      // when we actually know where the user is.
+      setShops(results.map(shop => ({
+        ...shop,
+        distanceKm: pos ? haversineKm(pos.lat, pos.lng, shop.latitude, shop.longitude) : null,
+      })));
     } catch { /* API unreachable — keep previous list */ }
     finally {
       setLoading(false);
@@ -120,21 +90,27 @@ export default function MechanicFinderScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  const pinned = useMemo(
-    () => shops.filter(s => !(s.latitude === 0 && s.longitude === 0)),
-    [shops],
-  );
-
-  const call = (shop: MechanicShop) => {
-    if (shop.phoneNumber) Linking.openURL(`tel:${shop.phoneNumber}`);
+  const call = async (shop: LocatedShop) => {
+    let phone = phoneCache.current[shop.placeId];
+    if (phone === undefined) {
+      try {
+        phone = await getShopPhone(shop.placeId);
+      } catch {
+        phone = null;
+      }
+      phoneCache.current[shop.placeId] = phone;
+    }
+    if (phone) {
+      Linking.openURL(`tel:${phone.replace(/[^\d+]/g, '')}`);
+    } else {
+      Alert.alert('No phone number', `${shop.name} has no phone number listed on Google Maps.`);
+    }
   };
 
   const directions = (shop: LocatedShop) => {
-    const dest = !(shop.latitude === 0 && shop.longitude === 0)
-      ? `${shop.latitude},${shop.longitude}`
-      : shop.address;
     Linking.openURL(
-      `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}&travelmode=driving`,
+      `https://www.google.com/maps/dir/?api=1&destination=${shop.latitude},${shop.longitude}` +
+      `&destination_place_id=${encodeURIComponent(shop.placeId)}&travelmode=driving`,
     );
   };
 
@@ -150,7 +126,16 @@ export default function MechanicFinderScreen() {
     <View style={styles.container}>
       {/* ── Map (native) / placeholder (web) ── */}
       <View style={styles.mapArea}>
-        <ShopMap shops={pinned} userPos={myPos} />
+        <ShopMap
+          shops={shops.map(s => ({
+            id: s.placeId,
+            name: s.name,
+            specialty: s.address,
+            latitude: s.latitude,
+            longitude: s.longitude,
+          }))}
+          userPos={myPos}
+        />
       </View>
 
       {/* ── Bottom sheet ── */}
@@ -160,6 +145,11 @@ export default function MechanicFinderScreen() {
           <Text style={styles.sheetTitle}>Nearby Mechanics</Text>
           <Text style={styles.sheetCount}>{shops.length} found</Text>
         </View>
+        {usedFallback && (
+          <Text style={styles.fallbackNote}>
+            Showing shops around Tel Aviv — enable location for results near you.
+          </Text>
+        )}
         <ScrollView
           contentContainerStyle={styles.sheetList}
           refreshControl={
@@ -169,20 +159,20 @@ export default function MechanicFinderScreen() {
           {shops.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyIcon}>🔧</Text>
-              <Text style={styles.emptyText}>No mechanics listed yet.</Text>
-              <Text style={styles.emptySubtext}>Shops added in the admin panel will appear here.</Text>
+              <Text style={styles.emptyText}>No mechanics found nearby.</Text>
+              <Text style={styles.emptySubtext}>Pull to refresh, or check your connection.</Text>
             </View>
           ) : (
             shops.map((shop, i) => (
-              <View key={shop.id} style={styles.shopCard}>
+              <View key={shop.placeId} style={styles.shopCard}>
                 <View style={[
                   styles.shopAccentBar,
                   { backgroundColor: i % 2 === 0 ? c.Dashboard.accentDeep : c.Severity.green },
                 ]} />
                 <View style={styles.shopHeader}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
-                    <Text style={styles.shopName} numberOfLines={1}>{shop.name.trim()}</Text>
-                    <Text style={styles.shopSpecialty}>Specialty: {shop.specialty || 'General'}</Text>
+                    <Text style={styles.shopName} numberOfLines={1}>{shop.name}</Text>
+                    <Text style={styles.shopAddress} numberOfLines={1}>{shop.address}</Text>
                   </View>
                   {shop.rating > 0 && (
                     <View style={styles.ratingChip}>
@@ -194,14 +184,12 @@ export default function MechanicFinderScreen() {
                     </View>
                   )}
                 </View>
-                <View style={styles.distanceRow}>
-                  <IconSymbol name="location.fill" size={14} color={c.Dashboard.textSecondary} />
-                  <Text style={styles.distanceText}>
-                    {shop.distanceKm != null
-                      ? `${shop.distanceKm.toFixed(1)} km away`
-                      : shop.address}
-                  </Text>
-                </View>
+                {shop.distanceKm != null && (
+                  <View style={styles.distanceRow}>
+                    <IconSymbol name="location.fill" size={14} color={c.Dashboard.textSecondary} />
+                    <Text style={styles.distanceText}>{shop.distanceKm.toFixed(1)} km away</Text>
+                  </View>
+                )}
                 <View style={styles.actionsRow}>
                   <Pressable style={styles.callBtn} onPress={() => call(shop)}>
                     <IconSymbol name="phone.fill" size={20} color={c.Dashboard.accentDeep} />
@@ -247,6 +235,10 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
   sheetTitle:     { fontSize: 20, lineHeight: 28, fontWeight: '600', color: c.Dashboard.textPrimary },
   sheetCount:     { fontSize: 14, lineHeight: 20, color: c.Dashboard.textSecondary },
+  fallbackNote:   {
+    fontSize: 12, color: c.Dashboard.textSecondary,
+    paddingHorizontal: 20, paddingBottom: 10, marginTop: -6,
+  },
   sheetList:      { paddingHorizontal: 20, paddingBottom: 32, gap: 16 },
 
   // Shop cards
@@ -261,8 +253,8 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
   shopAccentBar:  { position: 'absolute', left: 0, top: 0, bottom: 0, width: 2 },
   shopHeader:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
-  shopName:       { fontSize: 24, lineHeight: 26, fontWeight: '700', color: c.Dashboard.textPrimary, marginBottom: 4 },
-  shopSpecialty:  { fontSize: 14, lineHeight: 20, color: c.Dashboard.textSecondary },
+  shopName:       { fontSize: 20, lineHeight: 24, fontWeight: '700', color: c.Dashboard.textPrimary, marginBottom: 4 },
+  shopAddress:    { fontSize: 14, lineHeight: 20, color: c.Dashboard.textSecondary },
   ratingChip:     {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: c.Dashboard.bg,
@@ -273,7 +265,7 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   distanceRow:    { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 16 },
   distanceText:   { fontSize: 14, lineHeight: 20, color: c.Dashboard.textSecondary, flex: 1 },
 
-  actionsRow:     { flexDirection: 'row', gap: 12 },
+  actionsRow:     { flexDirection: 'row', gap: 12, marginTop: 4 },
   callBtn:        {
     flex: 1, height: 48, borderRadius: 8,
     backgroundColor: c.Fuel.chipBg,

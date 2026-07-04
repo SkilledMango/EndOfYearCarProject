@@ -2,7 +2,6 @@
 
 const BASE_URL = 'https://CarProject.somee.com/api';
 const DTC_URL = `${BASE_URL}/dtc`;
-const SHOPS_URL = `${BASE_URL}/shops`;
 const USERS_URL = `${BASE_URL}/users`;
 const VEHICLES_URL = `${BASE_URL}/vehicles`;
 
@@ -90,28 +89,6 @@ export const addDiagnosticCode = async (dtcData) => {
     }
 };
 
-// --- MECHANIC SHOPS SERVICES ---
-
-export const getShops = async () => {
-    try {
-        const response = await http.get(SHOPS_URL);
-        return response.data;
-    } catch (error) {
-        console.error("Error fetching shops:", error);
-        return [];
-    }
-};
-
-export const addShop = async (shopData) => {
-    try {
-        const response = await http.post(SHOPS_URL, shopData);
-        return response.data;
-    } catch (error) {
-        console.error("Error adding new shop:", error);
-        throw error;
-    }
-};
-
 // --- USER MANAGEMENT SERVICES ---
 
 export const getUsers = async () => {
@@ -150,15 +127,6 @@ export const deleteDiagnosticCode = async (id) => {
         await http.delete(`${DTC_URL}/${id}`);
     } catch (error) {
         console.error(`Error deleting DTC ${id}:`, error);
-        throw error;
-    }
-};
-
-export const deleteShop = async (id) => {
-    try {
-        await http.delete(`${SHOPS_URL}/${id}`);
-    } catch (error) {
-        console.error(`Error deleting shop ${id}:`, error);
         throw error;
     }
 };

@@ -11,7 +11,6 @@ namespace CarStats.API.Data
 
         public DbSet<DiagnosticCode> DiagnosticCodes { get; set; }
         public DbSet<VehicleEvent> VehicleEvents { get; set; }
-        public DbSet<MechanicShop> MechanicShops { get; set; }
         public DbSet<AppUser> Users { get; set; }
         public DbSet<Vehicle> Vehicles { get; set; }
 

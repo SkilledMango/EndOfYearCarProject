@@ -3,7 +3,6 @@ import { Tabs, Tab, Box, Container, AppBar, Toolbar, Typography, Button } from '
 import LogoutIcon from '@mui/icons-material/Logout';
 import Analytics    from './Components/Analytics';
 import Dashboard    from './Components/Dashboard';
-import ShopsManager from './Components/ShopsManager';
 import UsersManager from './Components/UsersManager';
 import LoginPage    from './Components/LoginPage';
 import { logout as clearToken, hasToken } from './Services/api';
@@ -68,7 +67,6 @@ function App() {
           <Tab label="Analytics" />
           <Tab label="User Management" />
           <Tab label="DTC Dictionary" />
-          <Tab label="Mechanic Shops" />
         </Tabs>
       </AppBar>
 
@@ -76,7 +74,6 @@ function App() {
         {tabValue === 0 && <Analytics />}
         {tabValue === 1 && <UsersManager />}
         {tabValue === 2 && <Dashboard />}
-        {tabValue === 3 && <ShopsManager />}
       </Container>
     </Box>
   );

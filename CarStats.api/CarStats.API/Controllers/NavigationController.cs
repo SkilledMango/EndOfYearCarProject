@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -48,6 +49,81 @@ namespace CarStats.API.Controllers
             var client = _httpFactory.CreateClient();
             var json   = await client.GetStringAsync(url);
             return Content(json, "application/json");
+        }
+
+        // GET: api/navigation/nearby-shops?lat=32.08&lng=34.78
+        // Live car-repair shops around the user from Google Places, trimmed to
+        // the fields the mechanic finder renders (the raw response is huge).
+        [HttpGet("nearby-shops")]
+        public async Task<IActionResult> NearbyShops([FromQuery] double lat, [FromQuery] double lng)
+        {
+            if (string.IsNullOrWhiteSpace(ApiKey))
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, "Shop search is not configured.");
+
+            var url =
+                "https://maps.googleapis.com/maps/api/place/nearbysearch/json" +
+                $"?location={lat},{lng}" +
+                "&rankby=distance" +
+                "&type=car_repair" +
+                $"&key={ApiKey}";
+
+            var client = _httpFactory.CreateClient();
+            var json   = await client.GetStringAsync(url);
+
+            using var doc = JsonDocument.Parse(json);
+            var status = doc.RootElement.GetProperty("status").GetString();
+            if (status != "OK" && status != "ZERO_RESULTS")
+                return StatusCode(StatusCodes.Status502BadGateway, $"Places search failed ({status}).");
+
+            var shops = new List<object>();
+            if (doc.RootElement.TryGetProperty("results", out var results))
+            {
+                foreach (var place in results.EnumerateArray())
+                {
+                    var loc = place.GetProperty("geometry").GetProperty("location");
+                    shops.Add(new
+                    {
+                        placeId     = place.GetProperty("place_id").GetString(),
+                        name        = place.GetProperty("name").GetString(),
+                        address     = place.TryGetProperty("vicinity", out var v) ? v.GetString() : "",
+                        rating      = place.TryGetProperty("rating", out var r) ? r.GetDouble() : 0,
+                        reviewCount = place.TryGetProperty("user_ratings_total", out var t) ? t.GetInt32() : 0,
+                        latitude    = loc.GetProperty("lat").GetDouble(),
+                        longitude   = loc.GetProperty("lng").GetDouble(),
+                    });
+                }
+            }
+            return Ok(shops);
+        }
+
+        // GET: api/navigation/shop-phone?placeId=ChIJ...
+        // Phone numbers aren't in the nearby-search payload — fetched lazily
+        // when the user taps Call.
+        [HttpGet("shop-phone")]
+        public async Task<IActionResult> ShopPhone([FromQuery] string placeId)
+        {
+            if (string.IsNullOrWhiteSpace(placeId))
+                return BadRequest("placeId is required.");
+            if (string.IsNullOrWhiteSpace(ApiKey))
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, "Shop search is not configured.");
+
+            var url =
+                "https://maps.googleapis.com/maps/api/place/details/json" +
+                $"?place_id={Uri.EscapeDataString(placeId)}" +
+                "&fields=formatted_phone_number,international_phone_number" +
+                $"&key={ApiKey}";
+
+            var client = _httpFactory.CreateClient();
+            var json   = await client.GetStringAsync(url);
+
+            using var doc = JsonDocument.Parse(json);
+            string? phone = null;
+            if (doc.RootElement.TryGetProperty("result", out var result))
+            {
+                if (result.TryGetProperty("international_phone_number", out var intl)) phone = intl.GetString();
+                else if (result.TryGetProperty("formatted_phone_number", out var local)) phone = local.GetString();
+            }
+            return Ok(new { phone });
         }
 
         // GET: api/navigation/autocomplete?input=diz

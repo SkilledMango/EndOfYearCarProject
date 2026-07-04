@@ -73,15 +73,14 @@ export interface AuthSession {
   user: AppUser;
 }
 
-export interface MechanicShop {
-  id: number;
+/** A live car-repair shop from Google Places (via the API's /navigation proxy). */
+export interface NearbyShop {
+  placeId: string;
   name: string;
   address: string;
-  phoneNumber: string;
-  specialty: string;
-  rating: number;      // 0 = not rated yet (chip hidden)
+  rating: number;      // 0 = not rated on Google (chip hidden)
   reviewCount: number;
-  latitude: number;    // 0,0 = unknown — geocoded from address on-device
+  latitude: number;
   longitude: number;
 }
 
@@ -157,7 +156,16 @@ export const createVehicle = async (dto: CreateVehicleDto): Promise<Vehicle> => 
   return data;
 };
 
-export const getShops = async (): Promise<MechanicShop[]> => {
-  const { data } = await api.get<MechanicShop[]>('/shops');
+export const getNearbyShops = async (lat: number, lng: number): Promise<NearbyShop[]> => {
+  const { data } = await api.get<NearbyShop[]>('/navigation/nearby-shops', {
+    params: { lat, lng },
+  });
   return data;
+};
+
+export const getShopPhone = async (placeId: string): Promise<string | null> => {
+  const { data } = await api.get<{ phone: string | null }>('/navigation/shop-phone', {
+    params: { placeId },
+  });
+  return data.phone;
 };
