@@ -7,7 +7,7 @@
  * missing in the DB are geocoded from the address on-device.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -18,20 +18,12 @@ import {
   Text,
   View,
 } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import ShopMap from '@/components/ShopMap';
 import { MechanicShop, getShops } from '@/services/api';
 import { Dashboard, Fuel, Severity } from '@/constants/theme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-
-// Tel Aviv — sensible default region when location permission is denied
-const DEFAULT_REGION = {
-  latitude: 32.08,
-  longitude: 34.78,
-  latitudeDelta: 0.25,
-  longitudeDelta: 0.25,
-};
 
 const GEOCODE_CACHE_KEY = 'shop_geocode_cache_v1';
 
@@ -55,7 +47,6 @@ export default function MechanicFinderScreen() {
   const [loading, setLoading]     = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [myPos, setMyPos]         = useState<{ lat: number; lng: number } | null>(null);
-  const mapRef = useRef<MapView>(null);
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -132,17 +123,6 @@ export default function MechanicFinderScreen() {
     [shops],
   );
 
-  // Frame the map around the pins (and the user) once they're known
-  useEffect(() => {
-    if (pinned.length === 0) return;
-    const coords = pinned.map(s => ({ latitude: s.latitude, longitude: s.longitude }));
-    if (myPos) coords.push({ latitude: myPos.lat, longitude: myPos.lng });
-    mapRef.current?.fitToCoordinates(coords, {
-      edgePadding: { top: 60, bottom: 60, left: 60, right: 60 },
-      animated: false,
-    });
-  }, [pinned, myPos]);
-
   const call = (shop: MechanicShop) => {
     if (shop.phoneNumber) Linking.openURL(`tel:${shop.phoneNumber}`);
   };
@@ -166,34 +146,10 @@ export default function MechanicFinderScreen() {
 
   return (
     <View style={styles.container}>
-      {/* ── Map ── */}
-      <MapView
-        ref={mapRef}
-        style={styles.map}
-        initialRegion={DEFAULT_REGION}
-        showsUserLocation
-        showsMyLocationButton={false}
-        toolbarEnabled={false}
-      >
-        {pinned.map((shop, i) => (
-          <Marker
-            key={shop.id}
-            coordinate={{ latitude: shop.latitude, longitude: shop.longitude }}
-            title={shop.name}
-            description={shop.specialty}
-            anchor={{ x: 0.5, y: 0.5 }}
-          >
-            {/* Design alternates filled / outlined circular wrench pins */}
-            <View style={[styles.pin, i % 2 === 1 && styles.pinOutlined]}>
-              <IconSymbol
-                name="wrench.fill"
-                size={18}
-                color={i % 2 === 1 ? Dashboard.accentDeep : '#FFFFFF'}
-              />
-            </View>
-          </Marker>
-        ))}
-      </MapView>
+      {/* ── Map (native) / placeholder (web) ── */}
+      <View style={styles.mapArea}>
+        <ShopMap shops={pinned} userPos={myPos} />
+      </View>
 
       {/* ── Bottom sheet ── */}
       <View style={styles.sheet}>
@@ -268,20 +224,7 @@ export default function MechanicFinderScreen() {
 const styles = StyleSheet.create({
   container:      { flex: 1, backgroundColor: Dashboard.bg },
   centered:       { justifyContent: 'center', alignItems: 'center' },
-  map:            { flex: 1 },
-
-  // Map pins: 40px circles — filled primary / outlined white variants
-  pin:            {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: Dashboard.accentDeep,
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 20, shadowOffset: { width: 0, height: 8 },
-    elevation: 5,
-  },
-  pinOutlined:    {
-    backgroundColor: Dashboard.card,
-    borderWidth: 2, borderColor: Dashboard.accentDeep,
-  },
+  mapArea:        { flex: 1 },
 
   // Bottom sheet
   sheet:          {

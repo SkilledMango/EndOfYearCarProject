@@ -1,0 +1,81 @@
+/**
+ * ShopMap (iOS/Android) — the real map for the mechanic finder.
+ * Circular wrench pins per the Stitch mechanic_finder export: filled primary
+ * and outlined variants alternate. Frames itself around the pins + user.
+ */
+
+import React, { useEffect, useRef } from 'react';
+import { StyleSheet, View } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
+import { Dashboard } from '@/constants/theme';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import type { ShopMapProps } from './ShopMap.types';
+
+// Tel Aviv — sensible default region before pins are known
+const DEFAULT_REGION = {
+  latitude: 32.08,
+  longitude: 34.78,
+  latitudeDelta: 0.25,
+  longitudeDelta: 0.25,
+};
+
+export default function ShopMap({ shops, userPos }: ShopMapProps) {
+  const mapRef = useRef<MapView>(null);
+
+  useEffect(() => {
+    if (shops.length === 0) return;
+    const coords = shops.map(s => ({ latitude: s.latitude, longitude: s.longitude }));
+    if (userPos) coords.push({ latitude: userPos.lat, longitude: userPos.lng });
+    mapRef.current?.fitToCoordinates(coords, {
+      edgePadding: { top: 60, bottom: 60, left: 60, right: 60 },
+      animated: false,
+    });
+  }, [shops, userPos]);
+
+  return (
+    <MapView
+      ref={mapRef}
+      style={styles.map}
+      initialRegion={DEFAULT_REGION}
+      showsUserLocation
+      showsMyLocationButton={false}
+      toolbarEnabled={false}
+    >
+      {shops.map((shop, i) => (
+        <Marker
+          key={shop.id}
+          coordinate={{ latitude: shop.latitude, longitude: shop.longitude }}
+          title={shop.name}
+          description={shop.specialty}
+          anchor={{ x: 0.5, y: 0.5 }}
+        >
+          {/* Design alternates filled / outlined circular wrench pins */}
+          <View style={[styles.pin, i % 2 === 1 && styles.pinOutlined]}>
+            <IconSymbol
+              name="wrench.fill"
+              size={18}
+              color={i % 2 === 1 ? Dashboard.accentDeep : '#FFFFFF'}
+            />
+          </View>
+        </Marker>
+      ))}
+    </MapView>
+  );
+}
+
+const styles = StyleSheet.create({
+  map: { flex: 1 },
+
+  // 40px circles — filled primary / outlined white variants
+  pin: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: Dashboard.accentDeep,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 20, shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
+  },
+  pinOutlined: {
+    backgroundColor: Dashboard.card,
+    borderWidth: 2, borderColor: Dashboard.accentDeep,
+  },
+});
