@@ -37,3 +37,22 @@ export const SeveritySoft = {
   yellow: '#FDF0DC',
   red: '#FFDAD6',
 };
+
+// Live-scan screen accents (Stitch live_scan export tokens)
+export const Scan = {
+  ringTrack: '#E7E7F3', // surface-container-high — progress ring background
+  ringGlow: '#B5C4FF',  // primary-fixed-dim — decorative inner ring
+  errorDeep: '#93000A', // on-error-container — text inside red fault chips
+  amberInk: '#653E00',  // on-tertiary-fixed-variant — text on amber chips
+  greenInk: '#005236',  // on-secondary-fixed-variant — text on green chips
+};
+
+// Fuel screen accents (Stitch fuel_tracking export tokens)
+export const Fuel = {
+  mintBar: '#4EDEA3',    // secondary-fixed-dim — hero card left accent bar
+  trendGreen: '#006C49', // secondary — "% from last month" improving trend
+  chipBg: '#EDEDF8',     // surface-container — circle chip behind pump icon
+  gridLine: '#E2E1ED',   // surface-variant — chart grid lines
+  axisLabel: '#737686',  // outline — chart Y-axis labels
+  starAmber: '#FFB95F',  // tertiary-fixed-dim — mechanic rating star
+};

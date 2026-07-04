@@ -1,474 +1,352 @@
-import React, { useEffect, useRef, useState } from 'react';
+/**
+ * Mechanic Finder — map + "Nearby Mechanics" bottom sheet.
+ * Layout and values follow design/stitch_carstats_diagnostic_suite/mechanic_finder:
+ * full-bleed map with circular wrench pins, and a rounded-top sheet listing
+ * shops with specialty, star-rating chip, distance, and Call / Directions.
+ * Shops come from the API; distances from the phone's location; coordinates
+ * missing in the DB are geocoded from the address on-device.
+ */
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Linking,
-  Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { useAuth } from '@/context/AuthContext';
-import { getUser, Vehicle } from '@/services/api';
-import { Dashboard, Severity } from '@/constants/theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MechanicShop, getShops } from '@/services/api';
+import { Dashboard, Fuel, Severity } from '@/constants/theme';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 
-const GOOGLE_API_KEY      = 'AIzaSyCvfk9E1IyQeWX41NGd5yTx4WiWFLKnGVU';
-const FUEL_PRICE_PER_LITRE = 7.2; // ₪ per litre
+// Tel Aviv — sensible default region when location permission is denied
+const DEFAULT_REGION = {
+  latitude: 32.08,
+  longitude: 34.78,
+  latitudeDelta: 0.25,
+  longitudeDelta: 0.25,
+};
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface RouteResult {
-  distanceKm:         number;
-  durationMin:        number;
-  durationTrafficMin: number;
-  trafficRatio:       number;
-  baseFuelL:          number;
-  estimatedFuelL:     number;
-  extraFuelL:         number;
-  fuelCostILS:        number;
-  trafficLabel:       string;
-  trafficColor:       string;
-  originLatLng:       string;   // "lat,lng" — used for Open in Maps
-  destinationText:    string;   // raw text — used for Open in Maps
+const GEOCODE_CACHE_KEY = 'shop_geocode_cache_v1';
+
+interface LocatedShop extends MechanicShop {
+  distanceKm: number | null;
 }
 
-interface PlaceSuggestion {
-  placeId:     string;
-  description: string;
+/** Great-circle distance in km. */
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function trafficMeta(ratio: number): { label: string; color: string } {
-  if (ratio < 1.1) return { label: 'CLEAR',    color: Severity.green  };
-  if (ratio < 1.3) return { label: 'MODERATE', color: Severity.yellow };
-  if (ratio < 1.6) return { label: 'HEAVY',    color: '#F97316'       };
-  return               { label: 'SEVERE',   color: Severity.red    };
-}
+export default function MechanicFinderScreen() {
+  const [shops, setShops]         = useState<LocatedShop[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [myPos, setMyPos]         = useState<{ lat: number; lng: number } | null>(null);
+  const mapRef = useRef<MapView>(null);
 
-function calcFuelWithTraffic(
-  distanceKm: number,
-  durationSec: number,
-  durationTrafficSec: number,
-  avgL100: number,
-) {
-  const baseFuelL      = (distanceKm / 100) * avgL100;
-  const trafficRatio   = durationSec > 0 ? durationTrafficSec / durationSec : 1;
-  const trafficMult    = 1 + Math.max(0, (trafficRatio - 1) * 0.5);
-  const estimatedFuelL = baseFuelL * trafficMult;
-  return { baseFuelL, estimatedFuelL, extraFuelL: estimatedFuelL - baseFuelL, trafficRatio };
-}
-
-// ─── Main Screen ──────────────────────────────────────────────────────────────
-export default function NavigateScreen() {
-  const { user: authUser }            = useAuth();
-  const [vehicle, setVehicle]         = useState<Vehicle | null>(null);
-  const [destination, setDestination] = useState('');
-  const [fuelInput, setFuelInput]     = useState('8.0');
-  const [loading, setLoading]         = useState(false);
-  const [result, setResult]           = useState<RouteResult | null>(null);
-  const [error, setError]             = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const autocompleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inputRef = useRef<TextInput>(null);
-
-  useEffect(() => {
-    if (!authUser) return;
-    getUser(authUser.id).then(u => {
-      const v = u?.vehicles?.[0] ?? null;
-      setVehicle(v);
-      if (v?.averageFuelConsumption && v.averageFuelConsumption > 0)
-        setFuelInput(v.averageFuelConsumption.toFixed(1));
-    }).catch(() => {});
-  }, [authUser]);
-
-  // ── Places autocomplete ───────────────────────────────────────────────────
-  const fetchSuggestions = (text: string) => {
-    if (autocompleteTimer.current) clearTimeout(autocompleteTimer.current);
-    if (text.length < 3) { setSuggestions([]); return; }
-
-    autocompleteTimer.current = setTimeout(async () => {
-      try {
-        const url =
-          `https://maps.googleapis.com/maps/api/place/autocomplete/json` +
-          `?input=${encodeURIComponent(text)}` +
-          `&types=geocode|establishment` +
-          `&key=${GOOGLE_API_KEY}`;
-        const res  = await fetch(url);
-        const data = await res.json();
-        if (data.status === 'OK') {
-          setSuggestions(
-            (data.predictions as any[]).slice(0, 5).map(p => ({
-              placeId:     p.place_id,
-              description: p.description,
-            }))
-          );
-          setShowSuggestions(true);
-        } else {
-          setSuggestions([]);
-        }
-      } catch { setSuggestions([]); }
-    }, 350); // debounce
-  };
-
-  const onDestinationChange = (text: string) => {
-    setDestination(text);
-    setResult(null);
-    setError(null);
-    fetchSuggestions(text);
-  };
-
-  const onPickSuggestion = (s: PlaceSuggestion) => {
-    setDestination(s.description);
-    setSuggestions([]);
-    setShowSuggestions(false);
-    inputRef.current?.blur();
-  };
-
-  // ── Route calculation ─────────────────────────────────────────────────────
-  const handleCalculate = async () => {
-    setSuggestions([]);
-    setShowSuggestions(false);
-    if (!destination.trim()) { setError('Please enter a destination.'); return; }
-    const avgL100 = parseFloat(fuelInput);
-    if (isNaN(avgL100) || avgL100 <= 0) { setError('Enter a valid fuel consumption (e.g. 8.0)'); return; }
-
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    inputRef.current?.blur();
-
+  const load = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setError('Location permission is required to calculate routes.');
-        setLoading(false);
-        return;
+      // Ask for location first (non-fatal if denied — distances just hide)
+      let pos: { lat: number; lng: number } | null = null;
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          pos = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+          setMyPos(pos);
+        }
+      } catch { /* location unavailable */ }
+
+      const raw = await getShops();
+
+      // Fill in missing coordinates by geocoding the address on-device,
+      // cached so each address is only geocoded once.
+      let cache: Record<string, { lat: number; lng: number }> = {};
+      try {
+        cache = JSON.parse((await AsyncStorage.getItem(GEOCODE_CACHE_KEY)) ?? '{}');
+      } catch { /* corrupted cache — rebuild */ }
+      let cacheDirty = false;
+
+      const located: LocatedShop[] = [];
+      for (const shop of raw) {
+        let lat = shop.latitude;
+        let lng = shop.longitude;
+        if (lat === 0 && lng === 0 && shop.address.trim()) {
+          const cached = cache[shop.address];
+          if (cached) {
+            ({ lat, lng } = cached);
+          } else {
+            try {
+              const results = await Location.geocodeAsync(shop.address);
+              if (results[0]) {
+                lat = results[0].latitude;
+                lng = results[0].longitude;
+                cache[shop.address] = { lat, lng };
+                cacheDirty = true;
+              }
+            } catch { /* geocoder unavailable — pin stays hidden */ }
+          }
+        }
+        located.push({
+          ...shop,
+          latitude: lat,
+          longitude: lng,
+          distanceKm: pos && !(lat === 0 && lng === 0)
+            ? haversineKm(pos.lat, pos.lng, lat, lng)
+            : null,
+        });
+      }
+      if (cacheDirty) {
+        try { await AsyncStorage.setItem(GEOCODE_CACHE_KEY, JSON.stringify(cache)); } catch {}
       }
 
-      const loc    = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const origin = `${loc.coords.latitude},${loc.coords.longitude}`;
-
-      const url =
-        `https://maps.googleapis.com/maps/api/directions/json` +
-        `?origin=${encodeURIComponent(origin)}` +
-        `&destination=${encodeURIComponent(destination.trim())}` +
-        `&departure_time=now` +
-        `&key=${GOOGLE_API_KEY}`;
-
-      const response = await fetch(url);
-      const data     = await response.json();
-
-      if (data.status !== 'OK') {
-        setError(
-          data.status === 'NOT_FOUND' || data.status === 'ZERO_RESULTS'
-            ? 'Destination not found. Try a more specific address.'
-            : `Could not get route (${data.status}). Check your connection.`
-        );
-        setLoading(false);
-        return;
-      }
-
-      const leg             = data.routes[0].legs[0];
-      const distanceKm      = (leg.distance.value as number) / 1000;
-      const durationSec     = leg.duration.value as number;
-      const durationTraffic = (leg.duration_in_traffic?.value ?? durationSec) as number;
-      const fuel            = calcFuelWithTraffic(distanceKm, durationSec, durationTraffic, avgL100);
-      const tm              = trafficMeta(fuel.trafficRatio);
-
-      setResult({
-        distanceKm,
-        durationMin:        Math.round(durationSec / 60),
-        durationTrafficMin: Math.round(durationTraffic / 60),
-        trafficRatio:       fuel.trafficRatio,
-        baseFuelL:          fuel.baseFuelL,
-        estimatedFuelL:     fuel.estimatedFuelL,
-        extraFuelL:         fuel.extraFuelL,
-        fuelCostILS:        fuel.estimatedFuelL * FUEL_PRICE_PER_LITRE,
-        trafficLabel:       tm.label,
-        trafficColor:       tm.color,
-        originLatLng:       origin,
-        destinationText:    destination.trim(),
-      });
-    } catch {
-      setError('Network error. Check your internet connection and try again.');
-    } finally {
+      located.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
+      setShops(located);
+    } catch { /* API unreachable — keep previous list */ }
+    finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const pinned = useMemo(
+    () => shops.filter(s => !(s.latitude === 0 && s.longitude === 0)),
+    [shops],
+  );
+
+  // Frame the map around the pins (and the user) once they're known
+  useEffect(() => {
+    if (pinned.length === 0) return;
+    const coords = pinned.map(s => ({ latitude: s.latitude, longitude: s.longitude }));
+    if (myPos) coords.push({ latitude: myPos.lat, longitude: myPos.lng });
+    mapRef.current?.fitToCoordinates(coords, {
+      edgePadding: { top: 60, bottom: 60, left: 60, right: 60 },
+      animated: false,
+    });
+  }, [pinned, myPos]);
+
+  const call = (shop: MechanicShop) => {
+    if (shop.phoneNumber) Linking.openURL(`tel:${shop.phoneNumber}`);
   };
 
-  // ── Open in Google Maps ───────────────────────────────────────────────────
-  const openInGoogleMaps = async () => {
-    if (!result) return;
-    const url =
-      `https://www.google.com/maps/dir/?api=1` +
-      `&origin=${encodeURIComponent(result.originLatLng)}` +
-      `&destination=${encodeURIComponent(result.destinationText)}` +
-      `&travelmode=driving`;
-    const supported = await Linking.canOpenURL(url);
-    if (supported) {
-      await Linking.openURL(url);
-    } else {
-      // Fallback: just navigate to destination
-      await Linking.openURL(
-        `https://maps.google.com/?q=${encodeURIComponent(result.destinationText)}`
-      );
-    }
+  const directions = (shop: LocatedShop) => {
+    const dest = !(shop.latitude === 0 && shop.longitude === 0)
+      ? `${shop.latitude},${shop.longitude}`
+      : shop.address;
+    Linking.openURL(
+      `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}&travelmode=driving`,
+    );
   };
 
-  const vehicleName = vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model}` : 'No vehicle';
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={Dashboard.accent} />
+      </View>
+    );
+  }
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: Dashboard.bg }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
+    <View style={styles.container}>
+      {/* ── Map ── */}
+      <MapView
+        ref={mapRef}
+        style={styles.map}
+        initialRegion={DEFAULT_REGION}
+        showsUserLocation
+        showsMyLocationButton={false}
+        toolbarEnabled={false}
       >
-        <Text style={styles.screenTitle}>FUEL NAVIGATOR</Text>
-
-        {/* ── Vehicle + L/100km ── */}
-        <View style={styles.vehicleRow}>
-          <View style={styles.vehicleDot} />
-          <Text style={styles.vehicleName}>{vehicleName}</Text>
-          <View style={styles.fuelInputRow}>
-            <TextInput
-              style={styles.fuelInputBox}
-              value={fuelInput}
-              onChangeText={v => { setFuelInput(v); setResult(null); }}
-              keyboardType="decimal-pad"
-              selectTextOnFocus
-            />
-            <Text style={styles.fuelInputLabel}>L/100km</Text>
-          </View>
-        </View>
-
-        {/* ── Destination input + suggestions ── */}
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>DESTINATION</Text>
-          <View>
-            <TextInput
-              ref={inputRef}
-              style={styles.input}
-              placeholder="e.g. Tel Aviv, Dizengoff Center"
-              placeholderTextColor={Dashboard.textSecondary}
-              value={destination}
-              onChangeText={onDestinationChange}
-              onSubmitEditing={handleCalculate}
-              returnKeyType="search"
-            />
-
-            {/* Autocomplete dropdown */}
-            {showSuggestions && suggestions.length > 0 && (
-              <View style={styles.dropdown}>
-                {suggestions.map((s, i) => (
-                  <Pressable
-                    key={s.placeId}
-                    style={[styles.dropdownItem, i < suggestions.length - 1 && styles.dropdownDivider]}
-                    onPress={() => onPickSuggestion(s)}
-                  >
-                    <Text style={styles.dropdownText} numberOfLines={1}>{s.description}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-          </View>
-
-          <Pressable
-            style={[styles.calcButton, (loading || !destination.trim()) && styles.calcButtonDisabled]}
-            onPress={handleCalculate}
-            disabled={loading || !destination.trim()}
+        {pinned.map((shop, i) => (
+          <Marker
+            key={shop.id}
+            coordinate={{ latitude: shop.latitude, longitude: shop.longitude }}
+            title={shop.name}
+            description={shop.specialty}
+            anchor={{ x: 0.5, y: 0.5 }}
           >
-            {loading
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.calcButtonText}>CALCULATE ROUTE</Text>}
-          </Pressable>
-          {error && <Text style={styles.errorText}>{error}</Text>}
+            {/* Design alternates filled / outlined circular wrench pins */}
+            <View style={[styles.pin, i % 2 === 1 && styles.pinOutlined]}>
+              <IconSymbol
+                name="wrench.fill"
+                size={18}
+                color={i % 2 === 1 ? Dashboard.accentDeep : '#FFFFFF'}
+              />
+            </View>
+          </Marker>
+        ))}
+      </MapView>
+
+      {/* ── Bottom sheet ── */}
+      <View style={styles.sheet}>
+        <View style={styles.sheetHandle} />
+        <View style={styles.sheetHeader}>
+          <Text style={styles.sheetTitle}>Nearby Mechanics</Text>
+          <Text style={styles.sheetCount}>{shops.length} found</Text>
         </View>
-
-        {/* ── Results ── */}
-        {result && (
-          <>
-            {/* Route summary */}
-            <View style={styles.card}>
-              <Text style={styles.cardLabel}>ROUTE SUMMARY</Text>
-              <View style={styles.statsGrid}>
-                <View style={styles.statBox}>
-                  <Text style={styles.statValue}>{result.distanceKm.toFixed(1)}</Text>
-                  <Text style={styles.statUnit}>km</Text>
-                </View>
-                <View style={styles.statBox}>
-                  <Text style={styles.statValue}>{result.durationMin}</Text>
-                  <Text style={styles.statUnit}>min normal</Text>
-                </View>
-                <View style={[styles.statBox, { borderColor: result.trafficColor + '55' }]}>
-                  <Text style={[styles.statValue, { color: result.trafficColor }]}>
-                    {result.durationTrafficMin}
-                  </Text>
-                  <Text style={styles.statUnit}>min w/ traffic</Text>
-                </View>
-              </View>
-
-              {/* Traffic badge */}
-              <View style={[styles.trafficBadge, {
-                backgroundColor: result.trafficColor + '18',
-                borderColor: result.trafficColor + '55',
-              }]}>
-                <View style={[styles.trafficDot, { backgroundColor: result.trafficColor }]} />
-                <Text style={[styles.trafficLabel, { color: result.trafficColor }]}>
-                  {result.trafficLabel} TRAFFIC
-                </Text>
-                {result.trafficRatio > 1.05 && (
-                  <Text style={[styles.trafficDelay, { color: result.trafficColor }]}>
-                    +{result.durationTrafficMin - result.durationMin} min delay
-                  </Text>
-                )}
-              </View>
-
-              {/* Open in Google Maps button */}
-              <Pressable style={styles.mapsButton} onPress={openInGoogleMaps}>
-                <Text style={styles.mapsButtonText}>🗺  Open in Google Maps</Text>
-              </Pressable>
+        <ScrollView
+          contentContainerStyle={styles.sheetList}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={Dashboard.accent} />
+          }
+        >
+          {shops.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>🔧</Text>
+              <Text style={styles.emptyText}>No mechanics listed yet.</Text>
+              <Text style={styles.emptySubtext}>Shops added in the admin panel will appear here.</Text>
             </View>
-
-            {/* Fuel estimate */}
-            <View style={[styles.card, styles.fuelCard]}>
-              <Text style={styles.cardLabel}>FUEL ESTIMATE</Text>
-              <View style={styles.fuelMain}>
-                <Text style={styles.fuelValue}>{result.estimatedFuelL.toFixed(2)}</Text>
-                <Text style={styles.fuelUnit}>litres</Text>
-              </View>
-              <Text style={styles.fuelCost}>≈ ₪{result.fuelCostILS.toFixed(2)}</Text>
-              <View style={styles.fuelDivider} />
-              <View style={styles.fuelBreakdown}>
-                <View style={styles.fuelRow}>
-                  <Text style={styles.fuelRowLabel}>Base (no traffic)</Text>
-                  <Text style={styles.fuelRowValue}>{result.baseFuelL.toFixed(2)} L</Text>
-                </View>
-                {result.extraFuelL > 0.05 && (
-                  <View style={styles.fuelRow}>
-                    <Text style={[styles.fuelRowLabel, { color: result.trafficColor }]}>Traffic penalty</Text>
-                    <Text style={[styles.fuelRowValue, { color: result.trafficColor }]}>+{result.extraFuelL.toFixed(2)} L</Text>
+          ) : (
+            shops.map((shop, i) => (
+              <View key={shop.id} style={styles.shopCard}>
+                <View style={[
+                  styles.shopAccentBar,
+                  { backgroundColor: i % 2 === 0 ? Dashboard.accentDeep : Severity.green },
+                ]} />
+                <View style={styles.shopHeader}>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={styles.shopName} numberOfLines={1}>{shop.name.trim()}</Text>
+                    <Text style={styles.shopSpecialty}>Specialty: {shop.specialty || 'General'}</Text>
                   </View>
-                )}
-                <View style={styles.fuelRow}>
-                  <Text style={styles.fuelRowLabel}>Your avg consumption</Text>
-                  <Text style={styles.fuelRowValue}>{fuelInput} L/100km</Text>
+                  {shop.rating > 0 && (
+                    <View style={styles.ratingChip}>
+                      <IconSymbol name="star.fill" size={14} color={Fuel.starAmber} />
+                      <Text style={styles.ratingValue}>
+                        {shop.rating.toFixed(1)}{' '}
+                        <Text style={styles.ratingCount}>({shop.reviewCount})</Text>
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.distanceRow}>
+                  <IconSymbol name="location.fill" size={14} color={Dashboard.textSecondary} />
+                  <Text style={styles.distanceText}>
+                    {shop.distanceKm != null
+                      ? `${shop.distanceKm.toFixed(1)} km away`
+                      : shop.address}
+                  </Text>
+                </View>
+                <View style={styles.actionsRow}>
+                  <Pressable style={styles.callBtn} onPress={() => call(shop)}>
+                    <IconSymbol name="phone.fill" size={20} color={Dashboard.accentDeep} />
+                    <Text style={styles.callBtnText}>Call</Text>
+                  </Pressable>
+                  <Pressable style={styles.directionsBtn} onPress={() => directions(shop)}>
+                    <IconSymbol name="arrow.triangle.turn.up.right.diamond.fill" size={20} color="#FFFFFF" />
+                    <Text style={styles.directionsBtnText}>Directions</Text>
+                  </Pressable>
                 </View>
               </View>
-            </View>
-          </>
-        )}
-
-        {!result && !loading && !error && (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>⛽</Text>
-            <Text style={styles.emptyText}>Enter a destination above</Text>
-            <Text style={styles.emptySubtext}>
-              We'll calculate fuel usage based on your vehicle and live traffic data.
-            </Text>
-          </View>
-        )}
-      </ScrollView>
-    </KeyboardAvoidingView>
+            ))
+          )}
+        </ScrollView>
+      </View>
+    </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Styles (values from the mechanic_finder Stitch export) ───────────────────
+
 const styles = StyleSheet.create({
-  container:   { flex: 1 },
-  content:     { padding: 24, paddingTop: 64, paddingBottom: 48 },
+  container:      { flex: 1, backgroundColor: Dashboard.bg },
+  centered:       { justifyContent: 'center', alignItems: 'center' },
+  map:            { flex: 1 },
 
-  screenTitle: { fontSize: 11, color: Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 20 },
-
-  vehicleRow:  {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
+  // Map pins: 40px circles — filled primary / outlined white variants
+  pin:            {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: Dashboard.accentDeep,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 20, shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
+  },
+  pinOutlined:    {
     backgroundColor: Dashboard.card,
-    borderRadius: 12, borderWidth: 1, borderColor: Dashboard.cardBorder,
-    padding: 14, marginBottom: 16,
+    borderWidth: 2, borderColor: Dashboard.accentDeep,
   },
-  vehicleDot:  { width: 10, height: 10, borderRadius: 5, backgroundColor: Dashboard.accent, flexShrink: 0 },
-  vehicleName: { fontSize: 14, fontWeight: '600', color: Dashboard.textPrimary, flex: 1 },
-  fuelInputRow:  { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  fuelInputBox:  {
-    backgroundColor: Dashboard.bg,
-    borderRadius: 8, borderWidth: 1, borderColor: Dashboard.accent + '88',
-    paddingHorizontal: 10, paddingVertical: 6,
-    fontSize: 16, fontWeight: '700', color: Dashboard.accent,
-    minWidth: 52, textAlign: 'center',
-  },
-  fuelInputLabel: { fontSize: 12, color: Dashboard.textSecondary },
 
-  card:        {
+  // Bottom sheet
+  sheet:          {
+    height: '52%',
     backgroundColor: Dashboard.card,
-    borderRadius: 12, borderWidth: 1, borderColor: Dashboard.cardBorder,
-    padding: 20, marginBottom: 16,
+    borderTopLeftRadius: 12, borderTopRightRadius: 12,
+    shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 24, shadowOffset: { width: 0, height: -8 },
+    elevation: 12,
   },
-  fuelCard:    { borderColor: Dashboard.accent + '44' },
-  cardLabel:   { fontSize: 11, color: Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 14 },
-
-  input:       {
-    backgroundColor: Dashboard.bg,
-    borderRadius: 10, borderWidth: 1, borderColor: Dashboard.cardBorder,
-    paddingHorizontal: 14, paddingVertical: 12,
-    fontSize: 15, color: Dashboard.textPrimary, marginBottom: 12,
+  sheetHandle:    {
+    width: 48, height: 4, borderRadius: 2,
+    backgroundColor: Dashboard.cardBorder,
+    alignSelf: 'center', marginVertical: 12,
   },
+  sheetHeader:    {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end',
+    paddingHorizontal: 20, paddingBottom: 16,
+  },
+  sheetTitle:     { fontSize: 20, lineHeight: 28, fontWeight: '600', color: Dashboard.textPrimary },
+  sheetCount:     { fontSize: 14, lineHeight: 20, color: Dashboard.textSecondary },
+  sheetList:      { paddingHorizontal: 20, paddingBottom: 32, gap: 16 },
 
-  dropdown:      {
-    position: 'absolute', top: 50, left: 0, right: 0,
+  // Shop cards
+  shopCard:       {
     backgroundColor: Dashboard.card,
-    borderRadius: 10, borderWidth: 1, borderColor: Dashboard.cardBorder,
-    zIndex: 999, elevation: 8,
-    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+    borderRadius: 8,
+    borderWidth: 1, borderColor: Dashboard.cardBorder,
+    padding: 16,
+    overflow: 'hidden',
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
-  dropdownItem:  { paddingHorizontal: 14, paddingVertical: 13 },
-  dropdownDivider: { borderBottomWidth: 1, borderBottomColor: Dashboard.cardBorder },
-  dropdownText:  { fontSize: 13, color: Dashboard.textPrimary },
-
-  calcButton:        { backgroundColor: Dashboard.accent, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  calcButtonDisabled:{ opacity: 0.4 },
-  calcButtonText:    { color: '#fff', fontWeight: '700', fontSize: 14, letterSpacing: 1.5 },
-  errorText:         { color: Severity.yellow, fontSize: 12, marginTop: 10, lineHeight: 17 },
-
-  statsGrid:   { flexDirection: 'row', gap: 10, marginBottom: 14 },
-  statBox:     {
-    flex: 1, alignItems: 'center',
+  shopAccentBar:  { position: 'absolute', left: 0, top: 0, bottom: 0, width: 2 },
+  shopHeader:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+  shopName:       { fontSize: 24, lineHeight: 26, fontWeight: '700', color: Dashboard.textPrimary, marginBottom: 4 },
+  shopSpecialty:  { fontSize: 14, lineHeight: 20, color: Dashboard.textSecondary },
+  ratingChip:     {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: Dashboard.bg,
-    borderRadius: 10, borderWidth: 1, borderColor: Dashboard.cardBorder,
-    paddingVertical: 12,
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4,
   },
-  statValue:   { fontSize: 22, fontWeight: '700', color: Dashboard.textPrimary },
-  statUnit:    { fontSize: 10, color: Dashboard.textSecondary, marginTop: 2, textAlign: 'center' },
+  ratingValue:    { fontSize: 12, fontWeight: '600', color: Dashboard.textPrimary },
+  ratingCount:    { fontWeight: '400', color: Dashboard.textSecondary },
+  distanceRow:    { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 16 },
+  distanceText:   { fontSize: 14, lineHeight: 20, color: Dashboard.textSecondary, flex: 1 },
 
-  trafficBadge:  { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 8, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 14 },
-  trafficDot:    { width: 8, height: 8, borderRadius: 4 },
-  trafficLabel:  { fontSize: 12, fontWeight: '700', letterSpacing: 1, flex: 1 },
-  trafficDelay:  { fontSize: 12, fontWeight: '600' },
-
-  mapsButton:    {
-    borderRadius: 10, borderWidth: 1, borderColor: Dashboard.accent,
-    paddingVertical: 12, alignItems: 'center',
+  actionsRow:     { flexDirection: 'row', gap: 12 },
+  callBtn:        {
+    flex: 1, height: 48, borderRadius: 8,
+    backgroundColor: Fuel.chipBg,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
   },
-  mapsButtonText: { color: Dashboard.accent, fontWeight: '700', fontSize: 14 },
+  callBtnText:    { fontSize: 15, fontWeight: '700', color: Dashboard.accentDeep },
+  directionsBtn:  {
+    flex: 1, height: 48, borderRadius: 8,
+    backgroundColor: Dashboard.accentDeep,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
+  },
+  directionsBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
 
-  fuelMain:    { flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginBottom: 4 },
-  fuelValue:   { fontSize: 52, fontWeight: '800', color: Dashboard.textPrimary, lineHeight: 56 },
-  fuelUnit:    { fontSize: 18, color: Dashboard.textSecondary, marginBottom: 8 },
-  fuelCost:    { fontSize: 20, fontWeight: '600', color: Dashboard.accent, marginBottom: 16 },
-  fuelDivider: { height: 1, backgroundColor: Dashboard.cardBorder, marginBottom: 14 },
-  fuelBreakdown: { gap: 8 },
-  fuelRow:     { flexDirection: 'row', justifyContent: 'space-between' },
-  fuelRowLabel:{ fontSize: 13, color: Dashboard.textSecondary },
-  fuelRowValue:{ fontSize: 13, fontWeight: '600', color: Dashboard.textPrimary },
-
-  emptyState:  { alignItems: 'center', paddingTop: 60 },
-  emptyIcon:   { fontSize: 48, marginBottom: 16 },
-  emptyText:   { fontSize: 17, fontWeight: '600', color: Dashboard.textPrimary, marginBottom: 8 },
-  emptySubtext:{ fontSize: 13, color: Dashboard.textSecondary, textAlign: 'center', lineHeight: 19 },
+  // Empty state
+  emptyState:     { alignItems: 'center', paddingTop: 40 },
+  emptyIcon:      { fontSize: 48 },
+  emptyText:      { fontSize: 17, fontWeight: '600', color: Dashboard.textPrimary, marginTop: 12 },
+  emptySubtext:   { fontSize: 13, color: Dashboard.textSecondary, marginTop: 6, textAlign: 'center' },
 });

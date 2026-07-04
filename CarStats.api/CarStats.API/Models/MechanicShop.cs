@@ -19,6 +19,12 @@ namespace CarStats.API.Models
 
         public string Specialty { get; set; } = "General"; // e.g., "Brakes", "Engine", "Electric"
 
+        // Shown as the "4.8 (120)" chip in the mobile mechanic finder.
+        // 0 means "not rated yet" — the mobile app hides the chip.
+        [Range(0, 5)]
+        public double Rating { get; set; }
+        public int ReviewCount { get; set; }
+
         // For future Google Maps integration
         public double Latitude { get; set; }
         public double Longitude { get; set; }

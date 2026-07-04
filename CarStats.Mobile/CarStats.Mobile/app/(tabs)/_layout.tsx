@@ -43,7 +43,7 @@ export default function TabLayout() {
         name="navigate"
         options={{
           title: 'Mechanics',
-          tabBarIcon: ({ color }) => <IconSymbol size={26} name="location.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={26} name="wrench.fill" color={color} />,
         }}
       />
       <Tabs.Screen

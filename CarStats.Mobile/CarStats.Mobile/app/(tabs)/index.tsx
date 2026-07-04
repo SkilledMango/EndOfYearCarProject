@@ -10,6 +10,8 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+import ScanOverlay from '@/components/ScanOverlay';
 import { AddVehicleModal, VehiclePrefill } from '@/components/AddVehicleModal';
 import {
   AppUser,
@@ -60,6 +62,7 @@ function fuelKey(vehicleId?: number) {
 
 export default function HomeScreen() {
   const { user: authUser } = useAuth();
+  const router = useRouter();
 
   // ── User / vehicle state ──
   const [user, setUser]                     = useState<AppUser | null>(null);
@@ -77,6 +80,7 @@ export default function HomeScreen() {
   const [scanning, setScanning]             = useState(false);
   const [dtcResults, setDtcResults]         = useState<ReportDtcResponse[]>([]);
   const [scanError, setScanError]           = useState<string | null>(null);
+  const [scanOverlayVisible, setScanOverlayVisible] = useState(false);
 
   // ── Fuel estimation ──
   const [tripKm, setTripKm]                 = useState(0);
@@ -250,6 +254,7 @@ export default function HomeScreen() {
     }
 
     setScanning(true);
+    setScanOverlayVisible(true); // full-screen scan experience (ring + tiles)
     try {
       const { codes } = await scanDtcs();
 
@@ -424,6 +429,16 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      {/* ── Trip fuel planner shortcut (feature moved off the Mechanics tab) ── */}
+      <Pressable style={styles.plannerCard} onPress={() => router.push('/trip-planner')}>
+        <Text style={styles.plannerIcon}>🗺</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.plannerTitle}>Trip Fuel Planner</Text>
+          <Text style={styles.plannerSub}>Estimate fuel & cost for a route with live traffic</Text>
+        </View>
+        <Text style={styles.plannerChevron}>›</Text>
+      </Pressable>
+
       {/* ── OBD-II Adapter status banner ── */}
       <ScannerBanner online={scannerOnline} status={scannerStatus} onRetry={checkScanner} />
 
@@ -496,6 +511,18 @@ export default function HomeScreen() {
         prefill={prefillData}
         onAdded={() => { setAddVehicleVisible(false); setPrefillData(undefined); loadData(); }}
         onClose={() => { setAddVehicleVisible(false); setPrefillData(undefined); }}
+      />
+
+      {/* ── Live scan overlay (Stitch live_scan design) ── */}
+      <ScanOverlay
+        visible={scanOverlayVisible}
+        scanning={scanning}
+        vehicleName={selectedVehicle ? `${selectedVehicle.make} ${selectedVehicle.model}` : 'your car'}
+        results={dtcResults}
+        finishedMessage={scanError}
+        liveData={liveData}
+        estimatedFuelPct={estimatedFuel ?? fuelBaseline?.pct ?? null}
+        onClose={() => setScanOverlayVisible(false)}
       />
 
       {/* ── Fuel set modal ── */}
@@ -1020,6 +1047,17 @@ const styles = StyleSheet.create({
   content:               { padding: 24, paddingTop: 64, paddingBottom: 40 },
 
   header:                { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+
+  plannerCard:           {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: Dashboard.card,
+    borderRadius: 12, borderWidth: 1, borderColor: Dashboard.cardBorder,
+    padding: 16, marginBottom: 16,
+  },
+  plannerIcon:           { fontSize: 24 },
+  plannerTitle:          { fontSize: 15, fontWeight: '700', color: Dashboard.textPrimary },
+  plannerSub:            { fontSize: 12, color: Dashboard.textSecondary, marginTop: 2 },
+  plannerChevron:        { fontSize: 26, color: Dashboard.textSecondary, marginTop: -2 },
   avatar: {
     width: 46,
     height: 46,

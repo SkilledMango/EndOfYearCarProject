@@ -9,7 +9,7 @@ import {
 export default function ShopsManager() {
     const [shops, setShops] = useState([]);
     const [open, setOpen] = useState(false);
-    const [newShop, setNewShop] = useState({ name: '', address: '', phoneNumber: '', specialty: '' });
+    const [newShop, setNewShop] = useState({ name: '', address: '', phoneNumber: '', specialty: '', rating: 0, reviewCount: 0 });
 
     const loadShops = async () => {
         const data = await getShops();
@@ -48,6 +48,7 @@ export default function ShopsManager() {
                             <TableCell><b>Address</b></TableCell>
                             <TableCell><b>Phone</b></TableCell>
                             <TableCell><b>Specialty</b></TableCell>
+                            <TableCell><b>Rating</b></TableCell>
                             <TableCell><b>Actions</b></TableCell>
                         </TableRow>
                     </TableHead>
@@ -58,6 +59,9 @@ export default function ShopsManager() {
                                 <TableCell>{shop.address}</TableCell>
                                 <TableCell>{shop.phoneNumber}</TableCell>
                                 <TableCell>{shop.specialty}</TableCell>
+                                <TableCell>
+                                    {shop.rating > 0 ? `★ ${shop.rating} (${shop.reviewCount})` : '—'}
+                                </TableCell>
                                 <TableCell>
                                     <Button variant="contained" color="error" size="small" onClick={() => handleDelete(shop.id, shop.name)}>
                                         Delete
@@ -76,6 +80,10 @@ export default function ShopsManager() {
                     <TextField label="Address" onChange={(e) => setNewShop({...newShop, address: e.target.value})} fullWidth />
                     <TextField label="Phone Number" onChange={(e) => setNewShop({...newShop, phoneNumber: e.target.value})} fullWidth />
                     <TextField label="Specialty (e.g., Transmissions)" onChange={(e) => setNewShop({...newShop, specialty: e.target.value})} fullWidth />
+                    <TextField label="Rating (0–5, e.g. 4.8)" type="number" inputProps={{ min: 0, max: 5, step: 0.1 }}
+                        onChange={(e) => setNewShop({...newShop, rating: parseFloat(e.target.value) || 0})} fullWidth />
+                    <TextField label="Number of reviews" type="number" inputProps={{ min: 0 }}
+                        onChange={(e) => setNewShop({...newShop, reviewCount: parseInt(e.target.value, 10) || 0})} fullWidth />
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setOpen(false)}>Cancel</Button>

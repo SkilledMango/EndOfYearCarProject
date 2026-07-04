@@ -73,6 +73,18 @@ export interface AuthSession {
   user: AppUser;
 }
 
+export interface MechanicShop {
+  id: number;
+  name: string;
+  address: string;
+  phoneNumber: string;
+  specialty: string;
+  rating: number;      // 0 = not rated yet (chip hidden)
+  reviewCount: number;
+  latitude: number;    // 0,0 = unknown — geocoded from address on-device
+  longitude: number;
+}
+
 export interface DiagnosticCode {
   id: number;
   errorCode: string;
@@ -142,5 +154,10 @@ export interface CreateVehicleDto {
 
 export const createVehicle = async (dto: CreateVehicleDto): Promise<Vehicle> => {
   const { data } = await api.post<Vehicle>('/vehicles', dto);
+  return data;
+};
+
+export const getShops = async (): Promise<MechanicShop[]> => {
+  const { data } = await api.get<MechanicShop[]>('/shops');
   return data;
 };

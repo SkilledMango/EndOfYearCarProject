@@ -22,6 +22,19 @@ const MAPPING = {
   'chevron.right': 'chevron-right',
   'location.fill': 'place',        // was missing — Navigate tab icon broke on Android
   'person.fill': 'person',         // Profile tab
+  'plus': 'add',                   // Fuel screen FAB
+  'arrow.down': 'arrow-downward',  // Fuel trend (improving)
+  'arrow.up': 'arrow-upward',      // Fuel trend (worsening)
+  'car.fill': 'directions-car',    // Fuel screen vehicle switcher
+  'qrcode.viewfinder': 'qr-code-scanner',            // Scan overlay center icon
+  'wrench.fill': 'build',                            // Mechanic finder map pins
+  'star.fill': 'star',                               // Mechanic rating chip
+  'phone.fill': 'call',                              // Mechanic call button
+  'arrow.triangle.turn.up.right.diamond.fill': 'directions', // Directions button
+  'gauge': 'speed',                                  // Scan tile: RPM
+  'thermometer': 'thermostat',                       // Scan tile: coolant
+  'exclamationmark.triangle.fill': 'warning',        // Scan faults: URGENT chip
+  'gearshape.2.fill': 'engineering',                 // Scan faults: fault row icon
 } as IconMapping;
 
 /**
