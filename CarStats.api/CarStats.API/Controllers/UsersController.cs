@@ -54,6 +54,12 @@ namespace CarStats.API.Controllers
         [Authorize(Policy = "AdminOnly")]
         public async Task<ActionResult<AppUser>> CreateUser(AppUser newUser)
         {
+            // Same uniqueness rule as self-service registration — two accounts
+            // with one email would make login's email lookup ambiguous.
+            newUser.Email = newUser.Email.ToLower().Trim();
+            if (await _context.Users.AnyAsync(u => u.Email.ToLower() == newUser.Email))
+                return Conflict("An account with that email already exists.");
+
             // Secure the password immediately before saving
             if (!string.IsNullOrEmpty(newUser.NewPassword))
             {
@@ -82,9 +88,14 @@ namespace CarStats.API.Controllers
             var existingUser = await _context.Users.FindAsync(id);
             if (existingUser == null) return NotFound();
 
+            // Changing the email must not collide with another account
+            var newEmail = updatedUser.Email.ToLower().Trim();
+            if (await _context.Users.AnyAsync(u => u.Id != id && u.Email.ToLower() == newEmail))
+                return Conflict("Another account already uses that email.");
+
             // 2. Update the normal fields
             existingUser.FullName = updatedUser.FullName;
-            existingUser.Email = updatedUser.Email;
+            existingUser.Email = newEmail;
             existingUser.Role = updatedUser.Role;
             existingUser.TotalFaultsLogged = updatedUser.TotalFaultsLogged;
             existingUser.IsPremiumMember = updatedUser.IsPremiumMember;

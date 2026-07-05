@@ -14,15 +14,7 @@ import {
 } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
-import { ThemeColors } from '@/constants/theme';
-
-const severityMeta = (c: ThemeColors, s: SeverityLevel | undefined) => {
-  switch (s) {
-    case SeverityLevel.Green:  return { label: 'OK',       color: c.Severity.green };
-    case SeverityLevel.Red:    return { label: 'CRITICAL', color: c.Severity.red };
-    default:                   return { label: 'WARNING',  color: c.Severity.yellow };
-  }
-};
+import { severityMeta } from '@/utils/severity';
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, {

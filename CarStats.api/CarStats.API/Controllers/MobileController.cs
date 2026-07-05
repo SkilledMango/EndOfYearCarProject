@@ -115,11 +115,11 @@ namespace CarStats.API.Controllers
             var dtcRows = await _context.DiagnosticCodes
                 .Where(d => codes.Contains(d.ErrorCode))
                 .ToListAsync();
-            // Group defensively — the dictionary table may contain duplicate
-            // ErrorCode rows; keep the first match per code like before.
+            // DistinctBy guards against duplicate ErrorCode rows in the
+            // dictionary table; keeps the first match per code like before.
             var dtcMap = dtcRows
-                .GroupBy(d => d.ErrorCode)
-                .ToDictionary(g => g.Key, g => g.First());
+                .DistinctBy(d => d.ErrorCode)
+                .ToDictionary(d => d.ErrorCode);
 
             var enriched = events.Select(ev =>
             {

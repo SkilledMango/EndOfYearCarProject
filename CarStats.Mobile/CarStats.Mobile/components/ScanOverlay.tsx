@@ -13,6 +13,7 @@ import { ReportDtcResponse, SeverityLevel } from '@/services/api';
 import { LiveData } from '@/services/scanner';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { resultSeverity, worstSeverity } from '@/utils/severity';
 
 const RING_R = 44;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_R; // ≈276, matches the design's dasharray
@@ -61,13 +62,8 @@ export default function ScanOverlay({
     };
   }, [visible, scanning]);
 
-  const done = !scanning;
-  const worst: SeverityLevel | null = results.reduce<SeverityLevel | null>((w, r) => {
-    const s = r.translation?.severity ?? r.severity ?? null;
-    if (s == null) return w;
-    return w == null || s > w ? s : w;
-  }, null);
-  const urgent = worst === SeverityLevel.Red;
+  const done   = !scanning;
+  const urgent = worstSeverity(results) === SeverityLevel.Red;
 
   const dashOffset = RING_CIRCUMFERENCE * (1 - progress / 100);
 
@@ -200,8 +196,7 @@ function Tile({ icon, label, value, unit }: {
 function FaultRow({ result }: { result: ReportDtcResponse }) {
   const { colors: c } = useTheme();
   const styles = useStyles();
-  const severity = result.translation?.severity ?? result.severity ?? SeverityLevel.Yellow;
-  const red  = severity === SeverityLevel.Red;
+  const red  = resultSeverity(result) === SeverityLevel.Red;
   const code = result.translation?.errorCode
     ?? result.message?.match(/Code (\w+)/)?.[1]
     ?? 'Unknown';

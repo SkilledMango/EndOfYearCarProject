@@ -13,6 +13,11 @@
 *.nupkg
 *.snupkg
 
+# ─── Build / log artifacts (never source-controlled) ─────────────────────────
+*.zip
+app_logs.zip
+deploy.zip
+
 # ─── App secrets & config overrides ──────────────────────────────────────────
 **/appsettings.Development.json
 **/appsettings.Local.json

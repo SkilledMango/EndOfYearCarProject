@@ -36,17 +36,8 @@ import {
 import { decodeVin, VinDecodeResult, vinMatchesVehicle } from '@/services/vindecode';
 import { sendFaultAlert } from '@/services/notifications';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
-import { Plate, ThemeColors } from '@/constants/theme';
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const severityColor = (c: ThemeColors, s: SeverityLevel | undefined) => {
-  switch (s) {
-    case SeverityLevel.Green:  return c.Severity.green;
-    case SeverityLevel.Red:    return c.Severity.red;
-    default:                   return c.Severity.yellow;
-  }
-};
+import { Plate } from '@/constants/theme';
+import { resultSeverity, severityColor, severityMeta, worstSeverity } from '@/utils/severity';
 
 // ─── Fuel baseline (stored in AsyncStorage per vehicle) ───────────────────────
 
@@ -275,13 +266,8 @@ export default function HomeScreen() {
       loadData();
 
       // Local notification (Settings → "Fault scan alerts")
-      const worst = responses.reduce<SeverityLevel>((w, r) => {
-        const sev = (r.translation?.severity ?? r.severity ?? SeverityLevel.Yellow) as SeverityLevel;
-        return sev > w ? sev : w;
-      }, SeverityLevel.Green);
-      const worstLabel =
-        worst === SeverityLevel.Red ? 'CRITICAL' : worst === SeverityLevel.Yellow ? 'WARNING' : 'OK';
-      sendFaultAlert(responses.length, worstLabel);
+      const worst = worstSeverity(responses) ?? SeverityLevel.Green;
+      sendFaultAlert(responses.length, severityMeta(c, worst).label);
     } catch {
       setScanError('Scan failed. Check that the adapter is connected to the car.');
     } finally {
@@ -1026,25 +1012,16 @@ const useModalStyles = createThemedStyles((c) => StyleSheet.create({
 
 // ─── DTC Result card ───────────────────────────────────────────────────────────
 
-const severityMetaFor = (c: ThemeColors, sev: SeverityLevel): { label: string; accent: string } => {
-  switch (sev) {
-    case SeverityLevel.Green: return { label: 'ALL CLEAR', accent: c.Severity.green };
-    case SeverityLevel.Red:   return { label: 'CRITICAL',  accent: c.Severity.red };
-    default:                  return { label: 'WARNING',   accent: c.Severity.yellow };
-  }
-};
-
 function DtcResultCard({ result }: { result: ReportDtcResponse }) {
   const { colors: c } = useTheme();
   const styles = useStyles();
-  const t   = result.translation;
-  const sev = (t?.severity ?? result.severity ?? SeverityLevel.Yellow) as SeverityLevel;
-  const meta = severityMetaFor(c, sev);
+  const t    = result.translation;
+  const meta = severityMeta(c, resultSeverity(result));
 
   return (
-    <View style={[styles.resultCard, { borderColor: meta.accent }]}>
+    <View style={[styles.resultCard, { borderColor: meta.color }]}>
       <View style={styles.resultHeader}>
-        <Text style={[styles.resultBadge, { color: meta.accent }]}>{meta.label}</Text>
+        <Text style={[styles.resultBadge, { color: meta.color }]}>{meta.label}</Text>
         {t && <Text style={styles.resultCode}>{t.errorCode}</Text>}
       </View>
       <Text style={styles.resultTitle}>{t?.humanTitle ?? 'Unknown code detected'}</Text>
@@ -1052,9 +1029,9 @@ function DtcResultCard({ result }: { result: ReportDtcResponse }) {
         {t?.description ?? result.message ?? 'Please contact support or check your manual.'}
       </Text>
       {t && (
-        <View style={[styles.costPill, { borderColor: meta.accent }]}>
+        <View style={[styles.costPill, { borderColor: meta.color }]}>
           <Text style={styles.costLabel}>EST. REPAIR COST</Text>
-          <Text style={[styles.costValue, { color: meta.accent }]}>
+          <Text style={[styles.costValue, { color: meta.color }]}>
             ₪{t.estimatedCostMin} – ₪{t.estimatedCostMax}
           </Text>
         </View>

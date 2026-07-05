@@ -30,11 +30,11 @@ namespace CarStats.API.Controllers
             var allDtcs = await _context.DiagnosticCodes
                 .Select(d => new { d.ErrorCode, d.HumanTitle, d.Severity })
                 .ToListAsync();
-            // Group defensively — the dictionary table may contain duplicate
-            // ErrorCode rows (same guard as MobileController).
+            // DistinctBy guards against duplicate ErrorCode rows in the
+            // dictionary table (same defense as MobileController).
             var dtcMap = allDtcs
-                .GroupBy(d => d.ErrorCode)
-                .ToDictionary(g => g.Key, g => g.First());
+                .DistinctBy(d => d.ErrorCode)
+                .ToDictionary(d => d.ErrorCode);
 
             // ── Most common fault codes (top 6) ───────────────────────────────
             var topCodes = await _context.VehicleEvents
