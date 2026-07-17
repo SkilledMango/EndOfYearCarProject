@@ -19,6 +19,9 @@ def main() -> None:
         print("Login failed.")
         return
 
+    # highlight the most important finding right after logging in
+    print("\nKEY INSIGHT:", reports.headline_insight())
+
     while True:
         print("\nReports:")
         print("  1. Registered users (table)")
@@ -26,6 +29,7 @@ def main() -> None:
         print("  3. Faults by severity (table + pie chart)")
         print("  4. Top fault codes (table + bar chart)")
         print("  5. Save ALL reports to files (CSV + PNG)")
+        print("  6. Save ALL reports to one Excel file")
         print("  0. Exit")
         choice = input("Choose: ").strip()
 
@@ -41,6 +45,9 @@ def main() -> None:
             for title in reports.ALL_REPORTS:
                 reports.show_in_console(title, save=True)
             print("\nAll reports saved to the 'exports' folder.")
+        elif choice == "6":
+            path = reports.save_all_to_excel()
+            print(f"\nSaved all reports to {path}")
         elif choice == "0":
             print("Bye!")
             return

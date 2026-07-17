@@ -115,6 +115,23 @@ ALL_REPORTS = {
 }
 
 
+# a short sentence that highlights the most important finding in the data
+def insight_from_stats(stats) -> str:
+    known = sum(x["count"] for x in stats["severityBreakdown"])   # faults we can classify
+    if known == 0:
+        return "No fault events have been logged yet."
+    critical = sum(x["count"] for x in stats["severityBreakdown"] if x["severity"] == 3)
+    percent_critical = round(critical / known * 100)
+    top = max(stats["topCodes"], key=lambda x: x["count"])        # most common fault code
+    return (f"{percent_critical}% of classified faults are critical. "
+            f"Most common problem: {top['title']} ({top['code']}), {top['count']} reports.")
+
+
+# fetches the stats and returns the insight sentence (used by the console app)
+def headline_insight() -> str:
+    return insight_from_stats(api_client.get_stats())
+
+
 # print a report's table in the terminal, then either show the chart or save both to files
 def show_in_console(title: str, save: bool = False) -> None:
     table, figure = ALL_REPORTS[title]()
@@ -132,3 +149,13 @@ def show_in_console(title: str, save: bool = False) -> None:
     else:
         print("(close the chart window to continue)")
         plt.show()
+
+
+# save all four report tables into one Excel file, each on its own sheet
+def save_all_to_excel(path: str = "CarStats_Reports.xlsx") -> str:
+    with pd.ExcelWriter(path) as writer:
+        for title, build in ALL_REPORTS.items():
+            table, figure = build()
+            plt.close(figure)                       # only the table goes into Excel
+            table.to_excel(writer, sheet_name=title[:31], index=False)
+    return path

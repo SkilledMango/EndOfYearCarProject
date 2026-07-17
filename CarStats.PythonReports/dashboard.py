@@ -1,3 +1,5 @@
+import io
+
 import streamlit as st
 
 import api_client
@@ -36,6 +38,9 @@ col1.metric("Total users", stats["totalUsers"])
 col2.metric("Total vehicles", stats["totalVehicles"])
 col3.metric("Total fault events", stats["totalFaults"])
 
+# one-line automatic insight about the data
+st.info("💡 " + reports.insight_from_stats(stats))
+
 st.divider()
 
 # sidebar to pick a report, then show its table and chart side by side
@@ -46,3 +51,17 @@ st.subheader(title)
 left, right = st.columns([1, 1])
 left.dataframe(table, use_container_width=True, hide_index=True)
 right.pyplot(figure)
+
+# let the admin download the current report as a CSV file
+csv = table.to_csv(index=False).encode("utf-8-sig")
+st.download_button("⬇ Download this report (CSV)", csv, file_name=f"{title}.csv", mime="text/csv")
+
+# ...or download all four reports as one Excel file
+excel_buffer = io.BytesIO()
+reports.save_all_to_excel(excel_buffer)
+st.sidebar.download_button(
+    "⬇ Download ALL reports (Excel)",
+    excel_buffer.getvalue(),
+    file_name="CarStats_Reports.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+)
