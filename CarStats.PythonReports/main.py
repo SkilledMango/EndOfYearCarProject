@@ -1,36 +1,24 @@
-"""
-CarStats — Admin Reports (Python end-of-year assignment, Alternative A).
-
-Statistical reports about our final project (the CarStats car-diagnostics
-app): tables with pandas, graphs with matplotlib, data pulled live from
-the project's real server after an admin login.
-
-Run with:  python main.py
-"""
-
 import sys
 
-# Windows terminals sometimes use an old encoding — switch to UTF-8 so the
-# table borders print correctly.
+# windows terminals sometimes use an old encoding - switch to utf-8 for the table borders
 sys.stdout.reconfigure(encoding="utf-8")
 
 import api_client
 import reports
 
 
+# log in, then show a menu and run the report the user picks
 def main() -> None:
     print("========================================")
     print("   CarStats - Admin Statistical Reports")
     print("========================================")
 
-    # ── Admin login (the server rejects non-admin accounts) ──
     email = input("Admin email: ")
     password = input("Password: ")
     if not api_client.login(email, password):
         print("Login failed.")
         return
 
-    # ── Menu loop ──
     while True:
         print("\nReports:")
         print("  1. Registered users (table)")

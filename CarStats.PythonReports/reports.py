@@ -1,17 +1,3 @@
-"""
-reports.py — the four admin reports.
-
-Each build_* function fetches data from the server and returns a pair:
-(pandas table, matplotlib chart). Who DISPLAYS them is someone else's job —
-main.py prints to the console / opens chart windows, dashboard.py shows the
-same pair on a web page. One report engine, two user interfaces.
-
-Course data structures used here (marked with comments):
-  List, Dictionary, Tuple, Set
-
-External packages: pandas, matplotlib  (pip install pandas matplotlib)
-"""
-
 import os
 
 import matplotlib.pyplot as plt
@@ -19,7 +5,7 @@ import pandas as pd
 
 import api_client
 
-# Dictionary: severity number from the server → readable label + chart color
+# severity number from the server -> readable label + chart color
 SEVERITY_INFO = {
     1: ("Green (minor)", "#059669"),
     2: ("Yellow (caution)", "#D97706"),
@@ -29,12 +15,11 @@ SEVERITY_INFO = {
 EXPORT_DIR = "exports"
 
 
-# ─── Report 1: registered users ───────────────────────────────────────────────
-
+# report 1 - table of all users + a chart of how many faults each one logged
 def build_users():
-    users = api_client.get_users()      # List of Dictionaries from the server
+    users = api_client.get_users()
 
-    rows = []                           # List — one dictionary per table row
+    rows = []
     for user in users:
         rows.append({
             "Name": user["fullName"],
@@ -45,7 +30,6 @@ def build_users():
         })
     table = pd.DataFrame(rows)
 
-    # Which users actually use the scanner? Faults logged per user.
     figure, ax = plt.subplots(figsize=(8, 4.5))
     ax.bar(table["Name"], table["Faults"], color="#1353D8")
     ax.set_title("Fault Events Logged per User")
@@ -54,13 +38,12 @@ def build_users():
     return table, figure
 
 
-# ─── Report 2: vehicles by make ───────────────────────────────────────────────
-
+# report 2 - how many vehicles of each make are registered
 def build_vehicles():
     users = api_client.get_users()
-    vehicles = [v for u in users for v in u["vehicles"]]    # flatten to one List
+    vehicles = [v for u in users for v in u["vehicles"]]
 
-    # Set — collects each make only ONCE, so its size = number of distinct makes
+    # a set keeps each make only once, so its size is the number of distinct makes
     makes: set = {v["make"] for v in vehicles}
     print(f"({len(vehicles)} vehicles from {len(makes)} different makes)")
 
@@ -76,12 +59,11 @@ def build_vehicles():
     return table, figure
 
 
-# ─── Report 3: faults by severity ─────────────────────────────────────────────
-
+# report 3 - fault events split by severity, shown as a pie chart
 def build_severity():
     stats = api_client.get_stats()
 
-    # Tuple — we collect (label, count, color) triples, one per severity
+    # collect (label, count, color) tuples, one per severity
     slices: list[tuple] = []
     for item in stats["severityBreakdown"]:
         label, color = SEVERITY_INFO[item["severity"]]
@@ -104,8 +86,7 @@ def build_severity():
     return table, figure
 
 
-# ─── Report 4: most common fault codes ────────────────────────────────────────
-
+# report 4 - the fault codes reported most often
 def build_top_codes():
     stats = api_client.get_stats()
 
@@ -118,14 +99,14 @@ def build_top_codes():
 
     figure, ax = plt.subplots(figsize=(8, 4.5))
     ax.barh(table["Code"], table["Times"], color="#003FB1")
-    ax.invert_yaxis()                   # most common code on top
+    ax.invert_yaxis()
     ax.set_title("Most Reported Fault Codes")
     ax.set_xlabel("Times reported")
 
     return table, figure
 
 
-# All four reports in one Dictionary — used by both user interfaces.
+# all four reports in one dictionary - used by both the console and the dashboard
 ALL_REPORTS = {
     "Registered Users": build_users,
     "Vehicles by Make": build_vehicles,
@@ -134,10 +115,8 @@ ALL_REPORTS = {
 }
 
 
-# ─── Console display helper (used by main.py) ─────────────────────────────────
-
+# print a report's table in the terminal, then either show the chart or save both to files
 def show_in_console(title: str, save: bool = False) -> None:
-    """Builds a report, prints its table; shows the chart or saves both."""
     table, figure = ALL_REPORTS[title]()
 
     print(f"\n=== {title} ===")
