@@ -46,7 +46,7 @@ def _finish(df: pd.DataFrame, title: str, figure, save: bool) -> None:
         plt.show()
 
 
-# ─── Report 1: registered users (table only) ─────────────────────────────────
+# ─── Report 1: registered users (table + bar chart) ──────────────────────────
 
 def report_users(save: bool = False) -> None:
     users = api_client.get_users()      # List of Dictionaries from the server
@@ -60,8 +60,15 @@ def report_users(save: bool = False) -> None:
             "Vehicles": len(user["vehicles"]),
             "Faults": user["totalFaultsLogged"],
         })
+    table = pd.DataFrame(rows)
 
-    _finish(pd.DataFrame(rows), "Registered Users", None, save)
+    # Which users actually use the scanner? Faults logged per user.
+    figure, ax = plt.subplots(figsize=(8, 4.5))
+    ax.bar(table["Name"], table["Faults"], color="#1353D8")
+    ax.set_title("Fault Events Logged per User")
+    ax.set_ylabel("Faults logged")
+
+    _finish(table, "Registered Users", figure, save)
 
 
 # ─── Report 2: vehicles by make (table + bar chart) ──────────────────────────
