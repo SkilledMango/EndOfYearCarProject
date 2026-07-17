@@ -1,118 +1,132 @@
 """
-reports.py — turns raw API data into pandas DataFrames (the "tables" half
-of the assignment).
+reports.py — the four admin reports: each one is a single function that
+prints a table (pandas) and, where it makes sense, shows a graph
+(matplotlib). With save=True it writes the table to a CSV file and the
+graph to a PNG file inside ./exports instead of showing a window.
 
-Each build_* function returns a DataFrame ready to print or export.
-This module deliberately exercises the course data structures:
+Course data structures used here (marked with comments):
+  List, Dictionary, Tuple, Set
 
-  * List        — the API returns JSON arrays → Python lists of records
-  * Dictionary  — every record is a dict; we also build lookup dicts
-  * Tuple       — (label, value) pairs collected before building DataFrames
-  * Set         — used to count DISTINCT things (e.g. car makes, fault codes)
-
-External package used: pandas (pip install pandas)
+External packages: pandas, matplotlib  (pip install pandas matplotlib)
 """
 
+import os
+
+import matplotlib.pyplot as plt
 import pandas as pd
 
-# Maps the API's numeric severity to a readable label.
-SEVERITY_LABELS: dict[int, str] = {1: "Green (minor)", 2: "Yellow (caution)", 3: "Red (critical)"}
+import api_client
 
-ROLE_LABELS: dict[int, str] = {1: "User", 2: "Admin", 3: "SuperAdmin"}
+# Dictionary: severity number from the server → readable label + chart color
+SEVERITY_INFO = {
+    1: ("Green (minor)", "#059669"),
+    2: ("Yellow (caution)", "#D97706"),
+    3: ("Red (critical)", "#BA1A1A"),
+}
+
+EXPORT_DIR = "exports"
 
 
-def build_users_table(users: list[dict]) -> pd.DataFrame:
-    """Overview of every registered user."""
-    rows = []                                   # List of dicts → DataFrame rows
+def _finish(df: pd.DataFrame, title: str, figure, save: bool) -> None:
+    """Every report ends here: print the table, then show or save."""
+    print(f"\n=== {title} ===")
+    print(df.to_string(index=False))
+
+    if save:
+        os.makedirs(EXPORT_DIR, exist_ok=True)
+        name = title.lower().replace(" ", "_")
+        df.to_csv(os.path.join(EXPORT_DIR, name + ".csv"), index=False, encoding="utf-8-sig")
+        print("saved:", os.path.join(EXPORT_DIR, name + ".csv"))
+        if figure is not None:
+            figure.savefig(os.path.join(EXPORT_DIR, name + ".png"), dpi=150, bbox_inches="tight")
+            print("saved:", os.path.join(EXPORT_DIR, name + ".png"))
+            plt.close(figure)
+    elif figure is not None:
+        print("(close the chart window to continue)")
+        plt.show()
+
+
+# ─── Report 1: registered users (table only) ─────────────────────────────────
+
+def report_users(save: bool = False) -> None:
+    users = api_client.get_users()      # List of Dictionaries from the server
+
+    rows = []                           # List — one dictionary per table row
     for user in users:
         rows.append({
             "Name": user["fullName"],
             "Email": user["email"],
-            "Role": ROLE_LABELS.get(user["role"], "?"),
             "Verified": "Yes" if user["isEmailVerified"] else "No",
-            "Premium": "Yes" if user["isPremiumMember"] else "No",
-            "Vehicles": len(user.get("vehicles") or []),
-            "Faults logged": user["totalFaultsLogged"],
+            "Vehicles": len(user["vehicles"]),
+            "Faults": user["totalFaultsLogged"],
         })
-    return pd.DataFrame(rows)
+
+    _finish(pd.DataFrame(rows), "Registered Users", None, save)
 
 
-def build_vehicles_by_make(users: list[dict]) -> pd.DataFrame:
-    """How many vehicles of each make are registered, and their average fuel use."""
-    all_vehicles = [v for u in users for v in (u.get("vehicles") or [])]
+# ─── Report 2: vehicles by make (table + bar chart) ──────────────────────────
 
-    # A Set gives us the number of DISTINCT makes in one line.
-    distinct_makes: set[str] = {v["make"] for v in all_vehicles}
-    print(f"  ({len(all_vehicles)} vehicles, {len(distinct_makes)} distinct makes)")
+def report_vehicles(save: bool = False) -> None:
+    users = api_client.get_users()
+    vehicles = [v for u in users for v in u["vehicles"]]    # flatten to one List
 
-    if not all_vehicles:
-        return pd.DataFrame(columns=["Make", "Vehicles", "Avg L/100km"])
+    # Set — collects each make only ONCE, so its size = number of distinct makes
+    makes: set = {v["make"] for v in vehicles}
+    print(f"\n{len(vehicles)} vehicles from {len(makes)} different makes")
 
-    df = pd.DataFrame(all_vehicles)
-    grouped = df.groupby("make").agg(
-        Vehicles=("id", "count"),
-        Avg_L_100km=("averageFuelConsumption", "mean"),
-    ).reset_index()
-    grouped.columns = ["Make", "Vehicles", "Avg L/100km"]
-    grouped["Avg L/100km"] = grouped["Avg L/100km"].round(1)
-    return grouped.sort_values("Vehicles", ascending=False).reset_index(drop=True)
+    df = pd.DataFrame(vehicles)
+    table = df.groupby("make").size().reset_index(name="Vehicles")
+    table.columns = ["Make", "Vehicles"]
 
+    figure, ax = plt.subplots(figsize=(8, 4.5))
+    ax.bar(table["Make"], table["Vehicles"], color="#1353D8")
+    ax.set_title("Registered Vehicles by Make")
+    ax.set_ylabel("Vehicles")
 
-def build_severity_breakdown(stats: dict) -> pd.DataFrame:
-    """Fault events grouped by severity level (from the server aggregates)."""
-    # Collect (label, count) Tuples first, then build the frame.
-    pairs: list[tuple[str, int]] = [
-        (SEVERITY_LABELS.get(item["severity"], "Unknown"), item["count"])
-        for item in stats.get("severityBreakdown", [])
-    ]
-    return pd.DataFrame(pairs, columns=["Severity", "Events"])
+    _finish(table, "Vehicles by Make", figure, save)
 
 
-def build_top_codes(stats: dict) -> pd.DataFrame:
-    """The most frequently reported fault codes."""
+# ─── Report 3: faults by severity (table + pie chart) ────────────────────────
+
+def report_severity(save: bool = False) -> None:
+    stats = api_client.get_stats()
+
+    # Tuple — we collect (label, count, color) triples, one per severity
+    slices: list[tuple] = []
+    for item in stats["severityBreakdown"]:
+        label, color = SEVERITY_INFO[item["severity"]]
+        slices.append((label, item["count"], color))
+
+    table = pd.DataFrame(slices, columns=["Severity", "Events", "Color"])[["Severity", "Events"]]
+
+    figure, ax = plt.subplots(figsize=(7, 5))
+    ax.pie(
+        [count for _, count, _ in slices],
+        labels=[label for label, _, _ in slices],
+        colors=[color for _, _, color in slices],
+        autopct="%1.0f%%",
+    )
+    ax.set_title("Fault Events by Severity")
+
+    _finish(table, "Faults by Severity", figure, save)
+
+
+# ─── Report 4: most common fault codes (table + bar chart) ───────────────────
+
+def report_top_codes(save: bool = False) -> None:
+    stats = api_client.get_stats()
+
     rows = [{
         "Code": item["code"],
         "Meaning": item["title"],
-        "Severity": SEVERITY_LABELS.get(item.get("severity"), "Unknown"),
-        "Times reported": item["count"],
-    } for item in stats.get("topCodes", [])]
-    return pd.DataFrame(rows)
+        "Times": item["count"],
+    } for item in stats["topCodes"]]
+    table = pd.DataFrame(rows)
 
+    figure, ax = plt.subplots(figsize=(8, 4.5))
+    ax.barh(table["Code"], table["Times"], color="#003FB1")
+    ax.invert_yaxis()                   # most common code on top
+    ax.set_title("Most Reported Fault Codes")
+    ax.set_xlabel("Times reported")
 
-def build_faults_per_day(stats: dict) -> pd.DataFrame:
-    """Fault events per day over the last two weeks."""
-    rows = [{
-        "Date": pd.to_datetime(item["date"]).date(),
-        "Faults": item["count"],
-    } for item in stats.get("faultsByDay", [])]
-    return pd.DataFrame(rows)
-
-
-def build_dtc_dictionary_stats(dtc_rows: list[dict]) -> pd.DataFrame:
-    """
-    Repair-cost statistics of the fault-code DICTIONARY itself:
-    per severity — number of known codes and their min/avg/max estimated cost.
-    """
-    if not dtc_rows:
-        return pd.DataFrame()
-
-    df = pd.DataFrame(dtc_rows)
-    df["Severity"] = df["severity"].map(SEVERITY_LABELS)
-    grouped = df.groupby("Severity").agg(
-        Known_codes=("errorCode", "count"),
-        Min_cost=("estimatedCostMin", "min"),
-        Avg_cost=("estimatedCostMax", "mean"),
-        Max_cost=("estimatedCostMax", "max"),
-    ).reset_index()
-    grouped.columns = ["Severity", "Known codes", "Min cost (₪)", "Avg max cost (₪)", "Max cost (₪)"]
-    grouped["Avg max cost (₪)"] = grouped["Avg max cost (₪)"].round(0)
-    return grouped
-
-
-def build_totals(stats: dict) -> pd.DataFrame:
-    """One-row headline numbers for the summary screen."""
-    return pd.DataFrame([{
-        "Total users": stats["totalUsers"],
-        "Total vehicles": stats["totalVehicles"],
-        "Total fault events": stats["totalFaults"],
-    }])
+    _finish(table, "Top Fault Codes", figure, save)

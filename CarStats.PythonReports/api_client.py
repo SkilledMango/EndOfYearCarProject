@@ -1,78 +1,50 @@
 """
-api_client.py — talks to the CarStats REST API.
+api_client.py — gets the data from our CarStats server.
 
-The CarStats API is protected with JWT authentication: we first log in with
-an admin account, receive a token, and attach it as a Bearer header to every
-report query. Statistics endpoints are admin-only on the server, so a regular
-driver account cannot pull these reports.
+We log in once with an admin account. The server answers with a token,
+we keep the token, and we send it with every request after that.
+Regular (non-admin) users are rejected by the server.
 
-External package used: requests (pip install requests)
+External package: requests  (pip install requests)
 """
 
 import requests
 
-# Default is the production server; pass --api http://localhost:5279/api
-# on the command line to run against a local development API instead.
-DEFAULT_BASE_URL = "https://CarProject.somee.com/api"
+API_URL = "https://CarProject.somee.com/api"   # our real production server
 
-# The free host can cold-start slowly, so give it a generous timeout.
-TIMEOUT_SECONDS = 60
+# Filled in by login() — sent with every request after a successful login.
+auth_header = {}
 
 
-class CarStatsClient:
-    """A small authenticated HTTP client for the CarStats API."""
+def login(email: str, password: str) -> bool:
+    """Log in. Returns True only if the account is an Admin/SuperAdmin."""
+    response = requests.post(
+        f"{API_URL}/auth/login",
+        json={"email": email, "password": password},
+        timeout=60,
+    )
+    if response.status_code != 200:
+        return False
 
-    def __init__(self, base_url: str = DEFAULT_BASE_URL):
-        self.base_url = base_url.rstrip("/")
-        self.session = requests.Session()   # reuses the TCP connection
-        self.admin_name: str | None = None
+    data = response.json()              # Dictionary: {"token": ..., "user": {...}}
+    if data["user"]["role"] < 2:        # roles: 1=User, 2=Admin, 3=SuperAdmin
+        print("This account is not an admin.")
+        return False
 
-    # ── Authentication ────────────────────────────────────────────────────
+    auth_header["Authorization"] = "Bearer " + data["token"]
+    print("Welcome,", data["user"]["fullName"] + "!")
+    return True
 
-    def login(self, email: str, password: str) -> bool:
-        """
-        Logs in against /auth/login. Returns True only for Admin/SuperAdmin
-        accounts — the reports endpoints would reject anyone else anyway.
-        On success the JWT is stored on the session for all later calls.
-        """
-        response = self.session.post(
-            f"{self.base_url}/auth/login",
-            json={"email": email, "password": password},
-            timeout=TIMEOUT_SECONDS,
-        )
-        if response.status_code != 200:
-            return False
 
-        body = response.json()          # Dictionary: {"token": ..., "user": {...}}
-        user = body["user"]
-        if user["role"] < 2:            # 1=User, 2=Admin, 3=SuperAdmin
-            print("This account is not an admin — reports require admin rights.")
-            return False
+def get_users() -> list:
+    """All users with their vehicles — a List of Dictionaries."""
+    response = requests.get(f"{API_URL}/users", headers=auth_header, timeout=60)
+    response.raise_for_status()
+    return response.json()
 
-        self.session.headers["Authorization"] = f"Bearer {body['token']}"
-        self.admin_name = user["fullName"]
-        return True
 
-    # ── Report data sources ───────────────────────────────────────────────
-
-    def _get(self, path: str):
-        """GET an API path and return the parsed JSON (raises on HTTP errors)."""
-        response = self.session.get(f"{self.base_url}{path}", timeout=TIMEOUT_SECONDS)
-        response.raise_for_status()
-        return response.json()
-
-    def get_users(self) -> list[dict]:
-        """All users with their vehicles (admin-only endpoint)."""
-        return self._get("/users")
-
-    def get_stats(self) -> dict:
-        """Server-side aggregates: totals, top codes, faults per day, severity."""
-        return self._get("/stats")
-
-    def get_dtc_dictionary(self) -> list[dict]:
-        """The full fault-code dictionary (code, title, severity, costs)."""
-        return self._get("/dtc")
-
-    def get_user_events(self, user_id: int) -> list[dict]:
-        """One user's fault-event history."""
-        return self._get(f"/mobile/events/{user_id}")
+def get_stats() -> dict:
+    """Ready-made statistics from the server (totals, top codes, severities)."""
+    response = requests.get(f"{API_URL}/stats", headers=auth_header, timeout=60)
+    response.raise_for_status()
+    return response.json()
