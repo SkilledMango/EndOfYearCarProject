@@ -42,18 +42,16 @@ def main() -> None:
         choice = input("Choose: ").strip()
 
         if choice == "1":
-            reports.report_users()
+            reports.show_in_console("Registered Users")
         elif choice == "2":
-            reports.report_vehicles()
+            reports.show_in_console("Vehicles by Make")
         elif choice == "3":
-            reports.report_severity()
+            reports.show_in_console("Faults by Severity")
         elif choice == "4":
-            reports.report_top_codes()
+            reports.show_in_console("Top Fault Codes")
         elif choice == "5":
-            reports.report_users(save=True)
-            reports.report_vehicles(save=True)
-            reports.report_severity(save=True)
-            reports.report_top_codes(save=True)
+            for title in reports.ALL_REPORTS:
+                reports.show_in_console(title, save=True)
             print("\nAll reports saved to the 'exports' folder.")
         elif choice == "0":
             print("Bye!")

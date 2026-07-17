@@ -8,9 +8,13 @@ Regular (non-admin) users are rejected by the server.
 External package: requests  (pip install requests)
 """
 
+import os
+
 import requests
 
-API_URL = "https://CarProject.somee.com/api"   # our real production server
+# Our real production server. For local testing you can override it:
+#   set CARSTATS_API=http://localhost:5279/api
+API_URL = os.environ.get("CARSTATS_API", "https://CarProject.somee.com/api")
 
 # Filled in by login() — sent with every request after a successful login.
 auth_header = {}

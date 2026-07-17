@@ -1,8 +1,10 @@
 """
-reports.py — the four admin reports: each one is a single function that
-prints a table (pandas) and, where it makes sense, shows a graph
-(matplotlib). With save=True it writes the table to a CSV file and the
-graph to a PNG file inside ./exports instead of showing a window.
+reports.py — the four admin reports.
+
+Each build_* function fetches data from the server and returns a pair:
+(pandas table, matplotlib chart). Who DISPLAYS them is someone else's job —
+main.py prints to the console / opens chart windows, dashboard.py shows the
+same pair on a web page. One report engine, two user interfaces.
 
 Course data structures used here (marked with comments):
   List, Dictionary, Tuple, Set
@@ -27,28 +29,9 @@ SEVERITY_INFO = {
 EXPORT_DIR = "exports"
 
 
-def _finish(df: pd.DataFrame, title: str, figure, save: bool) -> None:
-    """Every report ends here: print the table, then show or save."""
-    print(f"\n=== {title} ===")
-    print(df.to_string(index=False))
+# ─── Report 1: registered users ───────────────────────────────────────────────
 
-    if save:
-        os.makedirs(EXPORT_DIR, exist_ok=True)
-        name = title.lower().replace(" ", "_")
-        df.to_csv(os.path.join(EXPORT_DIR, name + ".csv"), index=False, encoding="utf-8-sig")
-        print("saved:", os.path.join(EXPORT_DIR, name + ".csv"))
-        if figure is not None:
-            figure.savefig(os.path.join(EXPORT_DIR, name + ".png"), dpi=150, bbox_inches="tight")
-            print("saved:", os.path.join(EXPORT_DIR, name + ".png"))
-            plt.close(figure)
-    elif figure is not None:
-        print("(close the chart window to continue)")
-        plt.show()
-
-
-# ─── Report 1: registered users (table + bar chart) ──────────────────────────
-
-def report_users(save: bool = False) -> None:
+def build_users():
     users = api_client.get_users()      # List of Dictionaries from the server
 
     rows = []                           # List — one dictionary per table row
@@ -68,18 +51,18 @@ def report_users(save: bool = False) -> None:
     ax.set_title("Fault Events Logged per User")
     ax.set_ylabel("Faults logged")
 
-    _finish(table, "Registered Users", figure, save)
+    return table, figure
 
 
-# ─── Report 2: vehicles by make (table + bar chart) ──────────────────────────
+# ─── Report 2: vehicles by make ───────────────────────────────────────────────
 
-def report_vehicles(save: bool = False) -> None:
+def build_vehicles():
     users = api_client.get_users()
     vehicles = [v for u in users for v in u["vehicles"]]    # flatten to one List
 
     # Set — collects each make only ONCE, so its size = number of distinct makes
     makes: set = {v["make"] for v in vehicles}
-    print(f"\n{len(vehicles)} vehicles from {len(makes)} different makes")
+    print(f"({len(vehicles)} vehicles from {len(makes)} different makes)")
 
     df = pd.DataFrame(vehicles)
     table = df.groupby("make").size().reset_index(name="Vehicles")
@@ -90,12 +73,12 @@ def report_vehicles(save: bool = False) -> None:
     ax.set_title("Registered Vehicles by Make")
     ax.set_ylabel("Vehicles")
 
-    _finish(table, "Vehicles by Make", figure, save)
+    return table, figure
 
 
-# ─── Report 3: faults by severity (table + pie chart) ────────────────────────
+# ─── Report 3: faults by severity ─────────────────────────────────────────────
 
-def report_severity(save: bool = False) -> None:
+def build_severity():
     stats = api_client.get_stats()
 
     # Tuple — we collect (label, count, color) triples, one per severity
@@ -104,7 +87,10 @@ def report_severity(save: bool = False) -> None:
         label, color = SEVERITY_INFO[item["severity"]]
         slices.append((label, item["count"], color))
 
-    table = pd.DataFrame(slices, columns=["Severity", "Events", "Color"])[["Severity", "Events"]]
+    table = pd.DataFrame(
+        [(label, count) for label, count, _ in slices],
+        columns=["Severity", "Events"],
+    )
 
     figure, ax = plt.subplots(figsize=(7, 5))
     ax.pie(
@@ -115,12 +101,12 @@ def report_severity(save: bool = False) -> None:
     )
     ax.set_title("Fault Events by Severity")
 
-    _finish(table, "Faults by Severity", figure, save)
+    return table, figure
 
 
-# ─── Report 4: most common fault codes (table + bar chart) ───────────────────
+# ─── Report 4: most common fault codes ────────────────────────────────────────
 
-def report_top_codes(save: bool = False) -> None:
+def build_top_codes():
     stats = api_client.get_stats()
 
     rows = [{
@@ -136,4 +122,34 @@ def report_top_codes(save: bool = False) -> None:
     ax.set_title("Most Reported Fault Codes")
     ax.set_xlabel("Times reported")
 
-    _finish(table, "Top Fault Codes", figure, save)
+    return table, figure
+
+
+# All four reports in one Dictionary — used by both user interfaces.
+ALL_REPORTS = {
+    "Registered Users": build_users,
+    "Vehicles by Make": build_vehicles,
+    "Faults by Severity": build_severity,
+    "Top Fault Codes": build_top_codes,
+}
+
+
+# ─── Console display helper (used by main.py) ─────────────────────────────────
+
+def show_in_console(title: str, save: bool = False) -> None:
+    """Builds a report, prints its table; shows the chart or saves both."""
+    table, figure = ALL_REPORTS[title]()
+
+    print(f"\n=== {title} ===")
+    print(table.to_string(index=False))
+
+    if save:
+        os.makedirs(EXPORT_DIR, exist_ok=True)
+        name = title.lower().replace(" ", "_")
+        table.to_csv(os.path.join(EXPORT_DIR, name + ".csv"), index=False, encoding="utf-8-sig")
+        figure.savefig(os.path.join(EXPORT_DIR, name + ".png"), dpi=150, bbox_inches="tight")
+        print(f"saved: {name}.csv + {name}.png")
+        plt.close(figure)
+    else:
+        print("(close the chart window to continue)")
+        plt.show()
