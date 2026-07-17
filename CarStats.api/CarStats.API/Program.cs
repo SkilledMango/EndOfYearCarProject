@@ -111,6 +111,24 @@ using (var scope = app.Services.CreateScope())
         {
             db.Database.Migrate();
             await DbSeeder.SeedDiagnosticCodesAsync(db);
+
+            // ── Bootstrap admin ────────────────────────────────────────────
+            // The prod DB can't be reached from outside Somee, so promoting
+            // the project owner by hand isn't possible. Instead, config
+            // (gitignored appsettings.Production.json) may name one account
+            // that is guaranteed SuperAdmin after every startup — the
+            // standard "first admin" bootstrap pattern.
+            var bootstrapEmail = app.Configuration["Bootstrap:AdminEmail"]?.ToLower().Trim();
+            if (!string.IsNullOrWhiteSpace(bootstrapEmail))
+            {
+                var owner = db.Users.FirstOrDefault(u => u.Email.ToLower() == bootstrapEmail);
+                if (owner != null && owner.Role != CarStats.API.Models.UserRole.SuperAdmin)
+                {
+                    owner.Role = CarStats.API.Models.UserRole.SuperAdmin;
+                    await db.SaveChangesAsync();
+                    logger.LogInformation("Bootstrap: promoted {Email} to SuperAdmin.", bootstrapEmail);
+                }
+            }
             break;
         }
         catch (Exception ex) when (attempt < maxAttempts)
