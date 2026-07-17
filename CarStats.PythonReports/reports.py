@@ -34,6 +34,9 @@ def build_users():
     ax.bar(table["Name"], table["Faults"], color="#1353D8")
     ax.set_title("Fault Events Logged per User")
     ax.set_ylabel("Faults logged")
+    # tilt the names so long ones don't overlap, and fit everything in the figure
+    plt.setp(ax.get_xticklabels(), rotation=35, ha="right")
+    figure.tight_layout()
 
     return table, figure
 
