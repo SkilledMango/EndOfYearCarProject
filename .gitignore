@@ -18,6 +18,11 @@
 app_logs.zip
 deploy.zip
 
+# ─── Python (CarStats.PythonReports) ─────────────────────────────────────────
+__pycache__/
+*.pyc
+CarStats.PythonReports/exports/
+
 # ─── App secrets & config overrides ──────────────────────────────────────────
 **/appsettings.Development.json
 **/appsettings.Local.json
