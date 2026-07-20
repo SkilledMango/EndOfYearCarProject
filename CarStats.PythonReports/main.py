@@ -1,6 +1,5 @@
 import sys
 
-# windows terminals sometimes use an old encoding - switch to utf-8 for the table borders
 sys.stdout.reconfigure(encoding="utf-8")
 
 import api_client
