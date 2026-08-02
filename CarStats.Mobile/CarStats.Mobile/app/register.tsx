@@ -1,15 +1,23 @@
+/**
+ * Registration — a three-step flow: account details, emailed code, first car.
+ *
+ * Inputs and buttons are react-native-paper components themed to the CarStats
+ * palette (see constants/paperTheme.ts). Paper's outlined TextInput gives the
+ * floating-label-cut-into-the-border treatment this screen previously hand-rolled.
+ */
+
 import React, { useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
+  TextInput as RNTextInput,
   View,
 } from 'react-native';
+import { Button, Card, HelperText, IconButton, TextInput } from 'react-native-paper';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
@@ -23,22 +31,12 @@ type Step = 'account' | 'verify' | 'vehicle';
 const STEP_ORDER: Step[] = ['account', 'verify', 'vehicle'];
 const STEP_LABELS = ['Account', 'Verify', 'Car'];
 
-/** Outlined input with a floating label cut into the top border (Stitch style). */
-function OutlinedField({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  const styles = useStyles();
-  return (
-    <View style={styles.fieldOuter}>
-      <View style={styles.fieldBox}>{children}</View>
-      <Text style={styles.fieldLabel}>{label}</Text>
-    </View>
-  );
-}
+/**
+ * Paper's TextInput forwards its ref to the native one. It accepts a ref
+ * satisfying both its own handle type and RN's TextInput, and the native
+ * TextInput covers both — so that is what the refs are typed as.
+ */
+type FieldRef = RNTextInput;
 
 export default function RegisterScreen() {
   const { register, verifyCode, resendCode, refreshUser } = useAuth();
@@ -75,9 +73,9 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
 
-  const emailRef   = useRef<TextInput>(null);
-  const passRef    = useRef<TextInput>(null);
-  const confirmRef = useRef<TextInput>(null);
+  const emailRef   = useRef<FieldRef>(null);
+  const passRef    = useRef<FieldRef>(null);
+  const confirmRef = useRef<FieldRef>(null);
 
   const firstName    = fullName.trim().split(/\s+/)[0] || 'there';
   const currentIndex = STEP_ORDER.indexOf(step);
@@ -156,9 +154,13 @@ export default function RegisterScreen() {
     >
       {/* Header: circular back button + centered title */}
       <View style={styles.header}>
-        <Pressable style={styles.backCircle} onPress={handleBackHeader} hitSlop={8}>
-          <MaterialIcons name="arrow-back" size={22} color={c.Dashboard.textPrimary} />
-        </Pressable>
+        <IconButton
+          icon="arrow-left"
+          size={22}
+          mode="contained-tonal"
+          onPress={handleBackHeader}
+          accessibilityLabel="Go back"
+        />
         <Text style={styles.headerTitle}>REGISTRATION</Text>
         <View style={styles.backCircleSpacer} />
       </View>
@@ -191,103 +193,97 @@ export default function RegisterScreen() {
           <>
             <Text style={styles.headline}>Create Account</Text>
             <Text style={styles.subhead}>
-              Enter your details to start managing your vehicle's health.
+              Enter your details to start managing your vehicle&apos;s health.
             </Text>
 
-            <OutlinedField label="Full Name">
-              <TextInput
-                style={styles.fieldInput}
-                placeholder="e.g. John Doe"
-                placeholderTextColor={c.Dashboard.textSecondary}
-                value={fullName}
-                onChangeText={t => { setFullName(t); setError(null); }}
-                autoCapitalize="words"
-                returnKeyType="next"
-                onSubmitEditing={() => emailRef.current?.focus()}
-                editable={!loading}
-              />
-            </OutlinedField>
-
-            <OutlinedField label="Email Address">
-              <MaterialIcons name="mail-outline" size={20} color={c.Dashboard.textSecondary} />
-              <TextInput
-                ref={emailRef}
-                style={styles.fieldInput}
-                placeholder="name@example.com"
-                placeholderTextColor={c.Dashboard.textSecondary}
-                value={email}
-                onChangeText={t => { setEmail(t); setError(null); }}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                returnKeyType="next"
-                onSubmitEditing={() => passRef.current?.focus()}
-                editable={!loading}
-              />
-            </OutlinedField>
-
-            <OutlinedField label="Password">
-              <MaterialIcons name="lock-outline" size={20} color={c.Dashboard.textSecondary} />
-              <TextInput
-                ref={passRef}
-                style={styles.fieldInput}
-                placeholder="Min. 6 characters"
-                placeholderTextColor={c.Dashboard.textSecondary}
-                value={password}
-                onChangeText={t => { setPassword(t); setError(null); }}
-                secureTextEntry={!showPass}
-                returnKeyType="next"
-                onSubmitEditing={() => confirmRef.current?.focus()}
-                editable={!loading}
-              />
-              <Pressable onPress={() => setShowPass(s => !s)} hitSlop={8}>
-                <MaterialIcons
-                  name={showPass ? 'visibility' : 'visibility-off'}
-                  size={20}
-                  color={c.Dashboard.textSecondary}
-                />
-              </Pressable>
-            </OutlinedField>
-
-            <OutlinedField label="Confirm Password">
-              <MaterialIcons name="lock-outline" size={20} color={c.Dashboard.textSecondary} />
-              <TextInput
-                ref={confirmRef}
-                style={styles.fieldInput}
-                placeholder="Re-enter your password"
-                placeholderTextColor={c.Dashboard.textSecondary}
-                value={confirmPassword}
-                onChangeText={t => { setConfirm(t); setError(null); }}
-                secureTextEntry={!showConfirm}
-                returnKeyType="done"
-                onSubmitEditing={handleRegister}
-                editable={!loading}
-              />
-              <Pressable onPress={() => setShowConfirm(s => !s)} hitSlop={8}>
-                <MaterialIcons
-                  name={showConfirm ? 'visibility' : 'visibility-off'}
-                  size={20}
-                  color={c.Dashboard.textSecondary}
-                />
-              </Pressable>
-            </OutlinedField>
-
-            {error && <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View>}
-
-            <Pressable
-              style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={handleRegister}
+            <TextInput
+              mode="outlined"
+              label="Full Name"
+              placeholder="e.g. John Doe"
+              style={styles.field}
+              value={fullName}
+              onChangeText={t => { setFullName(t); setError(null); }}
+              autoCapitalize="words"
+              returnKeyType="next"
+              onSubmitEditing={() => emailRef.current?.focus()}
               disabled={loading}
+              left={<TextInput.Icon icon="account-outline" />}
+            />
+
+            <TextInput
+              ref={emailRef}
+              mode="outlined"
+              label="Email Address"
+              placeholder="name@example.com"
+              style={styles.field}
+              value={email}
+              onChangeText={t => { setEmail(t); setError(null); }}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              returnKeyType="next"
+              onSubmitEditing={() => passRef.current?.focus()}
+              disabled={loading}
+              left={<TextInput.Icon icon="email-outline" />}
+            />
+
+            <TextInput
+              ref={passRef}
+              mode="outlined"
+              label="Password"
+              placeholder="Min. 6 characters"
+              style={styles.field}
+              value={password}
+              onChangeText={t => { setPassword(t); setError(null); }}
+              secureTextEntry={!showPass}
+              returnKeyType="next"
+              onSubmitEditing={() => confirmRef.current?.focus()}
+              disabled={loading}
+              left={<TextInput.Icon icon="lock-outline" />}
+              right={
+                <TextInput.Icon
+                  icon={showPass ? 'eye-off' : 'eye'}
+                  onPress={() => setShowPass(s => !s)}
+                  accessibilityLabel={showPass ? 'Hide password' : 'Show password'}
+                />
+              }
+            />
+
+            <TextInput
+              ref={confirmRef}
+              mode="outlined"
+              label="Confirm Password"
+              placeholder="Re-enter your password"
+              style={styles.field}
+              value={confirmPassword}
+              onChangeText={t => { setConfirm(t); setError(null); }}
+              secureTextEntry={!showConfirm}
+              returnKeyType="done"
+              onSubmitEditing={handleRegister}
+              disabled={loading}
+              left={<TextInput.Icon icon="lock-outline" />}
+              right={
+                <TextInput.Icon
+                  icon={showConfirm ? 'eye-off' : 'eye'}
+                  onPress={() => setShowConfirm(s => !s)}
+                  accessibilityLabel={showConfirm ? 'Hide password' : 'Show password'}
+                />
+              }
+            />
+
+            <HelperText type="error" visible={!!error}>{error ?? ' '}</HelperText>
+
+            <Button
+              mode="contained"
+              onPress={handleRegister}
+              loading={loading}
+              disabled={loading}
+              icon="arrow-right"
+              contentStyle={styles.buttonContent}
+              labelStyle={styles.buttonLabel}
             >
-              {loading
-                ? <ActivityIndicator color={c.Dashboard.onAccent} />
-                : (
-                  <View style={styles.buttonRow}>
-                    <Text style={styles.buttonText}>Continue</Text>
-                    <MaterialIcons name="arrow-forward" size={20} color={c.Dashboard.onAccent} />
-                  </View>
-                )}
-            </Pressable>
+              {loading ? 'Creating account…' : 'Continue'}
+            </Button>
 
             <Pressable onPress={() => router.back()} style={styles.footerLink}>
               <Text style={styles.footerLinkText}>
@@ -308,59 +304,68 @@ export default function RegisterScreen() {
             </Text>
 
             <TextInput
-              style={styles.codeInput}
+              mode="outlined"
+              label="6-digit code"
               placeholder="● ● ● ● ● ●"
-              placeholderTextColor={c.Dashboard.textSecondary}
+              style={[styles.field, styles.codeField]}
+              contentStyle={styles.codeFieldContent}
               value={code}
               onChangeText={t => { setCode(t.replace(/\D/g, '').slice(0, 6)); setError(null); }}
               keyboardType="number-pad"
               maxLength={6}
-              textAlign="center"
               returnKeyType="done"
               onSubmitEditing={handleVerify}
               autoFocus
-              editable={!loading}
+              disabled={loading}
+              error={!!error}
             />
 
-            {error && <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View>}
+            <HelperText type="error" visible={!!error}>{error ?? ' '}</HelperText>
             {resendMsg && <Text style={styles.resendOk}>{resendMsg}</Text>}
 
-            <Pressable
-              style={[styles.button, loading && styles.buttonDisabled]}
+            <Button
+              mode="contained"
               onPress={handleVerify}
+              loading={loading}
               disabled={loading}
+              contentStyle={styles.buttonContent}
+              labelStyle={styles.buttonLabel}
             >
-              {loading ? <ActivityIndicator color={c.Dashboard.onAccent} /> : <Text style={styles.buttonText}>Verify</Text>}
-            </Pressable>
+              {loading ? 'Verifying…' : 'Verify'}
+            </Button>
 
-            <Pressable style={styles.footerLink} onPress={handleResend} disabled={loading}>
-              <Text style={styles.footerLinkText}>
-                Didn't get it?{'  '}
-                <Text style={{ color: c.Dashboard.accent, fontWeight: '700' }}>Resend code</Text>
-              </Text>
-            </Pressable>
+            <Button mode="text" onPress={handleResend} disabled={loading} style={styles.footerLink}>
+              Didn&apos;t get it? Resend code
+            </Button>
           </>
         )}
 
         {/* ─────────── STEP 3: first car ─────────── */}
         {step === 'vehicle' && (
-          <View style={styles.successCard}>
-            <View style={styles.successIconCircle}>
-              <MaterialIcons name="directions-car" size={36} color={c.Dashboard.accent} />
-            </View>
-            <Text style={styles.successTitle}>Welcome aboard, {firstName}!</Text>
-            <Text style={styles.successSub}>
-              Add your first car to start tracking fuel economy and fault codes.
-              You can always add more later.
-            </Text>
+          <Card mode="elevated" style={styles.successCard}>
+            <Card.Content style={styles.successContent}>
+              <View style={styles.successIconCircle}>
+                <MaterialIcons name="directions-car" size={36} color={c.Dashboard.accent} />
+              </View>
+              <Text style={styles.successTitle}>Welcome aboard, {firstName}!</Text>
+              <Text style={styles.successSub}>
+                Add your first car to start tracking fuel economy and fault codes.
+                You can always add more later.
+              </Text>
 
-            <Pressable style={[styles.button, { alignSelf: 'stretch' }]} onPress={() => setAddCar(true)}>
-              <Text style={styles.buttonText}>Add My Car</Text>
-            </Pressable>
-            <Pressable style={styles.footerLink} onPress={goToApp}>
-              <Text style={styles.footerLinkText}>Skip for now</Text>
-            </Pressable>
-          </View>
+              <Button
+                mode="contained"
+                icon="car"
+                onPress={() => setAddCar(true)}
+                style={styles.successBtn}
+                contentStyle={styles.buttonContent}
+                labelStyle={styles.buttonLabel}
+              >
+                Add My Car
+              </Button>
+              <Button mode="text" onPress={goToApp}>Skip for now</Button>
+            </Card.Content>
+          </Card>
         )}
       </ScrollView>
 
@@ -388,19 +393,7 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 8,
   },
-  backCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: c.Dashboard.card,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
+  // Balances the IconButton on the left so the title stays optically centered.
   backCircleSpacer: { width: 44 },
   headerTitle: {
     flex: 1,
@@ -464,94 +457,29 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
     marginBottom: 18,
   },
 
-  // Outlined fields with floating labels
-  fieldOuter: { marginTop: 14 },
-  fieldBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderWidth: 1.5,
-    borderColor: c.Dashboard.cardBorder,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    backgroundColor: 'transparent',
-  },
-  fieldLabel: {
-    position: 'absolute',
-    top: -9,
-    left: 14,
-    backgroundColor: c.Dashboard.bg,
-    paddingHorizontal: 5,
-    fontSize: 13,
-    fontWeight: '700',
-    color: c.Dashboard.textPrimary,
-  },
-  fieldInput: {
-    flex: 1,
-    color: c.Dashboard.textPrimary,
-    fontSize: 16,
-    paddingVertical: 16,
-  },
-
-  // Verify code
-  codeInput: {
-    backgroundColor: c.Dashboard.card,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: c.Dashboard.accent + '66',
-    color: c.Dashboard.textPrimary,
+  // Paper's outlined TextInput draws its own border and floating label — these
+  // only handle spacing and the oversized verification-code treatment.
+  field: { marginTop: 14 },
+  codeField:        { marginTop: 10 },
+  codeFieldContent: {
     fontSize: 28,
     fontWeight: '800',
     letterSpacing: 8,
-    paddingVertical: 18,
-    marginTop: 10,
+    textAlign: 'center',
   },
   resendOk: { fontSize: 13, color: c.Severity.green, textAlign: 'center', marginTop: 10 },
 
-  // Error
-  errorBox: {
-    backgroundColor: c.SeveritySoft.red,
-    borderWidth: 1,
-    borderColor: c.Severity.red + '55',
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 14,
-  },
-  errorText: { color: c.Severity.red, fontSize: 13, lineHeight: 18 },
-
-  // Button
-  button: {
-    backgroundColor: c.Dashboard.accentDeep,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 24,
-    shadowColor: c.Dashboard.accentDeep,
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 4,
-  },
-  buttonDisabled: { opacity: 0.5 },
-  buttonRow:      { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  buttonText:     { color: c.Dashboard.onAccent, fontWeight: '700', fontSize: 18 },
+  // Buttons
+  buttonContent: { paddingVertical: 8, flexDirection: 'row-reverse' },
+  buttonLabel:   { fontSize: 18, fontWeight: '700' },
 
   footerLink:     { alignItems: 'center', marginTop: 20, paddingVertical: 6 },
   footerLinkText: { fontSize: 15, color: c.Dashboard.textSecondary },
 
   // Step 3
-  successCard: {
-    backgroundColor: c.Dashboard.card,
-    borderRadius: 24,
-    padding: 28,
-    alignItems: 'center',
-    marginTop: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
+  successCard:    { borderRadius: 24, marginTop: 12 },
+  successContent: { alignItems: 'center', paddingVertical: 12 },
+  successBtn:     { alignSelf: 'stretch', marginTop: 8 },
   successIconCircle: {
     width: 80,
     height: 80,
