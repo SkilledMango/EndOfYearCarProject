@@ -1,15 +1,23 @@
+/**
+ * Login screen.
+ *
+ * Built with react-native-paper components (TextInput, Button, Card,
+ * HelperText) themed to the CarStats palette via constants/paperTheme.ts —
+ * so the app gets the library's accessibility, focus states and floating
+ * labels for free without adopting Paper's stock Material look.
+ */
+
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { Button, Card, HelperText, TextInput } from 'react-native-paper';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
@@ -64,75 +72,69 @@ export default function LoginScreen() {
             <MaterialIcons name="directions-car" size={40} color={c.Dashboard.onAccent} />
           </View>
           <Text style={styles.appName}>CarStats</Text>
-          <Text style={styles.tagline}>Understand your car's language.</Text>
+          <Text style={styles.tagline}>Understand your car&apos;s language.</Text>
         </View>
 
-        {/* Card */}
-        <View style={styles.card}>
-          {/* Email */}
-          <Text style={styles.label}>Email Address</Text>
-          <View style={styles.inputWrap}>
-            <MaterialIcons name="mail-outline" size={20} color={c.Dashboard.textSecondary} />
+        <Card mode="elevated" style={styles.card}>
+          <Card.Content style={styles.cardContent}>
             <TextInput
-              style={styles.input}
+              mode="outlined"
+              label="Email Address"
               placeholder="you@example.com"
-              placeholderTextColor={c.Dashboard.textSecondary}
               value={email}
               onChangeText={t => { setEmail(t); setError(null); }}
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="email-address"
               returnKeyType="next"
-              editable={!loading}
+              disabled={loading}
+              error={!!error}
+              left={<TextInput.Icon icon="email-outline" />}
             />
-          </View>
 
-          {/* Password */}
-          <Text style={styles.label}>Password</Text>
-          <View style={styles.inputWrap}>
-            <MaterialIcons name="lock-outline" size={20} color={c.Dashboard.textSecondary} />
             <TextInput
-              style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor={c.Dashboard.textSecondary}
+              mode="outlined"
+              label="Password"
               value={password}
               onChangeText={t => { setPassword(t); setError(null); }}
               secureTextEntry={!showPass}
               returnKeyType="done"
               onSubmitEditing={handleLogin}
-              editable={!loading}
+              disabled={loading}
+              error={!!error}
+              left={<TextInput.Icon icon="lock-outline" />}
+              right={
+                <TextInput.Icon
+                  icon={showPass ? 'eye-off' : 'eye'}
+                  onPress={() => setShowPass(s => !s)}
+                  // Screen readers otherwise announce this as an unlabelled button
+                  accessibilityLabel={showPass ? 'Hide password' : 'Show password'}
+                />
+              }
             />
-            <Pressable onPress={() => setShowPass(s => !s)} hitSlop={8}>
-              <MaterialIcons
-                name={showPass ? 'visibility' : 'visibility-off'}
-                size={20}
-                color={c.Dashboard.textSecondary}
-              />
-            </Pressable>
-          </View>
 
-          {/* Error message */}
-          {error && (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          )}
+            {/* visible={false} keeps the row's height reserved, so the button
+                doesn't jump down when an error appears. */}
+            <HelperText type="error" visible={!!error}>
+              {error ?? ' '}
+            </HelperText>
 
-          {/* Login button */}
-          <Pressable
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading
-              ? <ActivityIndicator color={c.Dashboard.onAccent} />
-              : <Text style={styles.buttonText}>Sign In</Text>}
-          </Pressable>
-        </View>
+            <Button
+              mode="contained"
+              onPress={handleLogin}
+              loading={loading}
+              disabled={loading}
+              contentStyle={styles.buttonContent}
+              labelStyle={styles.buttonLabel}
+            >
+              {loading ? 'Signing in…' : 'Sign In'}
+            </Button>
+          </Card.Content>
+        </Card>
 
         <Pressable onPress={() => router.push('/register')} style={styles.registerLink}>
           <Text style={styles.registerLinkText}>
-            Don't have an account?{'  '}
+            Don&apos;t have an account?{'  '}
             <Text style={{ color: c.Dashboard.accent, fontWeight: '700' }}>Create one.</Text>
           </Text>
         </Pressable>
@@ -174,69 +176,13 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
   tagline: { fontSize: 16, color: c.Dashboard.textSecondary, marginTop: 8 },
 
-  // Card
-  card: {
-    backgroundColor: c.Dashboard.card,
-    borderRadius: 24,
-    padding: 24,
-    gap: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: c.Dashboard.textPrimary,
-    letterSpacing: 0.3,
-    marginTop: 10,
-    marginBottom: 6,
-  },
-  inputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: c.Dashboard.bg,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: c.Dashboard.cardBorder,
-    paddingHorizontal: 14,
-  },
-  input: {
-    flex: 1,
-    color: c.Dashboard.textPrimary,
-    fontSize: 16,
-    paddingVertical: 14,
-  },
+  // Card — Paper handles the surface color and elevation; the 24pt radius is
+  // ours, larger than the theme's global roundness.
+  card:        { borderRadius: 24 },
+  cardContent: { paddingVertical: 8, gap: 10 },
 
-  // Error
-  errorBox: {
-    backgroundColor: c.SeveritySoft.red,
-    borderWidth: 1,
-    borderColor: c.Severity.red + '55',
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 10,
-  },
-  errorText: { color: c.Severity.red, fontSize: 13, lineHeight: 18 },
-
-  // Button
-  button: {
-    backgroundColor: c.Dashboard.accentDeep,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 18,
-    shadowColor: c.Dashboard.accentDeep,
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 4,
-  },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText:     { color: c.Dashboard.onAccent, fontWeight: '700', fontSize: 18 },
+  buttonContent: { paddingVertical: 8 },
+  buttonLabel:   { fontSize: 18, fontWeight: '700' },
 
   registerLink:     { alignItems: 'center', marginTop: 28 },
   registerLinkText: { fontSize: 15, color: c.Dashboard.textSecondary },

@@ -7,13 +7,14 @@
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
-  Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from 'react-native';
+// Paper's Switch/Divider/Button pick their colors up from the themed
+// PaperProvider in app/_layout.tsx, so they need no explicit color props.
+import { Button, Divider, SegmentedButtons, Switch } from 'react-native-paper';
 import Constants from 'expo-constants';
 import { useAuth } from '@/context/AuthContext';
 import { createThemedStyles, useTheme, ThemeMode } from '@/context/ThemeContext';
@@ -36,7 +37,9 @@ const MODE_OPTIONS: { mode: ThemeMode; label: string }[] = [
 
 export default function SettingsScreen() {
   const { user } = useAuth();
-  const { colors: c, mode, setMode } = useTheme();
+  // No `colors` needed here any more — every control on this screen now takes
+  // its colors from the themed PaperProvider.
+  const { mode, setMode } = useTheme();
   const s = useStyles();
 
   const [prefs, setPrefs] = useState<NotifPrefs>(DEFAULT_PREFS);
@@ -115,19 +118,12 @@ export default function SettingsScreen() {
       <View style={s.card}>
         <Text style={s.rowTitle}>Theme</Text>
         <Text style={s.rowSub}>Dark mode re-skins the whole app instantly.</Text>
-        <View style={s.segmentRow}>
-          {MODE_OPTIONS.map(opt => (
-            <Pressable
-              key={opt.mode}
-              style={[s.segment, mode === opt.mode && s.segmentActive]}
-              onPress={() => setMode(opt.mode)}
-            >
-              <Text style={[s.segmentText, mode === opt.mode && s.segmentTextActive]}>
-                {opt.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        <SegmentedButtons
+          style={s.segmentRow}
+          value={mode}
+          onValueChange={(v) => setMode(v as ThemeMode)}
+          buttons={MODE_OPTIONS.map(opt => ({ value: opt.mode, label: opt.label }))}
+        />
       </View>
 
       {/* ── Notifications ── */}
@@ -138,15 +134,10 @@ export default function SettingsScreen() {
             <Text style={s.rowTitle}>Fault scan alerts</Text>
             <Text style={s.rowSub}>Notify me when a scan finds fault codes.</Text>
           </View>
-          <Switch
-            value={prefs.faultAlerts}
-            onValueChange={toggleFaultAlerts}
-            trackColor={{ true: c.Dashboard.accent, false: c.Dashboard.cardBorder }}
-            thumbColor={c.Dashboard.card}
-          />
+          <Switch value={prefs.faultAlerts} onValueChange={toggleFaultAlerts} />
         </View>
 
-        <View style={s.divider} />
+        <Divider style={s.divider} />
 
         <View style={s.switchRow}>
           <View style={{ flex: 1, paddingRight: 12 }}>
@@ -159,17 +150,20 @@ export default function SettingsScreen() {
             value={prefs.childReminder}
             onValueChange={toggleChildReminder}
             disabled={busy}
-            trackColor={{ true: c.Dashboard.accent, false: c.Dashboard.cardBorder }}
-            thumbColor={c.Dashboard.card}
           />
         </View>
 
-        <Pressable style={s.homeBtn} onPress={setHome} disabled={busy}>
-          <Text style={s.homeBtnText}>
-            {prefs.homeLat != null ? '📍  Update home location' : '📍  Set home location (use current spot)'}
-          </Text>
-          {prefs.homeLat != null && <Text style={s.homeSetBadge}>SET ✓</Text>}
-        </Pressable>
+        <Button
+          mode="outlined"
+          icon="map-marker"
+          onPress={setHome}
+          disabled={busy}
+          style={s.homeBtn}
+          contentStyle={s.homeBtnContent}
+        >
+          {prefs.homeLat != null ? 'Update home location' : 'Set home location'}
+        </Button>
+        {prefs.homeLat != null && <Text style={s.homeSetBadge}>SET ✓</Text>}
       </View>
 
       {/* ── Account ── */}
@@ -225,38 +219,20 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
 
   // Theme segmented control
   segmentRow: { flexDirection: 'row', gap: 8, marginTop: 14 },
-  segment: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: c.Dashboard.cardBorder,
-    backgroundColor: c.Dashboard.bg,
-    alignItems: 'center',
-  },
-  segmentActive: {
-    borderColor: c.Dashboard.accent,
-    backgroundColor: c.Dashboard.accentSoft,
-  },
-  segmentText:       { fontSize: 13, fontWeight: '600', color: c.Dashboard.textSecondary },
-  segmentTextActive: { color: c.Dashboard.accent },
-
   switchRow: { flexDirection: 'row', alignItems: 'center' },
-  divider:   { height: 1, backgroundColor: c.Dashboard.cardBorder, marginVertical: 14 },
+  // Paper's Divider draws its own hairline — this only spaces it.
+  divider:   { marginVertical: 14 },
 
-  homeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 14,
-    borderWidth: 1,
-    borderColor: c.Dashboard.accent + '66',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+  homeBtn:        { marginTop: 14 },
+  homeBtnContent: { paddingVertical: 4 },
+  homeSetBadge: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: c.Severity.green,
+    letterSpacing: 1,
+    textAlign: 'center',
+    marginTop: 8,
   },
-  homeBtnText:  { fontSize: 14, fontWeight: '600', color: c.Dashboard.accent },
-  homeSetBadge: { fontSize: 11, fontWeight: '800', color: c.Severity.green, letterSpacing: 1 },
 
   aboutRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 }));

@@ -3,10 +3,12 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { PaperProvider } from 'react-native-paper';
 import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ThemeProvider, useTheme } from '@/context/ThemeContext';
+import { PaperDarkTheme, PaperLightTheme } from '@/constants/paperTheme';
 // Side-effect import: registers the child-reminder geofence task + the
 // notification handler on every launch (including background launches).
 import '@/services/notifications';
@@ -64,16 +66,18 @@ function RootNavigator() {
   };
 
   return (
-    <NavThemeProvider value={navTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)"    options={{ headerShown: false }} />
-        <Stack.Screen name="login"     options={{ headerShown: false }} />
-        <Stack.Screen name="register"  options={{ headerShown: false }} />
-        <Stack.Screen name="trip-planner" options={{ title: 'Trip Fuel Planner' }} />
-        <Stack.Screen name="settings"  options={{ title: 'Settings' }} />
-      </Stack>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-    </NavThemeProvider>
+    <PaperProvider theme={isDark ? PaperDarkTheme : PaperLightTheme}>
+      <NavThemeProvider value={navTheme}>
+        <Stack>
+          <Stack.Screen name="(tabs)"    options={{ headerShown: false }} />
+          <Stack.Screen name="login"     options={{ headerShown: false }} />
+          <Stack.Screen name="register"  options={{ headerShown: false }} />
+          <Stack.Screen name="trip-planner" options={{ title: 'Trip Fuel Planner' }} />
+          <Stack.Screen name="settings"  options={{ title: 'Settings' }} />
+        </Stack>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+      </NavThemeProvider>
+    </PaperProvider>
   );
 }
 
