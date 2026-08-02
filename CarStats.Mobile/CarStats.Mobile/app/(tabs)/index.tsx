@@ -38,14 +38,10 @@ import { sendFaultAlert } from '@/services/notifications';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { Plate } from '@/constants/theme';
 import { resultSeverity, severityColor, severityMeta, worstSeverity } from '@/utils/severity';
+import { estimateFuelPercent, FuelBaseline } from '@/utils/fuel';
 
 // ─── Fuel baseline (stored in AsyncStorage per vehicle) ───────────────────────
-
-interface FuelBaseline {
-  pct: number;    // fuel % when the user set it
-  tankL: number;  // tank capacity in litres
-  tripKm: number; // accumulated trip km at the time of setting
-}
+// FuelBaseline and the estimation maths live in utils/fuel.ts.
 
 function fuelKey(vehicleId?: number) {
   return `fuel_baseline_${vehicleId ?? 'default'}`;
@@ -265,16 +261,13 @@ export default function HomeScreen() {
       setEstimatedFuel(null);
       return;
     }
-    const avgL100km = selectedVehicle?.averageFuelConsumption ?? null;
-    if (!avgL100km || avgL100km <= 0) {
-      // Can't estimate without consumption data — just show baseline
-      setEstimatedFuel(Math.max(0, fuelBaseline.pct));
-      return;
-    }
-    const kmDriven    = Math.max(0, tripKm - fuelBaseline.tripKm);
-    const litersUsed  = (kmDriven / 100) * avgL100km;
-    const pctDropped  = (litersUsed / fuelBaseline.tankL) * 100;
-    setEstimatedFuel(Math.max(0, Math.round(fuelBaseline.pct - pctDropped)));
+    // Arithmetic and its edge cases live in utils/fuel.ts so they can be
+    // tested without mounting this screen — see __tests__/fuel.test.ts.
+    setEstimatedFuel(estimateFuelPercent({
+      baseline:  fuelBaseline,
+      tripKm,
+      avgL100km: selectedVehicle?.averageFuelConsumption,
+    }));
   }, [liveData, fuelBaseline, tripKm, selectedVehicle]);
 
   // ── Auto-scan DTCs from hardware ─────────────────────────────────────────
