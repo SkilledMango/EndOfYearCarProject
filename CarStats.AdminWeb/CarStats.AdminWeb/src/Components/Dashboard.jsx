@@ -3,7 +3,7 @@ import { getDiagnosticCodes, addDiagnosticCode, deleteDiagnosticCode } from '../
 import { 
     Table, TableBody, TableCell, TableContainer, TableHead, 
     TableRow, Paper, Button, Dialog, DialogTitle, DialogContent, 
-    DialogActions, TextField, Typography 
+    DialogActions, TextField, Typography, Alert
 } from '@mui/material';
 
 export default function Dashboard() {
@@ -11,9 +11,19 @@ export default function Dashboard() {
     const [open, setOpen] = useState(false);
     const [newCode, setNewCode] = useState({ errorCode: '', humanTitle: '', severity: '', estimatedCostMin: 0, estimatedCostMax: 0 });
 
+    const [loadError, setLoadError] = useState(null);
+
+    // Without the catch a failed fetch rejects unhandled and the table just
+    // shows nothing, which reads as "the dictionary is empty".
     const loadCodes = async () => {
-        const data = await getDiagnosticCodes();
-        setCodes(data);
+        try {
+            const data = await getDiagnosticCodes();
+            setCodes(data);
+            setLoadError(null);
+        } catch (error) {
+            console.error('Failed to load diagnostic codes', error);
+            setLoadError('Could not load the fault-code dictionary. Check your connection and refresh.');
+        }
     };
 
     useEffect(() => { loadCodes(); }, []);
@@ -39,6 +49,10 @@ export default function Dashboard() {
                     + Add New DTC
                 </Button>
             </div>
+
+            {loadError && (
+                <Alert severity="error" sx={{ mb: 2 }}>{loadError}</Alert>
+            )}
 
             <TableContainer component={Paper}>
                 <Table>

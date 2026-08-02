@@ -51,6 +51,17 @@ function fuelKey(vehicleId?: number) {
   return `fuel_baseline_${vehicleId ?? 'default'}`;
 }
 
+function tripKey(vehicleId?: number) {
+  return `trip_km_${vehicleId ?? 'default'}`;
+}
+
+/**
+ * Accumulated trip distance is written back to storage at most once per this
+ * many km. The poll runs every second, so persisting on every tick would mean
+ * ~3600 storage writes an hour for a number that barely moves.
+ */
+const TRIP_PERSIST_KM = 1;
+
 // ─── Home Screen ──────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
@@ -85,6 +96,8 @@ export default function HomeScreen() {
   const [addVehicleVisible, setAddVehicleVisible]     = useState(false);
   const [prefillData, setPrefillData]       = useState<VehiclePrefill | undefined>();
   const lastPollTimeRef = useRef(Date.now());
+  // Highest tripKm already written to storage — throttles the persist below.
+  const lastPersistedTripRef = useRef(0);
 
   // ── OBD vehicle detection ──
   const [detectedVehicle, setDetectedVehicle] = useState<VinDecodeResult | null>(null);
@@ -109,25 +122,43 @@ export default function HomeScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+    // Keyed on the id, not the whole object: refreshUser() hands back a new
+    // AppUser instance on every call, and depending on that would refetch on
+    // each one. An empty array here would capture the user from first render
+    // and keep loading their data after a different account signs in.
+  }, [authUser?.id]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Load fuel baseline when vehicle changes ───────────────────────────────
   const loadFuelBaseline = useCallback(async (vehicleId?: number) => {
     try {
       const stored = await AsyncStorage.getItem(fuelKey(vehicleId));
-      if (stored) {
-        const baseline: FuelBaseline = JSON.parse(stored);
-        setFuelBaseline(baseline);
-        // Don't reset tripKm — keep accumulating. If we already drove past
-        // the baseline point, depletion will be calculated correctly.
-        setTripKm(prev => Math.max(prev, baseline.tripKm));
-      }
+      if (!stored) return;
+
+      const baseline: FuelBaseline = JSON.parse(stored);
+      setFuelBaseline(baseline);
+
+      // Restore the distance driven since the baseline was set. Without this
+      // tripKm restarts at 0 every launch, kmDriven comes out 0, and the gauge
+      // snaps back to the baseline percentage — reading HIGHER than the tank
+      // actually is, which is the wrong direction to be wrong about fuel.
+      const storedTrip = await AsyncStorage.getItem(tripKey(vehicleId));
+      const restored   = storedTrip ? parseFloat(storedTrip) : 0;
+      const safeTrip   = Number.isFinite(restored) ? restored : 0;
+
+      setTripKm(prev => Math.max(prev, safeTrip, baseline.tripKm));
+      lastPersistedTripRef.current = Math.max(safeTrip, baseline.tripKm);
     } catch { /* ignore storage errors */ }
   }, []);
 
   const saveFuelBaseline = useCallback(async (baseline: FuelBaseline, vehicleId?: number) => {
     try {
-      await AsyncStorage.setItem(fuelKey(vehicleId), JSON.stringify(baseline));
+      await AsyncStorage.multiSet([
+        [fuelKey(vehicleId), JSON.stringify(baseline)],
+        // Anchor the odometer to the baseline so the next launch measures
+        // depletion from here rather than from a stale larger number.
+        [tripKey(vehicleId), String(baseline.tripKm)],
+      ]);
+      lastPersistedTripRef.current = baseline.tripKm;
       setFuelBaseline(baseline);
     } catch { /* ignore */ }
   }, []);
@@ -172,6 +203,14 @@ export default function HomeScreen() {
   useEffect(() => {
     loadFuelBaseline(selectedVehicle?.id);
   }, [selectedVehicle, loadFuelBaseline]);
+
+  // ── Persist accumulated distance so the estimate survives a restart ───────
+  useEffect(() => {
+    if (tripKm - lastPersistedTripRef.current < TRIP_PERSIST_KM) return;
+    lastPersistedTripRef.current = tripKm;
+    AsyncStorage.setItem(tripKey(selectedVehicle?.id), String(tripKm))
+      .catch(() => { /* storage full or unavailable — estimate degrades, no crash */ });
+  }, [tripKm, selectedVehicle]);
 
   // ── OBD vehicle detection — runs once per real-car connection ────────────
   useEffect(() => {
@@ -829,7 +868,7 @@ function FuelSetModal({
         <View style={modalStyles.sheet}>
           <Text style={modalStyles.title}>SET FUEL LEVEL</Text>
           <Text style={modalStyles.sub}>
-            Your OBD adapter can't read the fuel sensor directly.{'\n'}
+            Your OBD adapter can&apos;t read the fuel sensor directly.{'\n'}
             Set your current level and the app will track usage automatically.
           </Text>
 

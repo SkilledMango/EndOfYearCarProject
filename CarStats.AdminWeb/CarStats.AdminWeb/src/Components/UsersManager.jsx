@@ -7,7 +7,7 @@ import {
     Table, TableBody, TableCell, TableContainer, TableHead,
     TableRow, Paper, Button, Dialog, DialogTitle, DialogContent,
     DialogActions, TextField, Typography, Switch, FormControlLabel,
-    Select, MenuItem, FormControl, InputLabel, Chip, IconButton, Divider
+    Select, MenuItem, FormControl, InputLabel, Chip, Divider, Alert
 } from '@mui/material';
 
 const ROLE_LABELS = { 1: 'User', 2: 'Admin', 3: 'SuperAdmin' };
@@ -33,9 +33,19 @@ export default function UsersManager() {
     const [editVehicle, setEditVehicle] = useState(null);
     const [isCreatingVehicle, setIsCreatingVehicle] = useState(false);
 
+    const [loadError, setLoadError] = useState(null);
+
+    // An unhandled rejection here used to leave the table silently empty, which
+    // is indistinguishable from "there are no users" — surface it instead.
     const loadUsers = async () => {
-        const data = await getUsers();
-        setUsers(data);
+        try {
+            const data = await getUsers();
+            setUsers(data);
+            setLoadError(null);
+        } catch (error) {
+            console.error('Failed to load users', error);
+            setLoadError('Could not load users. Check your connection and refresh.');
+        }
     };
 
     useEffect(() => { loadUsers(); }, []);
@@ -122,6 +132,10 @@ export default function UsersManager() {
                     + Add User
                 </Button>
             </div>
+
+            {loadError && (
+                <Alert severity="error" sx={{ mb: 2 }}>{loadError}</Alert>
+            )}
 
             {/* Users Table */}
             <TableContainer component={Paper}>

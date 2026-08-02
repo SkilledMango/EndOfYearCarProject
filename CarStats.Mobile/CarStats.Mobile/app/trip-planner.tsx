@@ -364,7 +364,7 @@ export default function TripPlannerScreen() {
             <Text style={styles.emptyIcon}>⛽</Text>
             <Text style={styles.emptyText}>Enter a destination above</Text>
             <Text style={styles.emptySubtext}>
-              We'll calculate fuel usage based on your vehicle and live traffic data.
+              We&apos;ll calculate fuel usage based on your vehicle and live traffic data.
             </Text>
           </View>
         )}

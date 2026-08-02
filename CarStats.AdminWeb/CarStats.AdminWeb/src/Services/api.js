@@ -34,10 +34,14 @@ export const login = async (email, password) => {
         // Plain axios - no stale token should ride along on a login attempt
         response = await axios.post(`${BASE_URL}/auth/login`, { email, password });
     } catch (error) {
+        // Keep the original axios error as `cause` — without it the real
+        // status, URL and network detail are lost, and a failed login looks
+        // identical in the console whether the server said 401 or was simply
+        // unreachable.
         const status = error?.response?.status;
-        if (status === 401) throw new Error('Incorrect email or password.');
-        if (status === 403) throw new Error('This account has not verified its email yet.');
-        throw new Error('Could not reach the server. Please try again.');
+        if (status === 401) throw new Error('Incorrect email or password.', { cause: error });
+        if (status === 403) throw new Error('This account has not verified its email yet.', { cause: error });
+        throw new Error('Could not reach the server. Please try again.', { cause: error });
     }
     const { token, user } = response.data;
     if (user.role !== ROLE_ADMIN && user.role !== ROLE_SUPERADMIN) {

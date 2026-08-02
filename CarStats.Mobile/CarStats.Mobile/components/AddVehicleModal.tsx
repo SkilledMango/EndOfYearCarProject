@@ -368,11 +368,6 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────
 
-  const stepOrder: Step[] = ['plate', 'year', 'make', 'model', 'trim', 'details'];
-  const stepIndex = stepOrder.indexOf(step);
-  // For progress dots: plate=0, year is also early, then make, model, trim, details
-  const progressSteps: Step[] = ['plate', 'trim', 'details'];
-
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
       <View style={s.screen}>
@@ -408,7 +403,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                 <View style={s.plateHeroCircle}>
                   <Text style={s.plateHeroIcon}>🚗</Text>
                 </View>
-                <Text style={s.plateHeadline}>Let's find your car</Text>
+                <Text style={s.plateHeadline}>Let&apos;s find your car</Text>
                 <Text style={s.plateSub}>
                   Enter your license plate number to automatically retrieve vehicle details.
                 </Text>

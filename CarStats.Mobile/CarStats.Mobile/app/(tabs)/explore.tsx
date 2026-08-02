@@ -8,7 +8,6 @@ import {
   View,
 } from 'react-native';
 import {
-  SeverityLevel,
   VehicleEventEnriched,
   getUserEvents,
 } from '@/services/api';
@@ -41,7 +40,9 @@ export default function HistoryScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+    // Keyed on the id so a different account signing in reloads the history,
+    // without refetching every time refreshUser() returns a new user object.
+  }, [authUser?.id]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load(); }, [load]);
 

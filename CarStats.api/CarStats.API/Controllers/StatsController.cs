@@ -111,16 +111,25 @@ namespace CarStats.API.Controllers
                 };
             }).ToList();
 
-            // ── Severity breakdown (joined in memory) ─────────────────────────
-            var allCodes = await _context.VehicleEvents
-                .Select(e => e.RawErrorCode)
+            // ── Severity breakdown ────────────────────────────────────────────
+            // Counted per distinct code on the SERVER. Pulling every raw code
+            // back to group in memory transferred one row per fault ever
+            // logged, which grows without bound; this returns at most one row
+            // per code in the dictionary.
+            var countsByCode = await _context.VehicleEvents
+                .GroupBy(e => e.RawErrorCode)
+                .Select(g => new { code = g.Key, count = g.Count() })
                 .ToListAsync();
 
-            var severityBreakdown = allCodes
-                .Select(code => dtcMap.TryGetValue(code, out var dtc) ? (int?)dtc.Severity : null)
-                .Where(s => s.HasValue)
-                .GroupBy(s => s!.Value)
-                .Select(g => new { severity = g.Key, count = g.Count() })
+            var severityBreakdown = countsByCode
+                .Select(x => new
+                {
+                    severity = dtcMap.TryGetValue(x.code, out var dtc) ? (int?)dtc.Severity : null,
+                    x.count,
+                })
+                .Where(x => x.severity.HasValue)
+                .GroupBy(x => x.severity!.Value)
+                .Select(g => new { severity = g.Key, count = g.Sum(x => x.count) })
                 .OrderBy(x => x.severity)
                 .ToList();
 
