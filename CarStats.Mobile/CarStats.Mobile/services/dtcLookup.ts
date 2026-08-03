@@ -16,19 +16,55 @@
  * Uses the same key and model as the fuel-economy lookup in fueleconomy.ts.
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchWithTimeout } from './http';
 import { SeverityLevel } from './api';
 
 const GEMINI_API_KEY: string = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
 
-const GEMINI_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
+/**
+ * Models tried in order. The free tier's daily cap is counted per model, so a
+ * second model is a genuinely separate allowance rather than a retry of the
+ * same exhausted one — a code still gets explained after the first runs out.
+ */
+const GEMINI_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+
+const modelUrl = (model: string) =>
+  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
+/** Cached explanations, so a code is only ever paid for once. */
+const CACHE_PREFIX = '@carstats_dtc_ai_';
+
+/** True when the response means "out of quota" rather than a real failure. */
+const isRateLimited = (status: number) => status === 429;
 
 export interface AiFaultExplanation {
   humanTitle:     string;
   description:    string;
   actionRequired: string;
   severity:       SeverityLevel;
+}
+
+/** Why no explanation came back — so the screen can say something true. */
+export type AiFailureReason = 'no-key' | 'rate-limited' | 'unavailable';
+
+export type AiLookupResult =
+  | { ok: true;  explanation: AiFaultExplanation; cached: boolean }
+  | { ok: false; reason: AiFailureReason };
+
+async function readCache(code: string): Promise<AiFaultExplanation | null> {
+  try {
+    const raw = await AsyncStorage.getItem(CACHE_PREFIX + code.toUpperCase());
+    return raw ? (JSON.parse(raw) as AiFaultExplanation) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCache(code: string, value: AiFaultExplanation): Promise<void> {
+  try {
+    await AsyncStorage.setItem(CACHE_PREFIX + code.toUpperCase(), JSON.stringify(value));
+  } catch { /* storage full — the explanation just costs a request next time */ }
 }
 
 /** Maps the model's one-word severity onto our enum, defaulting to caution. */
@@ -41,45 +77,18 @@ function parseSeverity(word: string): SeverityLevel {
 }
 
 /**
- * Explains an OBD-II code, or null when there is no key, no answer, or the
- * response cannot be trusted.
+ * Asks one model for an explanation.
  *
- * Never throws: an explanation is a bonus on top of the dictionary, and a
- * failure here must leave the screen usable.
+ * Returns the explanation, or a reason. Separated from the caller so the
+ * retry-on-another-model logic stays readable.
  */
-export async function explainFaultWithAi(
+async function askModel(
+  model: string,
   code: string,
-  vehicle?: { make: string; model: string; year: number },
-): Promise<AiFaultExplanation | null> {
-  if (!code) return null;
-
-  if (!GEMINI_API_KEY) {
-    // Worth saying out loud: this also happens when the key IS in .env but
-    // Metro served a cached bundle from before it was added, since
-    // EXPO_PUBLIC_* values are inlined at transform time. Restart with
-    // `npx expo start --clear`.
-    console.warn('[dtcLookup] no Gemini key in this bundle — skipping AI explanation');
-    return null;
-  }
-
-  const carHint = vehicle
-    ? ` on a ${vehicle.year} ${vehicle.make} ${vehicle.model}`
-    : '';
-
-  const prompt =
-    `You are explaining an OBD-II diagnostic trouble code to a car owner who ` +
-    `is not a mechanic. Explain code ${code}${carHint}.\n\n` +
-    `Reply as strict JSON with exactly these keys and nothing else:\n` +
-    `{"title": "...", "description": "...", "action": "...", "severity": "low|medium|high"}\n\n` +
-    `title: under 8 words, plain language, no jargon.\n` +
-    `description: 2 sentences on what is wrong and what the driver would notice.\n` +
-    `action: 1 sentence on what they should do and how urgently.\n` +
-    `severity: low if it can wait, medium if it should be booked in, high if ` +
-    `driving on could be unsafe or cause damage.\n` +
-    `Do not mention prices. If you do not recognise the code, reply exactly: unknown`;
-
+  prompt: string,
+): Promise<AiLookupResult> {
   try {
-    const res = await fetchWithTimeout(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, 15000, {
+    const res = await fetchWithTimeout(`${modelUrl(model)}?key=${GEMINI_API_KEY}`, 15000, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body:    JSON.stringify({
@@ -88,19 +97,22 @@ export async function explainFaultWithAi(
           temperature: 0,
           // Asking for JSON directly rather than parsing it out of prose. The
           // model then cannot wrap the object in a ``` fence or add a sentence
-          // in front of it, which is what made this succeed only sometimes.
+          // in front of it, which made this succeed only sometimes.
           responseMimeType: 'application/json',
           // Generous on purpose: 2.5 models spend part of this budget on
-          // internal reasoning, and running out mid-object truncates the JSON.
-          // That produced exactly the intermittent failures seen in testing.
+          // internal reasoning, and running out truncates the JSON mid-object.
           maxOutputTokens: 800,
         },
       }),
     });
 
+    if (isRateLimited(res.status)) {
+      console.warn(`[dtcLookup] ${model} is out of quota`);
+      return { ok: false, reason: 'rate-limited' };
+    }
     if (!res.ok) {
-      console.warn('[dtcLookup] Gemini returned', res.status);
-      return null;
+      console.warn(`[dtcLookup] ${model} returned`, res.status);
+      return { ok: false, reason: 'unavailable' };
     }
 
     const json = await res.json();
@@ -112,44 +124,113 @@ export async function explainFaultWithAi(
     }
     if (!text || text.toLowerCase() === 'unknown') {
       console.warn('[dtcLookup] no usable answer for', code);
-      return null;
+      return { ok: false, reason: 'unavailable' };
     }
 
-    // Still tolerate a fence or stray prose: responseMimeType makes that
-    // unlikely rather than impossible, and one bad response should not lose
+    // Tolerate a fence or stray prose anyway: responseMimeType makes that
+    // unlikely rather than impossible, and one odd response should not lose
     // an explanation the model actually produced.
-    const start = text.indexOf('{');
-    const end   = text.lastIndexOf('}');
-    const jsonText = start >= 0 && end > start ? text.slice(start, end + 1) : text;
+    const open  = text.indexOf('{');
+    const close = text.lastIndexOf('}');
+    const jsonText = open >= 0 && close > open ? text.slice(open, close + 1) : text;
 
     let parsed: any;
     try {
       parsed = JSON.parse(jsonText);
     } catch {
       console.warn('[dtcLookup] could not parse response:', text.slice(0, 120));
-      return null;
+      return { ok: false, reason: 'unavailable' };
     }
 
     const humanTitle     = String(parsed.title ?? '').trim();
     const description    = String(parsed.description ?? '').trim();
     const actionRequired = String(parsed.action ?? '').trim();
 
-    // A blank title or description means we have nothing worth showing, and
-    // half an explanation is worse than none.
-    if (!humanTitle || !description) return null;
+    // Half an explanation is worse than none.
+    if (!humanTitle || !description) return { ok: false, reason: 'unavailable' };
 
     return {
-      humanTitle,
-      description,
-      actionRequired,
-      severity: parseSeverity(String(parsed.severity ?? '')),
+      ok: true,
+      cached: false,
+      explanation: {
+        humanTitle,
+        description,
+        actionRequired,
+        severity: parseSeverity(String(parsed.severity ?? '')),
+      },
     };
   } catch (err) {
-    // No network, a timeout, or an unexpected shape. Logged rather than
-    // swallowed: a silent null here is indistinguishable from "the model had
-    // nothing to say", which made an intermittent failure impossible to
-    // diagnose from the outside.
-    console.warn('[dtcLookup] explanation failed for', code, err);
-    return null;
+    console.warn(`[dtcLookup] ${model} failed for ${code}:`, err);
+    return { ok: false, reason: 'unavailable' };
   }
+}
+
+/**
+ * Explains an OBD-II code in plain language.
+ *
+ * Answers are cached permanently per code, so a given fault costs one request
+ * ever. That matters more than it sounds: the free tier caps requests per day
+ * per model, and without caching simply reopening the same fault burns through
+ * the allowance until explanations stop working.
+ *
+ * Never throws — an explanation is a bonus on top of the dictionary, and a
+ * failure here must leave the screen usable.
+ */
+export async function explainFaultWithAi(
+  code: string,
+  vehicle?: { make: string; model: string; year: number },
+): Promise<AiLookupResult> {
+  if (!code) return { ok: false, reason: 'unavailable' };
+
+  const cached = await readCache(code);
+  if (cached) return { ok: true, explanation: cached, cached: true };
+
+  if (!GEMINI_API_KEY) {
+    // Also happens when the key IS in .env but Metro served a bundle cached
+    // from before it was added, since EXPO_PUBLIC_* values are inlined at
+    // transform time. Restart with `npx expo start --clear`.
+    console.warn('[dtcLookup] no Gemini key in this bundle');
+    return { ok: false, reason: 'no-key' };
+  }
+
+  const carHint = vehicle
+    ? ` on a ${vehicle.year} ${vehicle.make} ${vehicle.model}`
+    : '';
+
+  const prompt =
+    `You are explaining an OBD-II diagnostic trouble code to a car owner who ` +
+    `is not a mechanic. Explain code ${code}${carHint}.
+
+` +
+    `Reply as strict JSON with exactly these keys and nothing else:
+` +
+    `{"title": "...", "description": "...", "action": "...", "severity": "low|medium|high"}
+
+` +
+    `title: under 8 words, plain language, no jargon.
+` +
+    `description: 2 sentences on what is wrong and what the driver would notice.
+` +
+    `action: 1 sentence on what they should do and how urgently.
+` +
+    `severity: low if it can wait, medium if it should be booked in, high if ` +
+    `driving on could be unsafe or cause damage.
+` +
+    `Do not mention prices. If you do not recognise the code, reply exactly: unknown`;
+
+  let lastReason: AiFailureReason = 'unavailable';
+
+  for (const model of GEMINI_MODELS) {
+    const result = await askModel(model, code, prompt);
+    if (result.ok) {
+      await writeCache(code, result.explanation);
+      return result;
+    }
+    lastReason = result.reason;
+    // Only a quota failure is worth trying another model for — its daily cap
+    // is counted separately. Anything else would fail the same way twice.
+    if (result.reason !== 'rate-limited') break;
+  }
+
+  return { ok: false, reason: lastReason };
 }

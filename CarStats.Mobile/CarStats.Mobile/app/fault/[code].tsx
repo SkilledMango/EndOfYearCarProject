@@ -17,7 +17,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-nat
 import { Button, Card, Divider } from 'react-native-paper';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { DiagnosticCode, getDiagnosticCodes } from '@/services/api';
-import { AiFaultExplanation, explainFaultWithAi } from '@/services/dtcLookup';
+import { AiFailureReason, AiFaultExplanation, explainFaultWithAi } from '@/services/dtcLookup';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { severityMeta } from '@/utils/severity';
 
@@ -29,6 +29,9 @@ export default function FaultDetailScreen() {
 
   const [dtc, setDtc]         = useState<DiagnosticCode | null>(null);
   const [ai, setAi]           = useState<AiFaultExplanation | null>(null);
+  // Why the AI had nothing, so the screen can say something true rather than
+  // implying the code simply is not covered.
+  const [aiFailure, setAiFailure] = useState<AiFailureReason | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed]   = useState(false);
 
@@ -46,7 +49,10 @@ export default function FaultDetailScreen() {
           // Not in the dictionary — manufacturer-specific codes run into the
           // thousands, so ask the model rather than showing a bare code.
           const explained = await explainFaultWithAi(code ?? '');
-          if (!cancelled) setAi(explained);
+          if (!cancelled) {
+            if (explained.ok) setAi(explained.explanation);
+            else setAiFailure(explained.reason);
+          }
         }
       } catch {
         if (!cancelled) setFailed(true);
@@ -140,11 +146,15 @@ export default function FaultDetailScreen() {
       ) : !dtc ? (
         <Card mode="elevated" style={s.card}>
           <Card.Content>
-            <Text style={s.title}>Not in our dictionary yet</Text>
+            <Text style={s.title}>
+              {aiFailure === 'rate-limited'
+                ? 'Explanation unavailable right now'
+                : 'Not in our dictionary yet'}
+            </Text>
             <Text style={s.body}>
-              {code} is a valid OBD-II code but we do not have a plain-language
-              explanation for it. Treat it as worth checking, and ask a mechanic
-              what it means for your car.
+              {aiFailure === 'rate-limited'
+                ? `${code} is not one of the codes we cover, and today's limit for AI explanations has been reached. It resets tomorrow — until then, a mechanic can tell you what this code means for your car.`
+                : `${code} is a valid OBD-II code but we do not have a plain-language explanation for it. Treat it as worth checking, and ask a mechanic what it means for your car.`}
             </Text>
           </Card.Content>
         </Card>
