@@ -15,6 +15,7 @@ import * as Location from 'expo-location';
 import { useAuth } from '@/context/AuthContext';
 import { api, getUser, Vehicle } from '@/services/api';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
+import { routeErrorMessage } from '@/utils/route';
 import { ThemeColors } from '@/constants/theme';
 
 // Google Directions/Places calls go through our API's /navigation proxy:
@@ -158,11 +159,7 @@ export default function TripPlannerScreen() {
       });
 
       if (data.status !== 'OK') {
-        setError(
-          data.status === 'NOT_FOUND' || data.status === 'ZERO_RESULTS'
-            ? 'Destination not found. Try a more specific address.'
-            : `Could not get route (${data.status}). Check your connection.`
-        );
+        setError(routeErrorMessage(data.status));
         setLoading(false);
         return;
       }
