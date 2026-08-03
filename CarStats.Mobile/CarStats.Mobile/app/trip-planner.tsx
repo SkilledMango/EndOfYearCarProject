@@ -36,9 +36,14 @@ interface RouteResult {
   fuelCostILS:        number;
   trafficLabel:       string;
   trafficColor:       string;
-  /** "lat,lng" when taken from GPS, or the typed address. Used for Open in Maps. */
+  /** "lat,lng" of the start of the route as Google resolved it. */
   originLatLng:       string;
-  destinationText:    string;   // raw text — used for Open in Maps
+  /** "lat,lng" of the destination as Google resolved it. */
+  destinationLatLng:  string;
+  /** What Google matched the destination to, e.g. "AM:PM, Hadera". */
+  destinationAddress: string;
+  /** Exactly what the user typed. Shown in the UI, never sent to Maps. */
+  destinationText:    string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -198,7 +203,13 @@ export default function TripPlannerScreen() {
         fuelCostILS:        fuel.estimatedFuelL * FUEL_PRICE_PER_LITRE,
         trafficLabel:       tm.label,
         trafficColor:       tm.color,
-        originLatLng:       originParam,
+        // Coordinates from the route itself rather than the typed text: a
+        // name like "AM-PM" matches hundreds of places, and our own bias
+        // toward Israel does not travel with a deep link. Handing Maps the
+        // exact points guarantees it opens the route we just calculated.
+        originLatLng:       `${leg.start_location.lat},${leg.start_location.lng}`,
+        destinationLatLng:  `${leg.end_location.lat},${leg.end_location.lng}`,
+        destinationAddress: leg.end_address ?? destination.trim(),
         destinationText:    destination.trim(),
       });
     } catch (err: any) {
@@ -224,15 +235,16 @@ export default function TripPlannerScreen() {
     const url =
       `https://www.google.com/maps/dir/?api=1` +
       `&origin=${encodeURIComponent(result.originLatLng)}` +
-      `&destination=${encodeURIComponent(result.destinationText)}` +
+      `&destination=${encodeURIComponent(result.destinationLatLng)}` +
       `&travelmode=driving`;
     const supported = await Linking.canOpenURL(url);
     if (supported) {
       await Linking.openURL(url);
     } else {
-      // Fallback: just navigate to destination
+      // Fallback drops the route and just shows the destination pin — still
+      // by coordinates, so it lands in the right place.
       await Linking.openURL(
-        `https://maps.google.com/?q=${encodeURIComponent(result.destinationText)}`
+        `https://maps.google.com/?q=${encodeURIComponent(result.destinationLatLng)}`
       );
     }
   };
@@ -325,6 +337,12 @@ export default function TripPlannerScreen() {
             {/* Route summary */}
             <View style={styles.card}>
               <Text style={styles.cardLabel}>ROUTE SUMMARY</Text>
+              {/* What Google actually matched. A short name like "AM-PM" can
+                  resolve to any of dozens, and without this there is no way to
+                  tell whether it picked the one you meant. */}
+              <Text style={styles.resolvedTo} numberOfLines={2}>
+                → {result.destinationAddress}
+              </Text>
               <View style={styles.statsGrid}>
                 <View style={styles.statBox}>
                   <Text style={styles.statValue}>{result.distanceKm.toFixed(1)}</Text>
@@ -437,6 +455,7 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
   fuelCard:    { borderColor: c.Dashboard.accent + '44' },
   cardLabel:   { fontSize: 11, color: c.Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 14 },
+  resolvedTo:  { fontSize: 14, fontWeight: '600', color: c.Dashboard.textPrimary, marginTop: -6, marginBottom: 14 },
   // Separates the second field group from the one above it.
   cardLabelSpaced: { marginTop: 4 },
 
