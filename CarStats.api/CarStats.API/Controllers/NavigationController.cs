@@ -39,11 +39,16 @@ namespace CarStats.API.Controllers
             if (string.IsNullOrWhiteSpace(ApiKey))
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, "Route service is not configured.");
 
+            // region biases an ambiguous place name toward Israel, and language
+            // keeps the returned street names in Hebrew so they match the signs
+            // the driver will actually see.
             var url =
                 "https://maps.googleapis.com/maps/api/directions/json" +
                 $"?origin={Uri.EscapeDataString(origin)}" +
                 $"&destination={Uri.EscapeDataString(destination)}" +
                 "&departure_time=now" +
+                "&region=il" +
+                "&language=he" +
                 $"&key={ApiKey}";
 
             var client = _httpFactory.CreateClient();
@@ -65,6 +70,8 @@ namespace CarStats.API.Controllers
                 $"?location={lat},{lng}" +
                 "&rankby=distance" +
                 "&type=car_repair" +
+                // Hebrew names, so the list matches the signage on the street.
+                "&language=he" +
                 $"&key={ApiKey}";
 
             var client = _httpFactory.CreateClient();
@@ -168,9 +175,15 @@ namespace CarStats.API.Controllers
             if (string.IsNullOrWhiteSpace(ApiKey))
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, "Geocoding is not configured.");
 
+            // Same Israeli bias as autocomplete, and Hebrew output so a Hebrew
+            // query does not come back transliterated into English. The address
+            // itself is URL-encoded, so Hebrew input works either way.
             var url =
                 "https://maps.googleapis.com/maps/api/geocode/json" +
                 $"?address={Uri.EscapeDataString(address)}" +
+                "&components=country:IL" +
+                "&language=he" +
+                "&region=il" +
                 $"&key={ApiKey}";
 
             var client = _httpFactory.CreateClient();
