@@ -23,6 +23,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { AddVehicleModal } from '@/components/AddVehicleModal';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
+import { PASSWORD_REQUIREMENTS, validatePassword } from '@/utils/password';
 
 // Simple but solid email-format check (mirrors the backend MailAddress check)
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -85,7 +86,9 @@ export default function RegisterScreen() {
     setError(null);
     if (!fullName.trim())             { setError('Please enter your full name.');            return; }
     if (!EMAIL_RE.test(email.trim())) { setError('Please enter a valid email address.');     return; }
-    if (password.length < 6)          { setError('Password must be at least 6 characters.'); return; }
+    // Same rules the API enforces — see utils/password.ts.
+    const passwordProblem = validatePassword(password);
+    if (passwordProblem)              { setError(passwordProblem);                           return; }
     if (password !== confirmPassword) { setError('Passwords do not match.');                 return; }
 
     setLoading(true);
@@ -231,7 +234,7 @@ export default function RegisterScreen() {
               ref={passRef}
               mode="outlined"
               label="Password"
-              placeholder="Min. 6 characters"
+              placeholder="Min. 8 characters, letters and numbers"
               style={styles.field}
               value={password}
               onChangeText={t => { setPassword(t); setError(null); }}
@@ -248,6 +251,13 @@ export default function RegisterScreen() {
                 />
               }
             />
+
+            {/* States the rules up front, then narrows to the specific one
+                being broken as the user types — so nobody discovers the
+                requirements only by failing to submit. */}
+            <HelperText type={password && validatePassword(password) ? 'error' : 'info'} visible>
+              {password ? (validatePassword(password) ?? '✓ Password looks good.') : PASSWORD_REQUIREMENTS}
+            </HelperText>
 
             <TextInput
               ref={confirmRef}

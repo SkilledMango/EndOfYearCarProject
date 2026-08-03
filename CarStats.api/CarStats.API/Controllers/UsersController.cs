@@ -63,11 +63,16 @@ namespace CarStats.API.Controllers
             // Secure the password immediately before saving
             if (!string.IsNullOrEmpty(newUser.NewPassword))
             {
+                if (!PasswordPolicy.IsAcceptable(newUser.NewPassword))
+                    return BadRequest(PasswordPolicy.Requirements);
+
                 newUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newUser.NewPassword);
             }
             else
             {
-                // Fallback if admin forgets to set a password during creation
+                // Fallback if an admin creates an account without setting a
+                // password. The value satisfies PasswordPolicy, so an account
+                // created this way can still be logged into and changed later.
                 newUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword("DefaultPass123!");
             }
 
@@ -101,8 +106,13 @@ namespace CarStats.API.Controllers
             existingUser.IsPremiumMember = updatedUser.IsPremiumMember;
 
             // 3. THE SECURITY MAGIC: If the Admin typed a new password, hash it!
+            //    Same policy as registration — an admin-set password must not
+            //    be weaker than one a user could choose for themselves.
             if (!string.IsNullOrEmpty(updatedUser.NewPassword))
             {
+                if (!PasswordPolicy.IsAcceptable(updatedUser.NewPassword))
+                    return BadRequest(PasswordPolicy.Requirements);
+
                 existingUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword(updatedUser.NewPassword);
             }
 

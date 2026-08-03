@@ -68,8 +68,8 @@ namespace CarStats.API.Controllers
                 string.IsNullOrWhiteSpace(request.Password))
                 return BadRequest("Full name, email and password are all required.");
 
-            if (request.Password.Length < 6)
-                return BadRequest("Password must be at least 6 characters.");
+            if (!PasswordPolicy.IsAcceptable(request.Password))
+                return BadRequest(PasswordPolicy.Requirements);
 
             if (!IsValidEmail(request.Email))
                 return BadRequest("Please enter a valid email address.");
