@@ -35,7 +35,8 @@ interface RouteResult {
   fuelCostILS:        number;
   trafficLabel:       string;
   trafficColor:       string;
-  originLatLng:       string;   // "lat,lng" — used for Open in Maps
+  /** "lat,lng" when taken from GPS, or the typed address. Used for Open in Maps. */
+  originLatLng:       string;
   destinationText:    string;   // raw text — used for Open in Maps
 }
 
@@ -101,6 +102,10 @@ export default function TripPlannerScreen() {
   const styles = useStyles();
   const [vehicle, setVehicle]         = useState<Vehicle | null>(null);
   const [destination, setDestination] = useState('');
+  // Empty means "use my current location". Typing a starting point makes the
+  // planner usable for a trip you aren't standing at the start of yet — and
+  // means one flaky GPS reading can no longer take the whole screen down.
+  const [origin, setOrigin]           = useState('');
   const [fuelInput, setFuelInput]     = useState('8.0');
   const [loading, setLoading]         = useState(false);
   const [result, setResult]           = useState<RouteResult | null>(null);
@@ -173,31 +178,33 @@ export default function TripPlannerScreen() {
     inputRef.current?.blur();
 
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setError('Location permission is required to calculate routes.');
-        setLoading(false);
-        return;
-      }
+      // A typed starting point skips location entirely — no permission
+      // prompt, no GPS, nothing to fail. Google accepts a plain address as an
+      // origin exactly like it does for the destination.
+      let originParam = origin.trim();
 
-      // Getting a position is its own failure mode — a device with GPS
-      // disabled or no fix yet throws here, which is not a network problem
-      // and must not be reported as one.
-      //
-      // A fresh fix can be slow or impossible indoors, in a car park, or on a
-      // cold GPS, so fall back to the last known position. For estimating a
-      // route it is a perfectly good starting point, and it is far better than
-      // refusing to plan the trip at all.
-      const coords = await getOriginCoords();
-      if (!coords) {
-        setError('Could not get your current location. Make sure location is turned on, then try again.');
-        setLoading(false);
-        return;
+      if (!originParam) {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          setError('Location permission is required, or type a starting point above.');
+          setLoading(false);
+          return;
+        }
+
+        // A fresh fix can be slow or impossible indoors, in a car park, or on
+        // a cold GPS, so getOriginCoords falls back to the last known
+        // position before giving up.
+        const coords = await getOriginCoords();
+        if (!coords) {
+          setError('Could not get your current location. Type a starting point above instead.');
+          setLoading(false);
+          return;
+        }
+        originParam = `${coords.latitude},${coords.longitude}`;
       }
-      const origin = `${coords.latitude},${coords.longitude}`;
 
       const { data } = await api.get('/navigation/route', {
-        params: { origin, destination: destination.trim() },
+        params: { origin: originParam, destination: destination.trim() },
       });
 
       if (data.status !== 'OK') {
@@ -224,7 +231,7 @@ export default function TripPlannerScreen() {
         fuelCostILS:        fuel.estimatedFuelL * FUEL_PRICE_PER_LITRE,
         trafficLabel:       tm.label,
         trafficColor:       tm.color,
-        originLatLng:       origin,
+        originLatLng:       originParam,
         destinationText:    destination.trim(),
       });
     } catch (err: any) {
@@ -291,9 +298,20 @@ export default function TripPlannerScreen() {
           </View>
         </View>
 
-        {/* ── Destination input + suggestions ── */}
+        {/* ── Route input ── */}
         <View style={styles.card}>
-          <Text style={styles.cardLabel}>DESTINATION</Text>
+          <Text style={styles.cardLabel}>STARTING POINT</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Leave empty to use my current location"
+            placeholderTextColor={c.Dashboard.textSecondary}
+            value={origin}
+            onChangeText={(t) => { setOrigin(t); setResult(null); setError(null); }}
+            autoCorrect={false}
+            returnKeyType="next"
+          />
+
+          <Text style={[styles.cardLabel, styles.cardLabelSpaced]}>DESTINATION</Text>
           <View>
             <TextInput
               ref={inputRef}
@@ -452,6 +470,8 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
   fuelCard:    { borderColor: c.Dashboard.accent + '44' },
   cardLabel:   { fontSize: 11, color: c.Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 14 },
+  // Separates the second field group from the one above it.
+  cardLabelSpaced: { marginTop: 4 },
 
   input:       {
     backgroundColor: c.Dashboard.bg,

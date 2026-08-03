@@ -40,23 +40,22 @@ for /f "delims=" %%B in ('"%ADB%" shell getprop sys.boot_completed 2^>nul') do s
 if not "%BOOTED%"=="1" goto waitloop
 echo      booted.
 
-echo === 3/4  Setting location to %LAT%, %LON% ===
-REM Sent repeatedly: Android's GPS only delivers a fix while something is
-REM asking for one, so a single shot can land before anything is listening.
-for /l %%i in (1,1,10) do (
-  "%ADB%" emu geo fix %LON% %LAT% >nul 2>&1
-  timeout /t 1 /nobreak >nul
-)
-echo      location set.
+echo === 3/4  Starting the GPS feed at %LAT%, %LON% ===
+REM The emulator's GPS only delivers a fix while an app is actively asking for
+REM one. A burst at startup lands nowhere, because nothing is listening yet -
+REM so this runs continuously in its own minimised window for the whole
+REM session, and a position is always ready the moment the app requests it.
+REM
+REM Closing that window stops the feed. Leave it alone until you are done.
+start "" /min "%~dp0gps-feed.bat" %LAT% %LON%
+echo      GPS feed running in a minimised window.
 
 echo === 4/4  Starting Expo ===
 echo.
-echo  Keep THIS window open - it is the dev server.
-echo    a = open on the emulator     r = reload     ? = all commands
+echo  Two windows must stay open: THIS one (dev server) and the minimised
+echo  "CarStats GPS feed" window. Closing either breaks the demo.
 echo.
-echo  If the trip planner ever says there is no route, run this in another
-echo  window to re-send the position:
-echo    "%ADB%" emu geo fix %LON% %LAT%
+echo    a = open on the emulator     r = reload     ? = all commands
 echo.
 cd /d "%PROJECT%"
 call npx expo start
