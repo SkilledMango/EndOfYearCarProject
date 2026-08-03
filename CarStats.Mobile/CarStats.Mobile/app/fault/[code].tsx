@@ -17,6 +17,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-nat
 import { Button, Card, Divider } from 'react-native-paper';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { DiagnosticCode, getDiagnosticCodes } from '@/services/api';
+import { AiFaultExplanation, explainFaultWithAi } from '@/services/dtcLookup';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { severityMeta } from '@/utils/severity';
 
@@ -27,6 +28,7 @@ export default function FaultDetailScreen() {
   const router = useRouter();
 
   const [dtc, setDtc]         = useState<DiagnosticCode | null>(null);
+  const [ai, setAi]           = useState<AiFaultExplanation | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed]   = useState(false);
 
@@ -36,7 +38,16 @@ export default function FaultDetailScreen() {
       try {
         const all   = await getDiagnosticCodes();
         const match = all.find(d => d.errorCode.toUpperCase() === (code ?? '').toUpperCase());
-        if (!cancelled) setDtc(match ?? null);
+        if (cancelled) return;
+
+        if (match) {
+          setDtc(match);
+        } else {
+          // Not in the dictionary — manufacturer-specific codes run into the
+          // thousands, so ask the model rather than showing a bare code.
+          const explained = await explainFaultWithAi(code ?? '');
+          if (!cancelled) setAi(explained);
+        }
       } catch {
         if (!cancelled) setFailed(true);
       } finally {
@@ -54,7 +65,9 @@ export default function FaultDetailScreen() {
     );
   }
 
-  const meta = severityMeta(c, dtc?.severity);
+  // Whichever source produced the explanation also sets the badge, so the
+  // header never contradicts the text underneath it.
+  const meta = severityMeta(c, dtc?.severity ?? ai?.severity);
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
@@ -76,6 +89,54 @@ export default function FaultDetailScreen() {
             </Text>
           </Card.Content>
         </Card>
+      ) : !dtc && ai ? (
+        <>
+          {/* Labelled before the content, not after: the reader should know
+              what they are looking at before they read it. */}
+          <View style={s.aiNotice}>
+            <Text style={s.aiNoticeText}>
+              ✨ Not in our dictionary — explained by AI. Treat it as a starting
+              point and confirm with a mechanic.
+            </Text>
+          </View>
+
+          <Card mode="elevated" style={s.card}>
+            <Card.Content>
+              <Text style={s.title}>{ai.humanTitle}</Text>
+              <Text style={s.body}>{ai.description}</Text>
+            </Card.Content>
+          </Card>
+
+          {!!ai.actionRequired && (
+            <Card mode="elevated" style={s.card}>
+              <Card.Content>
+                <Text style={s.sectionLabel}>WHAT TO DO</Text>
+                <Text style={s.body}>{ai.actionRequired}</Text>
+              </Card.Content>
+            </Card>
+          )}
+
+          {/* Deliberately no cost estimate: a made-up price is worse than none. */}
+          <Card mode="elevated" style={s.card}>
+            <Card.Content>
+              <Text style={s.sectionLabel}>ESTIMATED REPAIR COST</Text>
+              <Text style={s.body}>
+                No estimate for this code yet. A mechanic can price it once they
+                have read the fault on your car.
+              </Text>
+            </Card.Content>
+          </Card>
+
+          <Button
+            mode="contained"
+            icon="wrench"
+            onPress={() => router.push('/navigate')}
+            style={s.action}
+            contentStyle={s.actionContent}
+          >
+            Find a mechanic
+          </Button>
+        </>
       ) : !dtc ? (
         <Card mode="elevated" style={s.card}>
           <Card.Content>
@@ -154,6 +215,14 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   badge: { fontSize: 12, fontWeight: '800', letterSpacing: 1.5 },
 
   card:  { borderRadius: 14, marginBottom: 12 },
+
+  aiNotice: {
+    backgroundColor: c.Dashboard.accentSoft,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  aiNoticeText: { fontSize: 13, color: c.Dashboard.accentDeep, lineHeight: 19 },
   title: { fontSize: 18, fontWeight: '700', color: c.Dashboard.textPrimary, marginBottom: 8 },
   body:  { fontSize: 15, color: c.Dashboard.textSecondary, lineHeight: 22 },
 

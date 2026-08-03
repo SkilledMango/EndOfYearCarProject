@@ -10,8 +10,11 @@ namespace CarStats.API.Data
         /// </summary>
         public static async Task SeedDiagnosticCodesAsync(AppDbContext context)
         {
-            // Only skip if our real codes are already present
-        if (context.DiagnosticCodes.Any(d => d.ErrorCode == "P0300")) return;
+            // Deliberately NOT an early return on "some code already exists":
+            // that made the dictionary un-extendable, because a database seeded
+            // once would skip every code added later. Instead each code is
+            // inserted only if it is missing, so a deploy can grow the
+            // dictionary without touching what is already there.
 
             var codes = new List<DiagnosticCode>
             {
@@ -205,10 +208,20 @@ namespace CarStats.API.Data
                 },
             };
 
-            context.DiagnosticCodes.AddRange(codes);
+            // The hand-written set above plus the wider generic catalogue.
+            codes.AddRange(DtcCatalog.Codes);
+
+            var existing = context.DiagnosticCodes
+                .Select(d => d.ErrorCode)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var toAdd = codes.Where(c => !existing.Contains(c.ErrorCode)).ToList();
+            if (toAdd.Count == 0) return;
+
+            context.DiagnosticCodes.AddRange(toAdd);
             await context.SaveChangesAsync();
 
-            Console.WriteLine($"[DbSeeder] Seeded {codes.Count} OBD-II diagnostic codes.");
+            Console.WriteLine($"[DbSeeder] Added {toAdd.Count} OBD-II diagnostic codes ({codes.Count} defined).");
         }
     }
 }
