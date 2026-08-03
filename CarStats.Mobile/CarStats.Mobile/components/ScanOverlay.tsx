@@ -42,6 +42,11 @@ export default function ScanOverlay({
 }: Props) {
   const { colors: c } = useTheme();
   const styles = useStyles();
+
+  // The car's own reading wins; the baseline estimate is the fallback for
+  // cars that cannot report fuel level over OBD-II.
+  const fuelPct = liveData?.fuelPercent ?? estimatedFuelPct;
+
   // Simulated progress while the hardware scan runs (the design's own script
   // does the same) — creeps to 90%, then snaps to 100% when results land.
   const [progress, setProgress] = useState(0);
@@ -117,8 +122,13 @@ export default function ScanOverlay({
               value={liveData ? String(liveData.speedKmh) : '—'} unit="km/h" />
             <Tile icon="thermometer" label="COOLANT"
               value={liveData ? `${liveData.coolantCelsius}°C` : '—'} />
+            {/* Prefers the car's own reading and falls back to the estimate.
+                This used to show only the estimate, so any car that actually
+                reports fuel over OBD displayed a dash here while the Garage
+                gauge showed the real number — the estimate is deliberately
+                null whenever a real reading exists. */}
             <Tile icon="fuelpump.fill" label="FUEL"
-              value={estimatedFuelPct != null ? `${Math.round(estimatedFuelPct)}%` : '—'} />
+              value={fuelPct != null ? `${Math.round(fuelPct)}%` : '—'} />
           </View>
 
           {/* ── Found faults ── */}
