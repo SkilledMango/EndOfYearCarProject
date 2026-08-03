@@ -14,8 +14,16 @@
 
 import { DtcScanResult, LiveData, ScannerStatus, VinResult } from './scanner';
 
-/** Codes that exist in the seeded dictionary, so translations and costs resolve. */
-const DEMO_CODES = ['P0300', 'P0420'];
+/**
+ * Two codes from the seeded dictionary and one that is deliberately not in it.
+ *
+ * P0300 (red) and P0420 (green) show curated entries with real descriptions
+ * and shekel estimates, and between them exercise the severity styling.
+ * P1450 is manufacturer-specific — Ford's EVAP system — and no generic
+ * dictionary carries it, so it falls through to the AI explanation. One scan
+ * therefore demonstrates both halves of how unknown codes are handled.
+ */
+const DEMO_CODES = ['P0300', 'P0420', 'P1450'];
 
 const START = Date.now();
 
