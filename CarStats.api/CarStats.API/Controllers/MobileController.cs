@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using CarStats.API.Data;
@@ -19,6 +19,12 @@ namespace CarStats.API.Controllers
     [Authorize]
     public class MobileController : ControllerBase
     {
+        /// <summary>
+        /// How long the same code counts as the same ongoing fault rather than
+        /// a new one. A car re-reports an active fault on every scan.
+        /// </summary>
+        private static readonly TimeSpan DuplicateFaultWindow = TimeSpan.FromHours(24);
+
         private readonly AppDbContext _context;
 
         public MobileController(AppDbContext context)
@@ -51,28 +57,46 @@ namespace CarStats.API.Controllers
                     v.Id == request.VehicleId.Value && v.AppUserId == request.UserId))
                 request.VehicleId = null;
 
-            // 1. Log the raw event, linking it to the user and specific vehicle
-            var newEvent = new VehicleEvent
-            {
-                RawErrorCode = request.RawCode.ToUpper(),
-                Timestamp = DateTime.UtcNow,
-                AppUserId = request.UserId,
-                VehicleId = request.VehicleId
-            };
-            _context.VehicleEvents.Add(newEvent);
+            var rawCode = request.RawCode.ToUpper();
 
-            // Keep the user's lifetime fault counter in sync
-            if (request.UserId.HasValue)
+            // 1. Log the raw event — unless this same fault was already logged
+            //    recently.
+            //
+            //    A car reports an active fault on every scan, so without this a
+            //    driver checking their car three times logs the same problem
+            //    three times and their fault count climbs for doing nothing.
+            //    One occurrence per code per day is the honest reading: an
+            //    ongoing fault is one fault, however often you look at it.
+            var since = DateTime.UtcNow - DuplicateFaultWindow;
+            var alreadyLogged = await _context.VehicleEvents.AnyAsync(e =>
+                e.RawErrorCode == rawCode &&
+                e.Timestamp >= since &&
+                e.AppUserId == request.UserId &&
+                e.VehicleId == request.VehicleId);
+
+            if (!alreadyLogged)
             {
-                var user = await _context.Users.FindAsync(request.UserId.Value);
-                if (user != null) user.TotalFaultsLogged++;
+                _context.VehicleEvents.Add(new VehicleEvent
+                {
+                    RawErrorCode = rawCode,
+                    Timestamp    = DateTime.UtcNow,
+                    AppUserId    = request.UserId,
+                    VehicleId    = request.VehicleId,
+                });
+
+                // Keep the user's lifetime fault counter in sync
+                if (request.UserId.HasValue)
+                {
+                    var user = await _context.Users.FindAsync(request.UserId.Value);
+                    if (user != null) user.TotalFaultsLogged++;
+                }
+
+                await _context.SaveChangesAsync();
             }
-
-            await _context.SaveChangesAsync();
 
             // 2. Look up the human-readable translation from the dictionary
             var translation = await _context.DiagnosticCodes
-                .FirstOrDefaultAsync(d => d.ErrorCode == newEvent.RawErrorCode);
+                .FirstOrDefaultAsync(d => d.ErrorCode == rawCode);
 
             // 3. If we don't have a translation yet, return a generic yellow warning
             if (translation == null)
@@ -80,7 +104,7 @@ namespace CarStats.API.Controllers
                 return Ok(new
                 {
                     status = "Logged",
-                    message = $"Code {newEvent.RawErrorCode} detected. Please contact support or check the manual.",
+                    message = $"Code {rawCode} detected. Please contact support or check the manual.",
                     severity = 2
                 });
             }

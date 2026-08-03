@@ -190,6 +190,15 @@ export default function HomeScreen() {
     await checkScanner();
   }, [demo, checkScanner]);
 
+  // Ends the session deliberately. The adapter stays powered — this just stops
+  // this app talking to it, which is what a driver means by "disconnect".
+  const disconnect = useCallback(() => {
+    setScannerOnline(false);
+    setScannerStatus(null);
+    setLiveData(null);
+    setLiveError(false);
+  }, []);
+
   const pollLive = useCallback(async () => {
     if (!scannerOnline) return;
     try {
@@ -498,6 +507,7 @@ export default function HomeScreen() {
         demo={demo}
         onRetry={checkScanner}
         onToggleDemo={toggleDemo}
+        onDisconnect={disconnect}
       />
 
       {/* ── Live gauges ── */}

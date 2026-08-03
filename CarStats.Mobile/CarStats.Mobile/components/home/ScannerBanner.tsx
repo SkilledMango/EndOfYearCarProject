@@ -15,6 +15,7 @@ export default function ScannerBanner({
   demo,
   onRetry,
   onToggleDemo,
+  onDisconnect,
 }: {
   online: boolean;
   status: ScannerStatus | null;
@@ -22,6 +23,8 @@ export default function ScannerBanner({
   demo: boolean;
   onRetry: () => void;
   onToggleDemo: () => void;
+  /** Ends the session with the adapter without unplugging it. */
+  onDisconnect: () => void;
 }) {
   const { colors: c } = useTheme();
   const bannerStyles = useBannerStyles();
@@ -58,7 +61,11 @@ export default function ScannerBanner({
         <Pressable onPress={onToggleDemo} style={bannerStyles.retryBtn}>
           <Text style={bannerStyles.retryText}>EXIT DEMO</Text>
         </Pressable>
-      ) : !online && (
+      ) : online ? (
+        <Pressable onPress={onDisconnect} style={bannerStyles.retryBtn}>
+          <Text style={bannerStyles.retryText}>DISCONNECT</Text>
+        </Pressable>
+      ) : (
         <View style={bannerStyles.actions}>
           <Pressable onPress={onRetry} style={bannerStyles.retryBtn}>
             <Text style={bannerStyles.retryText}>RETRY</Text>
