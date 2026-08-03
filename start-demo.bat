@@ -41,12 +41,13 @@ if not "%BOOTED%"=="1" goto waitloop
 echo      booted.
 
 echo === 3/4  Starting the GPS feed at %LAT%, %LON% ===
-REM The emulator's GPS only delivers a fix while an app is actively asking for
-REM one. A burst at startup lands nowhere, because nothing is listening yet -
-REM so this runs continuously in its own minimised window for the whole
-REM session, and a position is always ready the moment the app requests it.
+REM Runs continuously in its own minimised window: the emulator only hands a
+REM GPS fix to an app that is actively asking, so a single burst at startup
+REM lands nowhere.
 REM
-REM Closing that window stops the feed. Leave it alone until you are done.
+REM Only two things still depend on it - "Use my current location" in Settings
+REM and "Near me" on the Mechanics tab. The rest of the app takes typed
+REM addresses, so this is a safety net rather than a requirement.
 start "" /min "%~dp0gps-feed.bat" %LAT% %LON%
 echo      GPS feed running in a minimised window.
 

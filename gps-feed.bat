@@ -4,10 +4,15 @@ REM  CarStats - emulator GPS feed
 REM ===========================================================================
 REM  Keeps sending a fixed position to the running emulator.
 REM
-REM  Why this has to run continuously: the emulator's GPS only hands a fix to
-REM  an app that is actively asking for one. Sending the position once at
-REM  startup lands nowhere, because nothing is listening yet - so the app later
-REM  asks, finds nothing, and reports that it cannot get your location.
+REM  Why it runs continuously rather than once: the emulator's GPS only hands a
+REM  fix to an app that is actively asking for one, so a single shot at startup
+REM  lands nowhere and the app later finds nothing.
+REM
+REM  What still needs it: only "Use my current location" in Settings, and the
+REM  "Near me" side of the Mechanics switch. Everything else in the app takes a
+REM  typed address instead - the trip planner's starting point, the home
+REM  address, and "Near home" - so closing this window degrades those two
+REM  buttons and nothing else.
 REM
 REM  Started automatically by start-demo.bat. Leave it running for the whole
 REM  demo; closing this window stops the feed.
