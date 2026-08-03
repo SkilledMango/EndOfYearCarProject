@@ -96,14 +96,20 @@ export default function HistoryScreen() {
               </View>
 
               <Text style={styles.humanTitle}>
-                {ev.translation?.humanTitle ?? 'Unknown fault code'}
+                {ev.translation?.humanTitle ?? 'Not in our dictionary'}
               </Text>
 
               {ev.translation?.description ? (
                 <Text style={styles.description} numberOfLines={2}>
                   {ev.translation.description}
                 </Text>
-              ) : null}
+              ) : (
+                // Same promise the scan card makes: there is an explanation
+                // behind this row, it just is not a curated one.
+                <Text style={[styles.description, { color: sev.color }]} numberOfLines={2}>
+                  ✨ Tap for an AI explanation of this code.
+                </Text>
+              )}
 
               <View style={styles.cardFooter}>
                 <Text style={styles.timestamp}>{formatDate(ev.timestamp)}</Text>

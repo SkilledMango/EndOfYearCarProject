@@ -36,20 +36,39 @@ export default function DtcResultCard({
     >
       <View style={styles.resultHeader}>
         <Text style={[styles.resultBadge, { color: meta.color }]}>{meta.label}</Text>
-        {t && <Text style={styles.resultCode}>{t.errorCode}</Text>}
+        {/* The code is worth showing whether or not we have an entry for it —
+            it is what a mechanic will ask for. */}
+        {!!code && <Text style={styles.resultCode}>{code}</Text>}
       </View>
-      <Text style={styles.resultTitle}>{t?.humanTitle ?? 'Unknown code detected'}</Text>
-      <Text style={styles.resultBody}>
-        {t?.description ?? result.message ?? 'Please contact support or check your manual.'}
+
+      <Text style={styles.resultTitle}>
+        {t?.humanTitle ?? 'Not in our dictionary'}
       </Text>
-      {t && (
+
+      <Text style={styles.resultBody}>
+        {t?.description
+          ?? (code
+            ? 'This code is not one of the common ones we cover. Tap to see an AI explanation of what it means for your car.'
+            : result.message
+            ?? 'Please contact support or check your manual.')}
+      </Text>
+
+      {t ? (
         <View style={[styles.costPill, { borderColor: meta.color }]}>
           <Text style={styles.costLabel}>EST. REPAIR COST</Text>
           <Text style={[styles.costValue, { color: meta.color }]}>
             ₪{t.estimatedCostMin} – ₪{t.estimatedCostMax}
           </Text>
         </View>
-      )}
+      ) : code ? (
+        // Says plainly that there is more behind the card. Without it the
+        // card reads as a dead end, which is what it used to be.
+        <View style={[styles.costPill, { borderColor: meta.color }]}>
+          <Text style={[styles.costValue, styles.tapHint, { color: meta.color }]}>
+            ✨ TAP FOR AI EXPLANATION
+          </Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -77,4 +96,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
   costLabel:             { fontSize: 10, color: c.Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 4 },
   costValue:             { fontSize: 22, fontWeight: '700' },
+  // Same pill as the cost, but this is a label rather than a number.
+  tapHint:               { fontSize: 13, fontWeight: '800', letterSpacing: 1 },
 }));
