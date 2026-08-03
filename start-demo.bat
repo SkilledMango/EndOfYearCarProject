@@ -52,12 +52,42 @@ start "" /min "%~dp0gps-feed.bat" %LAT% %LON%
 echo      GPS feed running in a minimised window.
 
 echo === 4/4  Starting Expo ===
-echo.
-echo  Keep THIS window open - it is the dev server, and closing it stops the app.
-echo  The minimised "CarStats GPS feed" window only affects "Use my current
-echo  location" and "Near me"; everything else works without it.
-echo.
-echo    a = open on the emulator     r = reload     ? = all commands
-echo.
+REM The dev server runs in its OWN window rather than this one. Launched with
+REM `call` from inside a batch file its keyboard shortcuts do not work - the
+REM terminal is not interactive in that context - so pressing "a" appeared to
+REM do nothing. In its own cmd window the shortcuts behave normally.
 cd /d "%PROJECT%"
-call npx expo start
+start "CarStats dev server" cmd /k npx expo start
+
+echo      waiting for the bundler to come up...
+:waitmetro
+timeout /t 3 /nobreak >nul
+netstat -an | find ":8081" | find "LISTENING" >nul
+if errorlevel 1 goto waitmetro
+REM Give Metro a moment past opening the port before sending it a client.
+timeout /t 5 /nobreak >nul
+
+REM "localhost" on the emulator means the emulator, not this PC, so the port
+REM has to be forwarded first. Expo does this itself when you press "a"; since
+REM we are opening the app directly, we do it here. Using a forward rather than
+REM this machine's LAN IP means the script keeps working on any network.
+"%ADB%" reverse tcp:8081 tcp:8081 >nul 2>&1
+
+echo      opening the app on the emulator...
+"%ADB%" shell am start -a android.intent.action.VIEW -d "exp://localhost:8081" >nul 2>&1
+
+echo.
+echo  ============================================================
+echo   Ready. The app is loading on the emulator.
+echo.
+echo   Three windows are now open:
+echo     - "CarStats dev server"  : the bundler. Closing it stops the app.
+echo                                a = reopen on emulator, r = reload
+echo     - "CarStats GPS feed"    : minimised. Only affects "Use my current
+echo                                location" and "Near me".
+echo     - the emulator itself
+echo.
+echo   This window has finished its work and can be closed.
+echo  ============================================================
+echo.
+pause
