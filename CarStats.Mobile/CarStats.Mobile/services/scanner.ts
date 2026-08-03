@@ -12,6 +12,7 @@
  */
 
 import { fetchWithTimeout } from './http';
+import { demoDtcs, demoLiveData, demoStatus, demoVin } from './demoScanner';
 
 // Fixed IP of the ESP32 scanner — static IP assigned in firmware.
 // The ESP32 connects to the phone's hotspot, so no WiFi switching needed.
@@ -55,6 +56,25 @@ export interface VinResult {
   simMode: boolean;
 }
 
+// ─── Demo connection ──────────────────────────────────────────────────────────
+//
+// When on, every function below returns simulated readings instead of calling
+// the adapter. Deliberately module state rather than a React context: these
+// are plain async functions called from several screens, and threading a
+// provider through all of them to flip one boolean would be worse.
+
+let demoMode = false;
+
+/** Turns the demo connection on or off. */
+export function setDemoMode(on: boolean): void {
+  demoMode = on;
+}
+
+/** True while the demo connection is standing in for the adapter. */
+export function isDemoMode(): boolean {
+  return demoMode;
+}
+
 // ─── API functions ────────────────────────────────────────────────────────────
 
 /**
@@ -62,6 +82,7 @@ export interface VinResult {
  * Throws if the adapter is unreachable.
  */
 export async function getScannerStatus(): Promise<ScannerStatus> {
+  if (demoMode) return demoStatus();
   const res = await fetchWithTimeout(`${SCANNER_BASE_URL}/status`, FETCH_TIMEOUT_MS);
   if (!res.ok) throw new Error(`Scanner /status returned ${res.status}`);
   return res.json() as Promise<ScannerStatus>;
@@ -73,6 +94,7 @@ export async function getScannerStatus(): Promise<ScannerStatus> {
  * Throws if the adapter is unreachable.
  */
 export async function getLiveData(): Promise<LiveData> {
+  if (demoMode) return demoLiveData();
   const res = await fetchWithTimeout(`${SCANNER_BASE_URL}/live-data`, FETCH_TIMEOUT_MS);
   if (!res.ok) throw new Error(`Scanner /live-data returned ${res.status}`);
   return res.json() as Promise<LiveData>;
@@ -84,6 +106,7 @@ export async function getLiveData(): Promise<LiveData> {
  * Throws if the adapter is unreachable.
  */
 export async function scanDtcs(): Promise<DtcScanResult> {
+  if (demoMode) return demoDtcs();
   const res = await fetchWithTimeout(`${SCANNER_BASE_URL}/dtcs`, FETCH_TIMEOUT_MS);
   if (!res.ok) throw new Error(`Scanner /dtcs returned ${res.status}`);
   return res.json() as Promise<DtcScanResult>;
@@ -95,6 +118,7 @@ export async function scanDtcs(): Promise<DtcScanResult> {
  * Never throws — VIN detection is best-effort.
  */
 export async function getVehicleVin(): Promise<VinResult> {
+  if (demoMode) return demoVin();
   const res = await fetchWithTimeout(`${SCANNER_BASE_URL}/vin`, FETCH_TIMEOUT_MS);
   if (!res.ok) throw new Error(`Scanner /vin returned ${res.status}`);
   return res.json() as Promise<VinResult>;
@@ -105,6 +129,7 @@ export async function getVehicleVin(): Promise<VinResult> {
  * FETCH_TIMEOUT_MS, false otherwise. Never throws.
  */
 export async function isScannerReachable(): Promise<boolean> {
+  if (demoMode) return true;
   try {
     const status = await getScannerStatus();
     return !!status.device;

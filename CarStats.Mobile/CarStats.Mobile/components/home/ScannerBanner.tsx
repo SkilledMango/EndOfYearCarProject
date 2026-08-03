@@ -12,22 +12,39 @@ import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 export default function ScannerBanner({
   online,
   status,
+  demo,
   onRetry,
+  onToggleDemo,
 }: {
   online: boolean;
   status: ScannerStatus | null;
+  /** True while the demo connection is standing in for the adapter. */
+  demo: boolean;
   onRetry: () => void;
+  onToggleDemo: () => void;
 }) {
   const { colors: c } = useTheme();
   const bannerStyles = useBannerStyles();
+
+  const dotColor = demo   ? c.Severity.yellow
+                 : online ? c.Severity.green
+                 : c.Severity.unknown;
+
   return (
-    <View style={[bannerStyles.row, online ? bannerStyles.online : bannerStyles.offline]}>
-      <View style={[bannerStyles.dot, { backgroundColor: online ? c.Severity.green : c.Severity.unknown }]} />
+    <View style={[
+      bannerStyles.row,
+      demo ? bannerStyles.demo : online ? bannerStyles.online : bannerStyles.offline,
+    ]}>
+      <View style={[bannerStyles.dot, { backgroundColor: dotColor }]} />
       <View style={{ flex: 1 }}>
         <Text style={bannerStyles.title}>
-          {online ? 'OBD-II Adapter Connected' : 'Adapter Not Found'}
+          {demo ? 'Demo Connection' : online ? 'OBD-II Adapter Connected' : 'Adapter Not Found'}
         </Text>
-        {online && status ? (
+        {/* Demo readings are always labelled as such — nobody should be able
+            to mistake this screen for data off a real car. */}
+        {demo ? (
+          <Text style={bannerStyles.sub}>Simulated readings — no car connected</Text>
+        ) : online && status ? (
           <Text style={bannerStyles.sub}>
             {status.simMode ? '⚠ Simulation mode — no car connected' : '✓ Reading live car data'}
             {'  ·  Uptime '}{Math.floor(status.uptimeSeconds / 60)}m
@@ -36,10 +53,20 @@ export default function ScannerBanner({
           <Text style={bannerStyles.sub}>Looking for carstats-scanner.local on your network…</Text>
         )}
       </View>
-      {!online && (
-        <Pressable onPress={onRetry} style={bannerStyles.retryBtn}>
-          <Text style={bannerStyles.retryText}>RETRY</Text>
+
+      {demo ? (
+        <Pressable onPress={onToggleDemo} style={bannerStyles.retryBtn}>
+          <Text style={bannerStyles.retryText}>EXIT DEMO</Text>
         </Pressable>
+      ) : !online && (
+        <View style={bannerStyles.actions}>
+          <Pressable onPress={onRetry} style={bannerStyles.retryBtn}>
+            <Text style={bannerStyles.retryText}>RETRY</Text>
+          </Pressable>
+          <Pressable onPress={onToggleDemo} style={bannerStyles.retryBtn}>
+            <Text style={bannerStyles.retryText}>DEMO</Text>
+          </Pressable>
+        </View>
       )}
     </View>
   );
@@ -57,6 +84,8 @@ const useBannerStyles = createThemedStyles((c) => StyleSheet.create({
   },
   online:    { borderColor: c.Severity.green  + '55', backgroundColor: c.Severity.green  + '11' },
   offline:   { borderColor: c.Dashboard.cardBorder,   backgroundColor: c.Dashboard.card },
+  demo:      { borderColor: c.Severity.yellow + '66', backgroundColor: c.SeveritySoft.yellow },
+  actions:   { flexDirection: 'row', gap: 8 },
   dot:       { width: 8, height: 8, borderRadius: 4 },
   title:     { fontSize: 13, fontWeight: '600', color: c.Dashboard.textPrimary },
   sub:       { fontSize: 11, color: c.Dashboard.textSecondary, marginTop: 2 },

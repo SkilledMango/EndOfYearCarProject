@@ -30,6 +30,7 @@ import {
   getVehicleVin,
   isScannerReachable,
   scanDtcs,
+  setDemoMode,
 } from '@/services/scanner';
 import { decodeVin, VinDecodeResult, vinMatchesVehicle } from '@/services/vindecode';
 import { sendFaultAlert } from '@/services/notifications';
@@ -76,6 +77,9 @@ export default function HomeScreen() {
 
   // ── Scanner state ──
   const [scannerOnline, setScannerOnline]   = useState(false);
+  // Demo connection: simulated readings for showing the diagnostics flow
+  // without the ESP32 adapter on the network. Always user-initiated.
+  const [demo, setDemo]                     = useState(false);
   const [scannerStatus, setScannerStatus]   = useState<ScannerStatus | null>(null);
   const [liveData, setLiveData]             = useState<LiveData | null>(null);
   const [liveError, setLiveError]           = useState(false);
@@ -172,6 +176,19 @@ export default function HomeScreen() {
       } catch { /* ignore */ }
     }
   }, []);
+
+  // Flipping demo mode re-runs the connection check, so the banner, the
+  // gauges and the scan button all follow from the same state as a real
+  // adapter appearing or disappearing.
+  const toggleDemo = useCallback(async () => {
+    const next = !demo;
+    setDemo(next);
+    setDemoMode(next);
+    setLiveData(null);
+    setDtcResults([]);
+    setScanError(null);
+    await checkScanner();
+  }, [demo, checkScanner]);
 
   const pollLive = useCallback(async () => {
     if (!scannerOnline) return;
@@ -475,7 +492,13 @@ export default function HomeScreen() {
       </Pressable>
 
       {/* ── OBD-II Adapter status banner ── */}
-      <ScannerBanner online={scannerOnline} status={scannerStatus} onRetry={checkScanner} />
+      <ScannerBanner
+        online={scannerOnline}
+        status={scannerStatus}
+        demo={demo}
+        onRetry={checkScanner}
+        onToggleDemo={toggleDemo}
+      />
 
       {/* ── Live gauges ── */}
       {scannerOnline && liveData && !liveError && (
