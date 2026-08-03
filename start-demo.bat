@@ -11,14 +11,13 @@ REM  California) and silently overrides anything you set. Routing from
 REM  California to an Israeli address returns no result, which the app reports
 REM  as a routing failure. Cold booting is what makes the location stick.
 REM
-REM  TO USE YOUR OWN ADDRESS: change LAT and LON below. Get the numbers by
-REM  right-clicking your address in Google Maps - the first is latitude, the
-REM  second is longitude.
+REM  TO CHANGE THE STARTING POINT: open Google Maps, right-click the spot, and
+REM  the menu shows two numbers - latitude first, longitude second.
 REM ===========================================================================
 
-REM --- Tel Aviv city centre. Replace with your own coordinates. ---
-set LAT=32.0853
-set LON=34.7818
+REM --- Home address, Hadera. ---
+set LAT=32.4332
+set LON=34.9318
 
 set AVD=Medium_Phone_API_36.1
 set SDK=%LOCALAPPDATA%\Android\Sdk

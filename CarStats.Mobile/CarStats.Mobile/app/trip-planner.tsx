@@ -65,6 +65,35 @@ function calcFuelWithTraffic(
   return { baseFuelL, estimatedFuelL, extraFuelL: estimatedFuelL - baseFuelL, trafficRatio };
 }
 
+/**
+ * Best available position for the route origin, or null if the device can
+ * offer none.
+ *
+ * Tries for a current fix first, then falls back to the last known one. The
+ * fallback matters more than it looks: getCurrentPositionAsync rejects
+ * outright when no fresh fix can be obtained — indoors, in a car park, or on
+ * a GPS that has just been woken — and an origin from a few minutes ago
+ * changes a route estimate by almost nothing.
+ */
+async function getOriginCoords(): Promise<{ latitude: number; longitude: number } | null> {
+  try {
+    const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    return loc.coords;
+  } catch (err) {
+    console.warn('[trip-planner] no fresh fix, trying last known position', err);
+  }
+
+  try {
+    const last = await Location.getLastKnownPositionAsync();
+    if (last) return last.coords;
+    console.warn('[trip-planner] no last known position either');
+  } catch (err) {
+    console.warn('[trip-planner] last known position failed', err);
+  }
+
+  return null;
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function TripPlannerScreen() {
   const { user: authUser }            = useAuth();
@@ -154,16 +183,18 @@ export default function TripPlannerScreen() {
       // Getting a position is its own failure mode — a device with GPS
       // disabled or no fix yet throws here, which is not a network problem
       // and must not be reported as one.
-      let origin: string;
-      try {
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        origin = `${loc.coords.latitude},${loc.coords.longitude}`;
-      } catch (locErr) {
-        console.warn('[trip-planner] could not get current position', locErr);
+      //
+      // A fresh fix can be slow or impossible indoors, in a car park, or on a
+      // cold GPS, so fall back to the last known position. For estimating a
+      // route it is a perfectly good starting point, and it is far better than
+      // refusing to plan the trip at all.
+      const coords = await getOriginCoords();
+      if (!coords) {
         setError('Could not get your current location. Make sure location is turned on, then try again.');
         setLoading(false);
         return;
       }
+      const origin = `${coords.latitude},${coords.longitude}`;
 
       const { data } = await api.get('/navigation/route', {
         params: { origin, destination: destination.trim() },
