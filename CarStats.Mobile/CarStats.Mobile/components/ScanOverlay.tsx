@@ -210,7 +210,13 @@ function FaultRow({ result }: { result: ReportDtcResponse }) {
   const code = result.translation?.errorCode
     ?? result.message?.match(/Code (\w+)/)?.[1]
     ?? 'Unknown';
-  const desc = result.translation?.humanTitle ?? result.message ?? 'No description available';
+  // The API's fallback text tells the user to check the manual, which was
+  // written before unknown codes got an AI explanation. Say what the app can
+  // actually do instead — the same promise the result cards make.
+  const desc = result.translation?.humanTitle
+    ?? (code !== 'Unknown'
+      ? 'Not in our dictionary — tap the fault below for an AI explanation.'
+      : result.message ?? 'No description available');
   const bg   = red ? c.SeveritySoft.red : c.SeveritySoft.yellow;
   const ink  = red ? c.Scan.errorDeep : c.Scan.amberInk;
 
