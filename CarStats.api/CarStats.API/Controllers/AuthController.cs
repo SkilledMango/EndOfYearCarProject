@@ -38,6 +38,12 @@ namespace CarStats.API.Controllers
     {
         private const int CodeLifetimeMinutes = 15;
 
+        /// <summary>Wrong codes allowed before a fresh one must be requested.</summary>
+        private const int MaxVerificationAttempts = 5;
+
+        /// <summary>Minimum gap between verification emails to one account.</summary>
+        private static readonly TimeSpan ResendCooldown = TimeSpan.FromSeconds(60);
+
         private readonly AppDbContext _context;
         private readonly IEmailService _email;
         private readonly ITokenService _tokens;
@@ -114,20 +120,36 @@ namespace CarStats.API.Controllers
             if (user == null)
                 return NotFound("No account found for that email.");
 
-            // Already verified — treat as success (idempotent), log them in.
+            // Already verified — say so, but do NOT hand out a session.
+            //
+            // This previously returned Session(user) for idempotency, which
+            // made the endpoint an authentication bypass: it is [AllowAnonymous],
+            // so anyone who knew a verified account's email address could post
+            // any code at all and receive a valid token for it. Verification
+            // proves control of an inbox; it is not a substitute for a password.
             if (user.IsEmailVerified)
-                return Session(user);
+                return BadRequest("This email is already verified. Please log in with your password.");
 
             if (user.VerificationCodeExpiresAt == null || user.VerificationCodeExpiresAt < DateTime.UtcNow)
                 return BadRequest("That code has expired. Request a new one.");
 
+            // Cap the guesses. Six digits is a million combinations, which is
+            // nothing to a script running for the code's whole lifetime.
+            if (user.VerificationAttempts >= MaxVerificationAttempts)
+                return BadRequest("Too many incorrect codes. Request a new one.");
+
             if (user.EmailVerificationCode != request.Code.Trim())
+            {
+                user.VerificationAttempts++;
+                await _context.SaveChangesAsync();
                 return BadRequest("Incorrect code. Please check and try again.");
+            }
 
             // Success — mark verified and clear the code.
             user.IsEmailVerified           = true;
             user.EmailVerificationCode     = null;
             user.VerificationCodeExpiresAt = null;
+            user.VerificationAttempts      = 0;
             await _context.SaveChangesAsync();
 
             return Session(user);
@@ -148,6 +170,17 @@ namespace CarStats.API.Controllers
 
             if (user.IsEmailVerified)
                 return BadRequest("This email is already verified.");
+
+            // Throttle. This endpoint is anonymous and sends a real email every
+            // time, so without a limit it is both an inbox-flooding tool aimed
+            // at any registered address and a fast way to burn the free email
+            // quota the whole signup flow depends on.
+            //
+            // The issue time is derived from the expiry rather than stored
+            // separately — one less column for the same information.
+            var issuedAt = user.VerificationCodeExpiresAt?.AddMinutes(-CodeLifetimeMinutes);
+            if (issuedAt != null && DateTime.UtcNow - issuedAt < ResendCooldown)
+                return BadRequest("A code was just sent. Please wait a minute before asking for another.");
 
             await IssueVerificationCodeAsync(user);
             return Ok(new { message = "A new code has been sent." });
@@ -197,6 +230,9 @@ namespace CarStats.API.Controllers
         {
             user.EmailVerificationCode     = GenerateCode();
             user.VerificationCodeExpiresAt = DateTime.UtcNow.AddMinutes(CodeLifetimeMinutes);
+            // A fresh code gets a fresh allowance, otherwise a locked-out user
+            // could never recover.
+            user.VerificationAttempts      = 0;
             await _context.SaveChangesAsync();
             await _email.SendVerificationCodeAsync(user.Email, user.FullName, user.EmailVerificationCode!);
         }

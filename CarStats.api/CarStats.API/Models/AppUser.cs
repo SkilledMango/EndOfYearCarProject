@@ -47,6 +47,14 @@ namespace CarStats.API.Models
         [JsonIgnore]
         public DateTime? VerificationCodeExpiresAt { get; set; }
 
+        /// <summary>
+        /// Wrong codes entered against the current code. A six-digit code is
+        /// only a million guesses, so without a cap it can simply be tried
+        /// until it hits. Reset whenever a new code is issued.
+        /// </summary>
+        [JsonIgnore]
+        public int VerificationAttempts { get; set; } = 0;
+
         // --- RELATIONSHIPS ---
         public List<Vehicle> Vehicles { get; set; } = new();
         public List<DiagnosticCode> SavedCodes { get; set; } = new();
