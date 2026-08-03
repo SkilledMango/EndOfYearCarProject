@@ -151,8 +151,19 @@ export default function TripPlannerScreen() {
         return;
       }
 
-      const loc    = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const origin = `${loc.coords.latitude},${loc.coords.longitude}`;
+      // Getting a position is its own failure mode — a device with GPS
+      // disabled or no fix yet throws here, which is not a network problem
+      // and must not be reported as one.
+      let origin: string;
+      try {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        origin = `${loc.coords.latitude},${loc.coords.longitude}`;
+      } catch (locErr) {
+        console.warn('[trip-planner] could not get current position', locErr);
+        setError('Could not get your current location. Make sure location is turned on, then try again.');
+        setLoading(false);
+        return;
+      }
 
       const { data } = await api.get('/navigation/route', {
         params: { origin, destination: destination.trim() },
@@ -185,8 +196,18 @@ export default function TripPlannerScreen() {
         originLatLng:       origin,
         destinationText:    destination.trim(),
       });
-    } catch {
-      setError('Network error. Check your internet connection and try again.');
+    } catch (err: any) {
+      // Log the real cause — this used to be a bare catch reporting "network
+      // error" for everything, which sent debugging in the wrong direction.
+      console.warn('[trip-planner] route request failed', err);
+      const serverStatus = err?.response?.status;
+      setError(
+        serverStatus === 503
+          ? 'The route service is not configured on the server.'
+          : serverStatus
+            ? `The server rejected the route request (${serverStatus}).`
+            : 'Network error. Check your internet connection and try again.',
+      );
     } finally {
       setLoading(false);
     }
