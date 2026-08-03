@@ -58,7 +58,10 @@ export default function MechanicFinderScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [myPos, setMyPos]           = useState<{ lat: number; lng: number } | null>(null);
   const [usedFallback, setUsedFallback] = useState(false);
-  const [origin, setOrigin]         = useState<SearchOrigin>('current');
+  // Starts on 'home' when one is saved: reading a stored address is instant,
+  // while a GPS fix can stall for seconds or fail outright and leave the screen
+  // spinning. The user can switch to 'current' whenever they want.
+  const [origin, setOrigin]         = useState<SearchOrigin>('home');
   const [hasHome, setHasHome]       = useState(false);
   // Phone numbers already looked up this session (placeId → phone | null)
   const phoneCache = useRef<Record<string, string | null>>({});
@@ -78,7 +81,12 @@ export default function MechanicFinderScreen() {
         if (prefs.homeLat != null && prefs.homeLng != null) {
           pos = { lat: prefs.homeLat, lng: prefs.homeLng };
         }
-      } else {
+      }
+
+      // Reached in 'current' mode, and also when 'home' was asked for but none
+      // is saved — otherwise a user who has never set a home would jump
+      // straight to the Tel Aviv fallback without their location being tried.
+      if (!pos) {
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status === 'granted') {

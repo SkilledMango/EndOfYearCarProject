@@ -294,7 +294,9 @@ export default function HomeScreen() {
       }
 
       const responses = await Promise.all(
-        codes.map(code => reportDtc(code, authUser!.id, selectedVehicle?.id))
+        // userId is optional on the API — no assertion needed, and a session
+        // that expired mid-scan must not throw here.
+        codes.map(code => reportDtc(code, authUser?.id, selectedVehicle?.id))
       );
       setDtcResults(responses);
       loadData();
@@ -538,13 +540,20 @@ export default function HomeScreen() {
       )}
 
       {/* ── Add vehicle modal ── */}
-      <AddVehicleModal
-        visible={addVehicleVisible}
-        userId={authUser!.id}
-        prefill={prefillData}
-        onAdded={() => { setAddVehicleVisible(false); setPrefillData(undefined); loadData(); }}
-        onClose={() => { setAddVehicleVisible(false); setPrefillData(undefined); }}
-      />
+      {/* Rendered only with a signed-in user. This used to read authUser!.id,
+          and the `!` silenced the type error without preventing the runtime
+          one: on logout authUser becomes null, this screen threw mid-render
+          before the router could navigate away, and the app hung on a blank
+          screen instead of returning to login. */}
+      {authUser && (
+        <AddVehicleModal
+          visible={addVehicleVisible}
+          userId={authUser.id}
+          prefill={prefillData}
+          onAdded={() => { setAddVehicleVisible(false); setPrefillData(undefined); loadData(); }}
+          onClose={() => { setAddVehicleVisible(false); setPrefillData(undefined); }}
+        />
+      )}
 
       {/* ── Live scan overlay (Stitch live_scan design) ── */}
       <ScanOverlay
