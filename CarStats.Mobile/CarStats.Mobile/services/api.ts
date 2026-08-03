@@ -89,6 +89,8 @@ export interface DiagnosticCode {
   humanTitle: string;
   description: string;
   severity: SeverityLevel;
+  /** What the driver should actually do about it. */
+  actionRequired?: string;
   estimatedCostMin: number;
   estimatedCostMax: number;
 }
@@ -201,4 +203,13 @@ export const geocodeAddress = async (address: string): Promise<GeocodedAddress |
     }
     throw err;
   }
+};
+
+/**
+ * The whole fault-code dictionary. Small enough (tens of rows) to fetch and
+ * filter client-side, which avoids adding a by-code endpoint and a redeploy.
+ */
+export const getDiagnosticCodes = async (): Promise<DiagnosticCode[]> => {
+  const { data } = await api.get<DiagnosticCode[]>('/dtc');
+  return data;
 };

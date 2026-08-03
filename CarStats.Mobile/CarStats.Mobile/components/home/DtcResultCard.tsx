@@ -4,19 +4,28 @@
  */
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ReportDtcResponse } from '@/services/api';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { resultSeverity, severityMeta } from '@/utils/severity';
+import { useRouter } from 'expo-router';
 
 export default function DtcResultCard({ result }: { result: ReportDtcResponse }) {
   const { colors: c } = useTheme();
   const styles = useStyles();
-  const t    = result.translation;
-  const meta = severityMeta(c, resultSeverity(result));
+  const router = useRouter();
+  const t      = result.translation;
+  const meta   = severityMeta(c, resultSeverity(result));
+  const code   = t?.errorCode;
 
   return (
-    <View style={[styles.resultCard, { borderColor: meta.color }]}>
+    <Pressable
+      style={[styles.resultCard, { borderColor: meta.color }]}
+      onPress={code ? () => router.push({ pathname: '/fault/[code]', params: { code } }) : undefined}
+      // An untranslated code has no detail page to open, so it stays inert
+      // rather than navigating to an empty screen.
+      disabled={!code}
+    >
       <View style={styles.resultHeader}>
         <Text style={[styles.resultBadge, { color: meta.color }]}>{meta.label}</Text>
         {t && <Text style={styles.resultCode}>{t.errorCode}</Text>}
@@ -33,7 +42,7 @@ export default function DtcResultCard({ result }: { result: ReportDtcResponse })
           </Text>
         </View>
       )}
-    </View>
+    </Pressable>
   );
 }
 

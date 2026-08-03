@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -14,6 +15,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { severityMeta } from '@/utils/severity';
+import { useRouter } from 'expo-router';
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, {
@@ -24,6 +26,7 @@ export default function HistoryScreen() {
   const { user: authUser }      = useAuth();
   const { colors: c } = useTheme();
   const styles = useStyles();
+  const router = useRouter();
   const [events, setEvents]     = useState<VehicleEventEnriched[]>([]);
   const [loading, setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -80,7 +83,11 @@ export default function HistoryScreen() {
         events.map(ev => {
           const sev = severityMeta(c, ev.translation?.severity);
           return (
-            <View key={ev.id} style={styles.card}>
+            <Pressable
+              key={ev.id}
+              style={styles.card}
+              onPress={() => router.push({ pathname: '/fault/[code]', params: { code: ev.rawErrorCode } })}
+            >
               <View style={styles.cardHeader}>
                 <Text style={styles.rawCode}>{ev.rawErrorCode}</Text>
                 <View style={[styles.badge, { borderColor: sev.color }]}>
@@ -106,7 +113,7 @@ export default function HistoryScreen() {
                   </Text>
                 )}
               </View>
-            </View>
+            </Pressable>
           );
         })
       )}
