@@ -49,18 +49,30 @@ Notifications.setNotificationHandler({
 
 // ─── Geofence task (module scope — must exist before the OS wakes us) ─────────
 
+/**
+ * The arrival reminder itself, separate from what triggers it.
+ *
+ * Split out so it can be fired directly as well as by the geofence. The
+ * geofence needs background location, which Expo Go does not grant, so
+ * without this the notification could not be seen at all without a
+ * development build — and the notification is the part worth showing.
+ */
+export async function showChildReminderNotification(): Promise<void> {
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: '👶 Arrived — check the back seat',
+      body: "You've reached your saved location. Make sure no child or pet is left in the car.",
+      sound: true,
+    },
+    trigger: null, // immediately
+  });
+}
+
 TaskManager.defineTask(CHILD_REMINDER_TASK, async ({ data, error }) => {
   if (error || !data) return;
   const { eventType } = data as { eventType: Location.GeofencingEventType };
   if (eventType === Location.GeofencingEventType.Enter) {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: '👶 Arrived — check the back seat',
-        body: "You've reached your saved location. Make sure no child or pet is left in the car.",
-        sound: true,
-      },
-      trigger: null, // immediately
-    });
+    await showChildReminderNotification();
   }
 });
 

@@ -30,6 +30,7 @@ import {
   ensureNotifPermission,
   loadPrefs,
   savePrefs,
+  showChildReminderNotification,
 } from '@/services/notifications';
 
 const MODE_OPTIONS: { mode: ThemeMode; label: string }[] = [
@@ -101,6 +102,18 @@ export default function SettingsScreen() {
     } finally {
       setBusy(false);
     }
+  };
+
+  // Fires the arrival reminder directly, without waiting to drive home.
+  // The geofence that normally triggers it needs background location, which
+  // Expo Go does not grant — so this is how the notification can be seen and
+  // shown at all outside a development build.
+  const previewChildReminder = async () => {
+    if (!(await ensureNotifPermission())) {
+      Alert.alert('Permission needed', 'Allow notifications for CarStats to see the reminder.');
+      return;
+    }
+    await showChildReminderNotification();
   };
 
   // ── Capture home location ──────────────────────────────────────────────────
@@ -206,6 +219,16 @@ export default function SettingsScreen() {
             disabled={busy}
           />
         </View>
+
+        <Button
+          mode="outlined"
+          icon="bell-ring-outline"
+          onPress={previewChildReminder}
+          style={s.homeBtn}
+          contentStyle={s.homeBtnContent}
+        >
+          Preview the reminder
+        </Button>
 
         <Divider style={s.divider} />
 
