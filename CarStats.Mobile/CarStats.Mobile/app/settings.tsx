@@ -16,6 +16,7 @@ import {
 // Paper's Switch/Divider/Button pick their colors up from the themed
 // PaperProvider in app/_layout.tsx, so they need no explicit color props.
 import { Button, Divider, SegmentedButtons, Switch, TextInput } from 'react-native-paper';
+import * as Location from 'expo-location';
 import Constants from 'expo-constants';
 import { geocodeAddress } from '@/services/api';
 import { usePlaceSuggestions } from '@/hooks/usePlaceSuggestions';
@@ -119,7 +120,7 @@ export default function SettingsScreen() {
   // ── Capture home location ──────────────────────────────────────────────────
   /** Stores a home position and re-anchors an active geofence to it. */
   const saveHome = async (lat: number, lng: number, label: string) => {
-    const next = { ...prefs, homeLat: lat, homeLng: lng };
+    const next = { ...prefs, homeLat: lat, homeLng: lng, homeLabel: label };
     await update(next);
     if (prefs.childReminder) {
       await disableChildReminder();
@@ -167,7 +168,23 @@ export default function SettingsScreen() {
     setBusy(true);
     try {
       const { lat, lng } = await captureHomeLocation();
-      await saveHome(lat, lng, 'Using your current position.');
+
+      // Turn the fix into something readable. Done on the device rather than
+      // through our API — expo-location can already do it, and it saves a
+      // round trip for a label.
+      let label = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      try {
+        const [place] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+        if (place) {
+          const parts = [
+            [place.street, place.streetNumber].filter(Boolean).join(' '),
+            place.city ?? place.subregion,
+          ].filter(Boolean);
+          if (parts.length) label = parts.join(', ');
+        }
+      } catch { /* no reverse geocode available — the coordinates will do */ }
+
+      await saveHome(lat, lng, label);
     } catch (err: any) {
       Alert.alert('Could not get your location', err?.message ?? 'Type your address instead.');
     } finally {
@@ -291,8 +308,10 @@ export default function SettingsScreen() {
         </Button>
 
         {prefs.homeLat != null && (
-          <Text style={s.homeSetBadge}>
-            SET ✓  {prefs.homeLat.toFixed(4)}, {prefs.homeLng?.toFixed(4)}
+          <Text style={s.homeSetBadge} numberOfLines={2}>
+            {/* Falls back to coordinates for homes saved before the label
+                existed, so an older install still shows something. */}
+            Home: {prefs.homeLabel ?? `${prefs.homeLat.toFixed(4)}, ${prefs.homeLng?.toFixed(4)}`}
           </Text>
         )}
       </View>

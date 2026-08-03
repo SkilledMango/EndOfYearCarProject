@@ -28,6 +28,13 @@ export interface NotifPrefs {
   childReminder: boolean;
   homeLat: number | null;
   homeLng: number | null;
+  /**
+   * The saved home as the user would describe it, e.g. "Agmon 13, Hadera".
+   * Coordinates are what the geofence needs, but they are not what anyone
+   * wants to read back. Null for homes saved before this existed, so the UI
+   * has to cope with its absence.
+   */
+  homeLabel: string | null;
 }
 
 export const DEFAULT_PREFS: NotifPrefs = {
@@ -35,6 +42,7 @@ export const DEFAULT_PREFS: NotifPrefs = {
   childReminder: false,
   homeLat: null,
   homeLng: null,
+  homeLabel: null,
 };
 
 // Show alerts even while the app is foregrounded
