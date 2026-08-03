@@ -1,0 +1,18 @@
+# Netlify build configuration for the CarStats admin panel.
+#
+# The repository root holds several projects (the API, the mobile app, the
+# ESP32 firmware), so Netlify has to be pointed at the one it should build.
+# With this file committed, connecting the repo in Netlify is enough — no
+# settings need entering by hand, and every push to main redeploys the panel.
+#
+# The mobile app and the API are NOT built here. The API is published to Somee
+# separately, and the mobile app ships through Expo.
+
+[build]
+  base    = "CarStats.AdminWeb/CarStats.AdminWeb"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # Match the Node version the project is developed against.
+  NODE_VERSION = "22"
