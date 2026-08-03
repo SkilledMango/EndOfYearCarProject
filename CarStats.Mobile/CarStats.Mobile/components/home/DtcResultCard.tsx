@@ -10,20 +10,28 @@ import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { resultSeverity, severityMeta } from '@/utils/severity';
 import { useRouter } from 'expo-router';
 
-export default function DtcResultCard({ result }: { result: ReportDtcResponse }) {
+export default function DtcResultCard({
+  result,
+  rawCode,
+}: {
+  result: ReportDtcResponse;
+  /** The code that was scanned. Needed because an untranslated fault has no
+      translation object to read it from — and those are precisely the ones
+      whose detail screen has something to add, via the AI explanation. */
+  rawCode?: string;
+}) {
   const { colors: c } = useTheme();
   const styles = useStyles();
   const router = useRouter();
   const t      = result.translation;
   const meta   = severityMeta(c, resultSeverity(result));
-  const code   = t?.errorCode;
+  const code   = t?.errorCode ?? rawCode;
 
   return (
     <Pressable
       style={[styles.resultCard, { borderColor: meta.color }]}
       onPress={code ? () => router.push({ pathname: '/fault/[code]', params: { code } }) : undefined}
-      // An untranslated code has no detail page to open, so it stays inert
-      // rather than navigating to an empty screen.
+      // Only inert if we genuinely have no code to look up.
       disabled={!code}
     >
       <View style={styles.resultHeader}>

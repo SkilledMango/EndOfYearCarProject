@@ -135,10 +135,19 @@ namespace CarStats.API.Controllers
             if (string.IsNullOrWhiteSpace(ApiKey))
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, "Route service is not configured.");
 
+            // Restricted to Israel and biased toward the centre of the country.
+            //
+            // Unbiased, a partial street name matches thousands of places
+            // worldwide and the handful Google returns are rarely the ones a
+            // user here meant — which reads as "autocomplete doesn't work".
+            // The country filter alone makes short queries usable.
             var url =
                 "https://maps.googleapis.com/maps/api/place/autocomplete/json" +
                 $"?input={Uri.EscapeDataString(input)}" +
                 "&types=geocode|establishment" +
+                "&components=country:il" +
+                "&location=31.5,34.9&radius=150000" +
+                "&language=he" +
                 $"&key={ApiKey}";
 
             var client = _httpFactory.CreateClient();

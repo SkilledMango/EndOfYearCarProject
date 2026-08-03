@@ -87,6 +87,10 @@ export default function HomeScreen() {
   // ── DTC scan state ──
   const [scanning, setScanning]             = useState(false);
   const [dtcResults, setDtcResults]         = useState<ReportDtcResponse[]>([]);
+  // Scanned codes, index-aligned with dtcResults. The API response omits the
+  // raw code when it has no dictionary entry, so this is how an unknown fault
+  // still knows what it is.
+  const [scannedCodes, setScannedCodes]     = useState<string[]>([]);
   const [scanError, setScanError]           = useState<string | null>(null);
   const [scanOverlayVisible, setScanOverlayVisible] = useState(false);
 
@@ -186,6 +190,7 @@ export default function HomeScreen() {
     setDemoMode(next);
     setLiveData(null);
     setDtcResults([]);
+    setScannedCodes([]);
     setScanError(null);
     await checkScanner();
   }, [demo, checkScanner]);
@@ -325,6 +330,7 @@ export default function HomeScreen() {
         codes.map(code => reportDtc(code, authUser?.id, selectedVehicle?.id))
       );
       setDtcResults(responses);
+      setScannedCodes(codes);
       loadData();
 
       // Local notification (Settings → "Fault scan alerts")
@@ -546,7 +552,7 @@ export default function HomeScreen() {
         <View>
           <Text style={styles.sectionTitle}>SCAN RESULTS</Text>
           {dtcResults.map((r, i) => (
-            <DtcResultCard key={i} result={r} />
+            <DtcResultCard key={i} result={r} rawCode={scannedCodes[i]} />
           ))}
         </View>
       )}

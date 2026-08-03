@@ -84,14 +84,23 @@ namespace CarStats.API.Controllers
                     VehicleId    = request.VehicleId,
                 });
 
-                // Keep the user's lifetime fault counter in sync
+                await _context.SaveChangesAsync();
+
+                // Keep the user's lifetime fault counter in sync.
+                //
+                // Incremented in the database rather than read-modify-write in
+                // memory. A scan reports every code it found at once, so three
+                // faults arrive as three concurrent requests; each would read
+                // the same starting value, add one, and save — and two of the
+                // three increments would be lost. A single scan finding three
+                // faults would raise the count by one.
                 if (request.UserId.HasValue)
                 {
-                    var user = await _context.Users.FindAsync(request.UserId.Value);
-                    if (user != null) user.TotalFaultsLogged++;
+                    await _context.Users
+                        .Where(u => u.Id == request.UserId.Value)
+                        .ExecuteUpdateAsync(setters =>
+                            setters.SetProperty(u => u.TotalFaultsLogged, u => u.TotalFaultsLogged + 1));
                 }
-
-                await _context.SaveChangesAsync();
             }
 
             // 2. Look up the human-readable translation from the dictionary
