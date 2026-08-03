@@ -14,8 +14,9 @@ import {
 } from 'react-native';
 // Paper's Switch/Divider/Button pick their colors up from the themed
 // PaperProvider in app/_layout.tsx, so they need no explicit color props.
-import { Button, Divider, SegmentedButtons, Switch } from 'react-native-paper';
+import { Button, Divider, SegmentedButtons, Switch, TextInput } from 'react-native-paper';
 import Constants from 'expo-constants';
+import { geocodeAddress } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 import { createThemedStyles, useTheme, ThemeMode } from '@/context/ThemeContext';
 import {
@@ -44,6 +45,7 @@ export default function SettingsScreen() {
 
   const [prefs, setPrefs] = useState<NotifPrefs>(DEFAULT_PREFS);
   const [busy, setBusy]   = useState(false);
+  const [homeAddress, setHomeAddress] = useState('');
 
   useEffect(() => { loadPrefs().then(setPrefs); }, []);
 
@@ -73,7 +75,7 @@ export default function SettingsScreen() {
     if (prefs.homeLat == null || prefs.homeLng == null) {
       Alert.alert(
         'Set a home location first',
-        'The reminder fires when you arrive at your saved location. Tap "Set home location" below, then enable the reminder.',
+        'The reminder fires when you arrive at your saved location. Set a home address below, then enable the reminder.',
       );
       return;
     }
@@ -89,20 +91,49 @@ export default function SettingsScreen() {
   };
 
   // ── Capture home location ──────────────────────────────────────────────────
-  const setHome = async () => {
+  /** Stores a home position and re-anchors an active geofence to it. */
+  const saveHome = async (lat: number, lng: number, label: string) => {
+    const next = { ...prefs, homeLat: lat, homeLng: lng };
+    await update(next);
+    if (prefs.childReminder) {
+      await disableChildReminder();
+      await enableChildReminder(lat, lng);
+    }
+    Alert.alert(
+      'Home location saved',
+      `${label}\n\nThe arrival reminder will trigger within ~150 m of this spot.`,
+    );
+  };
+
+  // Typing an address needs no GPS at all, which matters on a device that
+  // cannot get a fix — and lets you set a home you are not currently at.
+  const setHomeFromAddress = async () => {
+    const query = homeAddress.trim();
+    if (!query) { Alert.alert('Enter an address', 'Type your home address first.'); return; }
+
+    setBusy(true);
+    try {
+      const found = await geocodeAddress(query);
+      if (!found) {
+        Alert.alert('Address not found', 'Try adding the city, e.g. "Agmon 13, Hadera".');
+        return;
+      }
+      await saveHome(found.latitude, found.longitude, found.formattedAddress);
+      setHomeAddress('');
+    } catch {
+      Alert.alert('Could not save location', 'Check your connection and try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const setHomeFromGps = async () => {
     setBusy(true);
     try {
       const { lat, lng } = await captureHomeLocation();
-      const next = { ...prefs, homeLat: lat, homeLng: lng };
-      await update(next);
-      // Re-anchor an active geofence to the new spot
-      if (prefs.childReminder) {
-        await disableChildReminder();
-        await enableChildReminder(lat, lng);
-      }
-      Alert.alert('Home location saved', 'The arrival reminder will trigger within ~150 m of this spot.');
+      await saveHome(lat, lng, 'Using your current position.');
     } catch (err: any) {
-      Alert.alert('Could not save location', err?.message ?? 'Unknown error.');
+      Alert.alert('Could not get your location', err?.message ?? 'Type your address instead.');
     } finally {
       setBusy(false);
     }
@@ -153,17 +184,54 @@ export default function SettingsScreen() {
           />
         </View>
 
+        <Divider style={s.divider} />
+
+        <Text style={s.rowTitle}>Home location</Text>
+        <Text style={s.rowSub}>
+          Used by the arrival reminder, and as a search point on the Mechanics tab.
+        </Text>
+
+        <TextInput
+          mode="outlined"
+          dense
+          label="Home address"
+          placeholder="e.g. Agmon 13, Hadera"
+          value={homeAddress}
+          onChangeText={setHomeAddress}
+          disabled={busy}
+          style={s.homeInput}
+          left={<TextInput.Icon icon="home-outline" />}
+          onSubmitEditing={setHomeFromAddress}
+          returnKeyType="done"
+        />
+
+        <Button
+          mode="contained"
+          icon="content-save"
+          onPress={setHomeFromAddress}
+          disabled={busy || !homeAddress.trim()}
+          style={s.homeBtn}
+          contentStyle={s.homeBtnContent}
+        >
+          Save this address
+        </Button>
+
         <Button
           mode="outlined"
-          icon="map-marker"
-          onPress={setHome}
+          icon="crosshairs-gps"
+          onPress={setHomeFromGps}
           disabled={busy}
           style={s.homeBtn}
           contentStyle={s.homeBtnContent}
         >
-          {prefs.homeLat != null ? 'Update home location' : 'Set home location'}
+          Use my current location
         </Button>
-        {prefs.homeLat != null && <Text style={s.homeSetBadge}>SET ✓</Text>}
+
+        {prefs.homeLat != null && (
+          <Text style={s.homeSetBadge}>
+            SET ✓  {prefs.homeLat.toFixed(4)}, {prefs.homeLng?.toFixed(4)}
+          </Text>
+        )}
       </View>
 
       {/* ── Account ── */}
@@ -223,7 +291,8 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   // Paper's Divider draws its own hairline — this only spaces it.
   divider:   { marginVertical: 14 },
 
-  homeBtn:        { marginTop: 14 },
+  homeInput:      { marginTop: 12 },
+  homeBtn:        { marginTop: 10 },
   homeBtnContent: { paddingVertical: 4 },
   homeSetBadge: {
     fontSize: 11,

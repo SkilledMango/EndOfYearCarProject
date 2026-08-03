@@ -168,3 +168,28 @@ export const getShopPhone = async (placeId: string): Promise<string | null> => {
   });
   return data.phone;
 };
+
+export interface GeocodedAddress {
+  latitude:  number;
+  longitude: number;
+  /** Google's tidied-up version of what the user typed. */
+  formattedAddress: string;
+}
+
+/**
+ * Turns a typed address into coordinates.
+ *
+ * Returns null when the address cannot be found — a typo is a normal outcome,
+ * not an error worth throwing over. Network and server failures still throw.
+ */
+export const geocodeAddress = async (address: string): Promise<GeocodedAddress | null> => {
+  try {
+    const { data } = await api.get<GeocodedAddress>('/navigation/geocode', {
+      params: { address },
+    });
+    return data;
+  } catch (err: any) {
+    if (err?.response?.status === 404) return null;
+    throw err;
+  }
+};

@@ -145,5 +145,53 @@ namespace CarStats.API.Controllers
             var json   = await client.GetStringAsync(url);
             return Content(json, "application/json");
         }
+
+        // GET: api/navigation/geocode?address=Agmon 13, Hadera
+        // Turns a typed address into coordinates, so features that need a
+        // point on the map do not all depend on the device's GPS. Unlike the
+        // other endpoints this one trims the response: callers want a single
+        // lat/lng, not Google's full geocoding payload.
+        [HttpGet("geocode")]
+        public async Task<IActionResult> Geocode([FromQuery] string address)
+        {
+            if (string.IsNullOrWhiteSpace(address))
+                return BadRequest("address is required.");
+            if (string.IsNullOrWhiteSpace(ApiKey))
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, "Geocoding is not configured.");
+
+            var url =
+                "https://maps.googleapis.com/maps/api/geocode/json" +
+                $"?address={Uri.EscapeDataString(address)}" +
+                $"&key={ApiKey}";
+
+            var client = _httpFactory.CreateClient();
+            var json   = await client.GetStringAsync(url);
+
+            using var doc = JsonDocument.Parse(json);
+            var root      = doc.RootElement;
+            var status    = root.TryGetProperty("status", out var s) ? s.GetString() : "UNKNOWN_ERROR";
+
+            // ZERO_RESULTS is a normal outcome for a typo, not a server fault —
+            // 404 lets the client say "we couldn't find that address" without
+            // treating it as an outage.
+            if (status != "OK" ||
+                !root.TryGetProperty("results", out var results) ||
+                results.GetArrayLength() == 0)
+            {
+                return NotFound(new { status, message = "No location found for that address." });
+            }
+
+            var first    = results[0];
+            var location = first.GetProperty("geometry").GetProperty("location");
+
+            return Ok(new
+            {
+                latitude         = location.GetProperty("lat").GetDouble(),
+                longitude        = location.GetProperty("lng").GetDouble(),
+                formattedAddress = first.TryGetProperty("formatted_address", out var fa)
+                                   ? fa.GetString()
+                                   : address,
+            });
+        }
     }
 }

@@ -20,14 +20,20 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import * as Location from 'expo-location';
+import { SegmentedButtons } from 'react-native-paper';
 import ShopMap from '@/components/ShopMap';
 import { NearbyShop, getNearbyShops, getShopPhone } from '@/services/api';
+import { loadPrefs } from '@/services/notifications';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 // Search center when location permission is denied
 const FALLBACK_CENTER = { lat: 32.0853, lng: 34.7818 }; // Tel Aviv
+
+/** Which point the shop search is centred on. */
+type SearchOrigin = 'current' | 'home';
 
 interface LocatedShop extends NearbyShop {
   distanceKm: number | null;
@@ -52,24 +58,48 @@ export default function MechanicFinderScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [myPos, setMyPos]           = useState<{ lat: number; lng: number } | null>(null);
   const [usedFallback, setUsedFallback] = useState(false);
+  const [origin, setOrigin]         = useState<SearchOrigin>('current');
+  const [hasHome, setHasHome]       = useState(false);
   // Phone numbers already looked up this session (placeId → phone | null)
   const phoneCache = useRef<Record<string, string | null>>({});
 
-  const load = useCallback(async (isRefresh = false) => {
+  const load = useCallback(async (isRefresh = false, mode: SearchOrigin = origin) => {
     if (isRefresh) setRefreshing(true);
     try {
-      // Where to search: the user's position, or central Tel Aviv when denied
+      // Where to search, in order of preference:
+      //   "home"    → the address saved in Settings
+      //   "current" → a GPS fix, falling back to the last known position
+      // and central Tel Aviv only when neither can be had, so the screen
+      // always shows something rather than an empty list.
       let pos: { lat: number; lng: number } | null = null;
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          });
-          pos = { lat: loc.coords.latitude, lng: loc.coords.longitude };
-          setMyPos(pos);
+
+      if (mode === 'home') {
+        const prefs = await loadPrefs();
+        if (prefs.homeLat != null && prefs.homeLng != null) {
+          pos = { lat: prefs.homeLat, lng: prefs.homeLng };
         }
-      } catch { /* location unavailable — fall back */ }
+      } else {
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            let coords = null;
+            try {
+              const loc = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+              });
+              coords = loc.coords;
+            } catch {
+              // No fresh fix — a slightly old position still finds the right
+              // mechanics, and beats silently searching another city.
+              const last = await Location.getLastKnownPositionAsync();
+              coords = last?.coords ?? null;
+            }
+            if (coords) pos = { lat: coords.latitude, lng: coords.longitude };
+          }
+        } catch { /* location unavailable — fall back */ }
+      }
+
+      if (mode === 'current') setMyPos(pos);
       setUsedFallback(!pos);
 
       const center = pos ?? FALLBACK_CENTER;
@@ -86,9 +116,25 @@ export default function MechanicFinderScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [origin]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Only offer the "Home" option once there is a home to search around.
+  // Re-checked on every focus, not just on mount: tabs stay mounted, so a home
+  // saved in Settings would otherwise not show up here until an app restart.
+  useFocusEffect(
+    useCallback(() => {
+      loadPrefs().then(p => setHasHome(p.homeLat != null && p.homeLng != null));
+    }, []),
+  );
+
+  const switchOrigin = (next: SearchOrigin) => {
+    if (next === origin) return;
+    setOrigin(next);
+    setLoading(true);
+    load(false, next);
+  };
 
   const call = async (shop: LocatedShop) => {
     let phone = phoneCache.current[shop.placeId];
@@ -145,9 +191,26 @@ export default function MechanicFinderScreen() {
           <Text style={styles.sheetTitle}>Nearby Mechanics</Text>
           <Text style={styles.sheetCount}>{shops.length} found</Text>
         </View>
+        {/* Only worth showing once a home exists — otherwise it is a switch
+            with nothing on the other side. */}
+        {hasHome && (
+          <SegmentedButtons
+            style={styles.originSwitch}
+            density="small"
+            value={origin}
+            onValueChange={(v) => switchOrigin(v as SearchOrigin)}
+            buttons={[
+              { value: 'current', label: 'Near me',   icon: 'crosshairs-gps' },
+              { value: 'home',    label: 'Near home', icon: 'home-outline'   },
+            ]}
+          />
+        )}
+
         {usedFallback && (
           <Text style={styles.fallbackNote}>
-            Showing shops around Tel Aviv — enable location for results near you.
+            {origin === 'home'
+              ? 'No home address saved — showing shops around Tel Aviv. Set one in Settings.'
+              : 'Showing shops around Tel Aviv — enable location, or search near your home address instead.'}
           </Text>
         )}
         <ScrollView
@@ -235,6 +298,7 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
   sheetTitle:     { fontSize: 20, lineHeight: 28, fontWeight: '600', color: c.Dashboard.textPrimary },
   sheetCount:     { fontSize: 14, lineHeight: 20, color: c.Dashboard.textSecondary },
+  originSwitch: { marginHorizontal: 20, marginBottom: 10 },
   fallbackNote:   {
     fontSize: 12, color: c.Dashboard.textSecondary,
     paddingHorizontal: 20, paddingBottom: 10, marginTop: -6,
