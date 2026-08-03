@@ -7,6 +7,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,6 +18,7 @@ import {
 import { Button, Divider, SegmentedButtons, Switch, TextInput } from 'react-native-paper';
 import Constants from 'expo-constants';
 import { geocodeAddress } from '@/services/api';
+import { usePlaceSuggestions } from '@/hooks/usePlaceSuggestions';
 import { useAuth } from '@/context/AuthContext';
 import { createThemedStyles, useTheme, ThemeMode } from '@/context/ThemeContext';
 import {
@@ -46,6 +48,17 @@ export default function SettingsScreen() {
   const [prefs, setPrefs] = useState<NotifPrefs>(DEFAULT_PREFS);
   const [busy, setBusy]   = useState(false);
   const [homeAddress, setHomeAddress] = useState('');
+  const { suggestions, visible, search, clear } = usePlaceSuggestions();
+
+  const onHomeAddressChange = (text: string) => {
+    setHomeAddress(text);
+    search(text);
+  };
+
+  const pickSuggestion = (description: string) => {
+    setHomeAddress(description);
+    clear();
+  };
 
   useEffect(() => { loadPrefs().then(setPrefs); }, []);
 
@@ -120,8 +133,18 @@ export default function SettingsScreen() {
       }
       await saveHome(found.latitude, found.longitude, found.formattedAddress);
       setHomeAddress('');
-    } catch {
-      Alert.alert('Could not save location', 'Check your connection and try again.');
+      clear();
+    } catch (err: any) {
+      console.warn('[settings] geocode failed', err);
+      const status = err?.response?.status;
+      Alert.alert(
+        'Could not save location',
+        status === 404
+          ? 'The server does not have address lookup yet. It needs to be published.'
+          : status === 503
+            ? 'Address lookup is not configured on the server.'
+            : 'Check your connection and try again.',
+      );
     } finally {
       setBusy(false);
     }
@@ -191,19 +214,36 @@ export default function SettingsScreen() {
           Used by the arrival reminder, and as a search point on the Mechanics tab.
         </Text>
 
-        <TextInput
-          mode="outlined"
-          dense
-          label="Home address"
-          placeholder="e.g. Agmon 13, Hadera"
-          value={homeAddress}
-          onChangeText={setHomeAddress}
-          disabled={busy}
-          style={s.homeInput}
-          left={<TextInput.Icon icon="home-outline" />}
-          onSubmitEditing={setHomeFromAddress}
-          returnKeyType="done"
-        />
+        <View>
+          <TextInput
+            mode="outlined"
+            dense
+            label="Home address"
+            placeholder="e.g. Agmon 13, Hadera"
+            value={homeAddress}
+            onChangeText={onHomeAddressChange}
+            disabled={busy}
+            style={s.homeInput}
+            left={<TextInput.Icon icon="home-outline" />}
+            onSubmitEditing={setHomeFromAddress}
+            returnKeyType="done"
+            autoCorrect={false}
+          />
+
+          {visible && suggestions.length > 0 && (
+            <View style={s.dropdown}>
+              {suggestions.map((sug, i) => (
+                <Pressable
+                  key={sug.placeId}
+                  style={[s.dropdownItem, i < suggestions.length - 1 && s.dropdownDivider]}
+                  onPress={() => pickSuggestion(sug.description)}
+                >
+                  <Text style={s.dropdownText} numberOfLines={1}>{sug.description}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
 
         <Button
           mode="contained"
@@ -292,6 +332,23 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   divider:   { marginVertical: 14 },
 
   homeInput:      { marginTop: 12 },
+  // Overlays the content below rather than pushing it down, so the card does
+  // not jump every time a suggestion list appears.
+  dropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    backgroundColor: c.Dashboard.card,
+    borderWidth: 1,
+    borderColor: c.Dashboard.cardBorder,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  dropdownItem:    { paddingHorizontal: 14, paddingVertical: 12 },
+  dropdownDivider: { borderBottomWidth: 1, borderBottomColor: c.Dashboard.cardBorder },
+  dropdownText:    { fontSize: 14, color: c.Dashboard.textPrimary },
   homeBtn:        { marginTop: 10 },
   homeBtnContent: { paddingVertical: 4 },
   homeSetBadge: {

@@ -16,6 +16,7 @@ import { useAuth } from '@/context/AuthContext';
 import { api, getUser, Vehicle } from '@/services/api';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { routeErrorMessage } from '@/utils/route';
+import { PlaceSuggestion, usePlaceSuggestions } from '@/hooks/usePlaceSuggestions';
 import { ThemeColors } from '@/constants/theme';
 
 // Google Directions/Places calls go through our API's /navigation proxy:
@@ -38,11 +39,6 @@ interface RouteResult {
   /** "lat,lng" when taken from GPS, or the typed address. Used for Open in Maps. */
   originLatLng:       string;
   destinationText:    string;   // raw text — used for Open in Maps
-}
-
-interface PlaceSuggestion {
-  placeId:     string;
-  description: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -110,9 +106,7 @@ export default function TripPlannerScreen() {
   const [loading, setLoading]         = useState(false);
   const [result, setResult]           = useState<RouteResult | null>(null);
   const [error, setError]             = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const autocompleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { suggestions, visible: showSuggestions, search, clear } = usePlaceSuggestions();
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -125,49 +119,22 @@ export default function TripPlannerScreen() {
     }).catch(() => {});
   }, [authUser]);
 
-  // ── Places autocomplete ───────────────────────────────────────────────────
-  const fetchSuggestions = (text: string) => {
-    if (autocompleteTimer.current) clearTimeout(autocompleteTimer.current);
-    if (text.length < 3) { setSuggestions([]); return; }
-
-    autocompleteTimer.current = setTimeout(async () => {
-      try {
-        const { data } = await api.get('/navigation/autocomplete', {
-          params: { input: text },
-        });
-        if (data.status === 'OK') {
-          setSuggestions(
-            (data.predictions as any[]).slice(0, 5).map(p => ({
-              placeId:     p.place_id,
-              description: p.description,
-            }))
-          );
-          setShowSuggestions(true);
-        } else {
-          setSuggestions([]);
-        }
-      } catch { setSuggestions([]); }
-    }, 350); // debounce
-  };
-
   const onDestinationChange = (text: string) => {
     setDestination(text);
     setResult(null);
     setError(null);
-    fetchSuggestions(text);
+    search(text);
   };
 
-  const onPickSuggestion = (s: PlaceSuggestion) => {
-    setDestination(s.description);
-    setSuggestions([]);
-    setShowSuggestions(false);
+  const onPickSuggestion = (suggestion: PlaceSuggestion) => {
+    setDestination(suggestion.description);
+    clear();
     inputRef.current?.blur();
   };
 
   // ── Route calculation ─────────────────────────────────────────────────────
   const handleCalculate = async () => {
-    setSuggestions([]);
-    setShowSuggestions(false);
+    clear();
     if (!destination.trim()) { setError('Please enter a destination.'); return; }
     const avgL100 = parseFloat(fuelInput);
     if (isNaN(avgL100) || avgL100 <= 0) { setError('Enter a valid fuel consumption (e.g. 8.0)'); return; }

@@ -179,8 +179,13 @@ export interface GeocodedAddress {
 /**
  * Turns a typed address into coordinates.
  *
- * Returns null when the address cannot be found — a typo is a normal outcome,
- * not an error worth throwing over. Network and server failures still throw.
+ * Returns null when the address genuinely has no match — a typo is a normal
+ * outcome, not an error worth throwing over. Everything else throws, including
+ * the case where the endpoint itself is missing.
+ *
+ * That distinction matters: a server without this endpoint also answers 404,
+ * and treating that as "no such address" sends the user off rewriting a
+ * perfectly good address while the real problem is an undeployed API.
  */
 export const geocodeAddress = async (address: string): Promise<GeocodedAddress | null> => {
   try {
@@ -189,7 +194,11 @@ export const geocodeAddress = async (address: string): Promise<GeocodedAddress |
     });
     return data;
   } catch (err: any) {
-    if (err?.response?.status === 404) return null;
+    // Our own "no match" 404 carries a status field; a routing 404 does not.
+    const body = err?.response?.data;
+    if (err?.response?.status === 404 && body && typeof body.status === 'string') {
+      return null;
+    }
     throw err;
   }
 };
