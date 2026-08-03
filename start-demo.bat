@@ -57,7 +57,10 @@ REM `call` from inside a batch file its keyboard shortcuts do not work - the
 REM terminal is not interactive in that context - so pressing "a" appeared to
 REM do nothing. In its own cmd window the shortcuts behave normally.
 cd /d "%PROJECT%"
-start "CarStats dev server" cmd /k npx expo start
+REM --clear every time: EXPO_PUBLIC_* values are inlined when a module is
+REM transformed, so a cached bundle can silently carry an old (or empty) key
+REM and features that depend on one fail for no visible reason.
+start "CarStats dev server" cmd /k npx expo start --clear
 
 echo      waiting for the bundler to come up...
 :waitmetro
