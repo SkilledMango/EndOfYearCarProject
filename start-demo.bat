@@ -53,8 +53,9 @@ echo      GPS feed running in a minimised window.
 
 echo === 4/4  Starting Expo ===
 echo.
-echo  Two windows must stay open: THIS one (dev server) and the minimised
-echo  "CarStats GPS feed" window. Closing either breaks the demo.
+echo  Keep THIS window open - it is the dev server, and closing it stops the app.
+echo  The minimised "CarStats GPS feed" window only affects "Use my current
+echo  location" and "Near me"; everything else works without it.
 echo.
 echo    a = open on the emulator     r = reload     ? = all commands
 echo.
