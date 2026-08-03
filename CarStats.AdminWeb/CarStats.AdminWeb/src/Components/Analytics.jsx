@@ -1,3 +1,4 @@
+import { Palette } from '../theme';
 import { useEffect, useState } from 'react';
 import { getStats } from '../Services/api';
 import {
@@ -11,17 +12,17 @@ import AccessTimeIcon    from '@mui/icons-material/AccessTime';
 import CodeIcon          from '@mui/icons-material/Code';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const SEVERITY_COLOR = { 1: '#22C55E', 2: '#F59E0B', 3: '#EF4444' };
+const SEVERITY_COLOR = { 1: Palette.green, 2: Palette.yellow, 3: Palette.red };
 const SEVERITY_LABEL = { 1: 'Green',   2: 'Yellow',  3: 'Red'    };
-const SEVERITY_BG    = { 1: '#F0FDF4', 2: '#FFFBEB',  3: '#FEF2F2' };
+const SEVERITY_BG    = { 1: Palette.greenSoft, 2: Palette.yellowSoft, 3: Palette.redSoft };
 
 const severityChipSx = (s) => ({
     fontWeight: 700,
     fontSize: 11,
     height: 22,
-    backgroundColor: SEVERITY_BG[s] ?? '#F3F4F6',
-    color: SEVERITY_COLOR[s] ?? '#6B7280',
-    border: `1px solid ${SEVERITY_COLOR[s] ?? '#6B7280'}40`,
+    backgroundColor: SEVERITY_BG[s] ?? Palette.bg,
+    color: SEVERITY_COLOR[s] ?? Palette.inkMuted,
+    border: `1px solid ${SEVERITY_COLOR[s] ?? Palette.inkMuted}40`,
 });
 
 const formatTime = (d) => new Date(d).toLocaleString(undefined, {
@@ -47,7 +48,7 @@ function StatCard({ icon, label, value, gradient, iconColor }) {
                         <Typography variant="body2" sx={{ color: 'rgba(0,0,0,0.5)', fontWeight: 500, mb: 0.5, fontSize: 13 }}>
                             {label}
                         </Typography>
-                        <Typography variant="h3" fontWeight={800} sx={{ color: '#1a1a2e', lineHeight: 1 }}>
+                        <Typography variant="h3" fontWeight={800} sx={{ color: Palette.ink, lineHeight: 1 }}>
                             {value ?? '—'}
                         </Typography>
                     </Box>
@@ -66,7 +67,7 @@ function StatCard({ icon, label, value, gradient, iconColor }) {
 }
 
 // ─── Bar Chart ────────────────────────────────────────────────────────────────
-function BarChart({ data, color = '#6366F1' }) {
+function BarChart({ data, color = Palette.accent }) {
     const [hovered, setHovered] = useState(null);
 
     if (!data || data.length === 0) {
@@ -88,7 +89,7 @@ function BarChart({ data, color = '#6366F1' }) {
                         position: 'absolute',
                         left: 0, right: 0,
                         bottom: `${pct * 130 + 24}px`,
-                        borderTop: '1px dashed #E5E7EB',
+                        borderTop: '1px dashed ${Palette.border}',
                     }} />
                 ))}
 
@@ -157,7 +158,7 @@ function BarChart({ data, color = '#6366F1' }) {
                 }}>
                     {data.map((d, i) => (
                         <Box key={i} sx={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                            <Typography variant="caption" sx={{ fontSize: 9, color: '#9CA3AF', textAlign: 'center' }}>
+                            <Typography variant="caption" sx={{ fontSize: 9, color: Palette.inkMuted, textAlign: 'center' }}>
                                 {/* Show every other label to avoid clutter */}
                                 {i % 2 === 0 ? d.label : ''}
                             </Typography>
@@ -190,7 +191,7 @@ function SeverityBreakdown({ data }) {
                     <Tooltip key={i} title={`${SEVERITY_LABEL[d.severity]}: ${d.count} (${Math.round((d.count / total) * 100)}%)`} arrow>
                         <Box sx={{
                             flex: d.count,
-                            backgroundColor: SEVERITY_COLOR[d.severity] ?? '#6B7280',
+                            backgroundColor: SEVERITY_COLOR[d.severity] ?? Palette.inkMuted,
                             transition: 'flex 0.5s ease',
                             cursor: 'default',
                             '&:first-of-type': { borderRadius: '6px 0 0 6px' },
@@ -208,10 +209,10 @@ function SeverityBreakdown({ data }) {
                         <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                             <Box sx={{
                                 width: 10, height: 10, borderRadius: '50%',
-                                backgroundColor: SEVERITY_COLOR[d.severity] ?? '#6B7280',
+                                backgroundColor: SEVERITY_COLOR[d.severity] ?? Palette.inkMuted,
                                 flexShrink: 0,
                             }} />
-                            <Typography variant="body2" fontWeight={600} sx={{ flex: 1, color: '#374151' }}>
+                            <Typography variant="body2" fontWeight={600} sx={{ flex: 1, color: Palette.ink }}>
                                 {SEVERITY_LABEL[d.severity] ?? 'Unknown'}
                             </Typography>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -219,8 +220,8 @@ function SeverityBreakdown({ data }) {
                                     {d.count}
                                 </Typography>
                                 <Typography variant="caption" sx={{
-                                    backgroundColor: '#F3F4F6',
-                                    color: '#6B7280',
+                                    backgroundColor: Palette.bg,
+                                    color: Palette.inkMuted,
                                     px: 0.75, py: 0.25,
                                     borderRadius: 1,
                                     fontWeight: 600,
@@ -247,8 +248,8 @@ function SeverityBreakdown({ data }) {
 function SectionTitle({ icon, children }) {
     return (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-            <Box sx={{ color: '#6B7280', display: 'flex' }}>{icon}</Box>
-            <Typography variant="subtitle1" fontWeight={700} color="#1F2937">
+            <Box sx={{ color: Palette.inkMuted, display: 'flex' }}>{icon}</Box>
+            <Typography variant="subtitle1" fontWeight={700} color={Palette.ink}>
                 {children}
             </Typography>
         </Box>
@@ -274,7 +275,7 @@ export default function Analytics() {
 
     if (!stats) {
         return (
-            <Box sx={{ mt: 4, p: 3, bgcolor: '#FEF2F2', borderRadius: 2, border: '1px solid #FECACA' }}>
+            <Box sx={{ mt: 4, p: 3, bgcolor: Palette.redSoft, borderRadius: 2, border: `1px solid ${Palette.red}33` }}>
                 <Typography color="error" fontWeight={600}>Could not load analytics data.</Typography>
             </Box>
         );
@@ -289,7 +290,7 @@ export default function Analytics() {
         <Box sx={{ mt: 2, pb: 6 }}>
             {/* Page header */}
             <Box sx={{ mb: 4 }}>
-                <Typography variant="h5" fontWeight={800} color="#111827" gutterBottom>
+                <Typography variant="h5" fontWeight={800} color={Palette.ink} gutterBottom>
                     Analytics Overview
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
@@ -304,8 +305,8 @@ export default function Analytics() {
                         icon={<PeopleIcon fontSize="small" />}
                         label="Total Users"
                         value={stats.totalUsers}
-                        gradient="linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)"
-                        iconColor="#3B82F6"
+                        gradient={Palette.accentSoft}
+                        iconColor={Palette.accent}
                     />
                 </Grid>
                 <Grid item xs={12} sm={4}>
@@ -313,8 +314,8 @@ export default function Analytics() {
                         icon={<DirectionsCarIcon fontSize="small" />}
                         label="Total Vehicles"
                         value={stats.totalVehicles}
-                        gradient="linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%)"
-                        iconColor="#7C3AED"
+                        gradient={Palette.bg}
+                        iconColor={Palette.accentDeep}
                     />
                 </Grid>
                 <Grid item xs={12} sm={4}>
@@ -322,8 +323,8 @@ export default function Analytics() {
                         icon={<WarningAmberIcon fontSize="small" />}
                         label="Total Faults Logged"
                         value={stats.totalFaults}
-                        gradient="linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)"
-                        iconColor="#D97706"
+                        gradient={Palette.yellowSoft}
+                        iconColor={Palette.yellow}
                     />
                 </Grid>
             </Grid>
@@ -332,19 +333,19 @@ export default function Analytics() {
             <Grid container spacing={2.5} sx={{ mb: 2.5 }}>
                 {/* Bar chart */}
                 <Grid item xs={12} md={8}>
-                    <Card elevation={0} sx={{ borderRadius: 3, border: '1px solid #F3F4F6', height: '100%' }}>
+                    <Card elevation={0} sx={{ borderRadius: 3, border: `1px solid ${Palette.border}`, height: '100%' }}>
                         <CardContent sx={{ p: 3 }}>
                             <SectionTitle icon={<WarningAmberIcon sx={{ fontSize: 18 }} />}>
                                 Faults Logged — Last 14 Days
                             </SectionTitle>
-                            <BarChart data={barData} color="#6366F1" />
+                            <BarChart data={barData} color={Palette.accent} />
                         </CardContent>
                     </Card>
                 </Grid>
 
                 {/* Severity breakdown */}
                 <Grid item xs={12} md={4}>
-                    <Card elevation={0} sx={{ borderRadius: 3, border: '1px solid #F3F4F6', height: '100%' }}>
+                    <Card elevation={0} sx={{ borderRadius: 3, border: `1px solid ${Palette.border}`, height: '100%' }}>
                         <CardContent sx={{ p: 3 }}>
                             <SectionTitle icon={<WarningAmberIcon sx={{ fontSize: 18 }} />}>
                                 Severity Breakdown
@@ -359,7 +360,7 @@ export default function Analytics() {
             <Grid container spacing={2.5}>
                 {/* Top fault codes */}
                 <Grid item xs={12} md={5}>
-                    <Card elevation={0} sx={{ borderRadius: 3, border: '1px solid #F3F4F6' }}>
+                    <Card elevation={0} sx={{ borderRadius: 3, border: `1px solid ${Palette.border}` }}>
                         <CardContent sx={{ p: 3 }}>
                             <SectionTitle icon={<CodeIcon sx={{ fontSize: 18 }} />}>
                                 Most Common Fault Codes
@@ -376,8 +377,8 @@ export default function Analytics() {
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                                             <Box sx={{
                                                 width: 28, height: 28, borderRadius: '50%',
-                                                backgroundColor: i === 0 ? '#FEF3C7' : i === 1 ? '#F3F4F6' : '#F9FAFB',
-                                                color: i === 0 ? '#92400E' : '#6B7280',
+                                                backgroundColor: i === 0 ? Palette.yellowSoft : i === 1 ? Palette.bg : Palette.bg,
+                                                color: i === 0 ? Palette.yellow : Palette.inkMuted,
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                 fontSize: 12, fontWeight: 800, flexShrink: 0,
                                             }}>
@@ -403,12 +404,12 @@ export default function Analytics() {
                                             )}
                                             <Box sx={{
                                                 px: 1, py: 0.25,
-                                                backgroundColor: '#EEF2FF',
+                                                backgroundColor: Palette.accentSoft,
                                                 borderRadius: 1.5,
                                                 minWidth: 36,
                                                 textAlign: 'center',
                                             }}>
-                                                <Typography variant="caption" fontWeight={800} color="#4338CA">
+                                                <Typography variant="caption" fontWeight={800} color={Palette.accentDeep}>
                                                     ×{tc.count}
                                                 </Typography>
                                             </Box>
@@ -423,7 +424,7 @@ export default function Analytics() {
 
                 {/* Recent events */}
                 <Grid item xs={12} md={7}>
-                    <Card elevation={0} sx={{ borderRadius: 3, border: '1px solid #F3F4F6' }}>
+                    <Card elevation={0} sx={{ borderRadius: 3, border: `1px solid ${Palette.border}` }}>
                         <CardContent sx={{ p: 3 }}>
                             <SectionTitle icon={<AccessTimeIcon sx={{ fontSize: 18 }} />}>
                                 Recent Fault Events
@@ -440,8 +441,8 @@ export default function Analytics() {
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
                                             <Box sx={{
                                                 width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                                                backgroundColor: SEVERITY_COLOR[ev.severity] ?? '#9CA3AF',
-                                                boxShadow: `0 0 0 3px ${(SEVERITY_COLOR[ev.severity] ?? '#9CA3AF')}25`,
+                                                backgroundColor: SEVERITY_COLOR[ev.severity] ?? Palette.inkMuted,
+                                                boxShadow: `0 0 0 3px ${(SEVERITY_COLOR[ev.severity] ?? Palette.inkMuted)}25`,
                                             }} />
                                             <Box sx={{ minWidth: 0 }}>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
@@ -464,7 +465,7 @@ export default function Analytics() {
 
                                         {/* User + time */}
                                         <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
-                                            <Typography variant="caption" fontWeight={600} color="#374151" display="block">
+                                            <Typography variant="caption" fontWeight={600} color={Palette.ink} display="block">
                                                 {ev.userName}
                                             </Typography>
                                             <Typography variant="caption" color="text.secondary">

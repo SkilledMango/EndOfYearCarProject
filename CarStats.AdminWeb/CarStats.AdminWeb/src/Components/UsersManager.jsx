@@ -140,7 +140,7 @@ export default function UsersManager() {
             {/* Users Table */}
             <TableContainer component={Paper}>
                 <Table>
-                    <TableHead style={{ backgroundColor: '#f5f5f5' }}>
+                    <TableHead>
                         <TableRow>
                             <TableCell><b>Driver</b></TableCell>
                             <TableCell><b>Role</b></TableCell>

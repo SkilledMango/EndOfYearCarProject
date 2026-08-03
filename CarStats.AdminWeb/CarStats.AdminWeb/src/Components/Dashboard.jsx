@@ -56,7 +56,7 @@ export default function Dashboard() {
 
             <TableContainer component={Paper}>
                 <Table>
-                    <TableHead style={{ backgroundColor: '#f5f5f5' }}>
+                    <TableHead>
                         <TableRow>
                             <TableCell><b>Error Code</b></TableCell>
                             <TableCell><b>Human Title</b></TableCell>

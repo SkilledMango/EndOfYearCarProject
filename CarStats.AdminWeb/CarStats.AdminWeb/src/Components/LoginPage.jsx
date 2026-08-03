@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   CircularProgress,
@@ -9,7 +8,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import { login } from '../Services/api';
 
 /**
@@ -51,18 +50,33 @@ function LoginPage({ onLogin }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        bgcolor: 'grey.100',
+        bgcolor: 'background.default',
+        p: 2,
       }}
     >
-      <Paper elevation={3} sx={{ p: 4, width: 380, borderRadius: 3 }}>
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2 }}>
-          <Avatar sx={{ bgcolor: 'primary.main', mb: 1 }}>
-            <LockOutlinedIcon />
-          </Avatar>
-          <Typography variant="h5" fontWeight={700}>
-            CarStats Admin
+      <Paper sx={{ p: 4, width: 380, maxWidth: '100%', borderRadius: 4 }}>
+        {/* Mirrors the mobile app's login header: the same rounded-square
+            logo tile, name and tagline, so the two read as one product. */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3 }}>
+          <Box
+            sx={{
+              width: 68, height: 68, borderRadius: 4,
+              bgcolor: 'primary.dark',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              mb: 2,
+            }}
+          >
+            <DirectionsCarIcon sx={{ color: '#fff', fontSize: 34 }} />
+          </Box>
+          <Typography variant="h5" sx={{ fontSize: 26 }}>
+            CarStats
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            sx={{ fontSize: 11, letterSpacing: 2, color: 'text.secondary', mt: 0.5 }}
+          >
+            ADMIN PANEL
+          </Typography>
+          <Typography variant="body2" sx={{ mt: 1.5 }}>
             Sign in with an admin account
           </Typography>
         </Box>
