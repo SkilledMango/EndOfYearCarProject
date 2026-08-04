@@ -26,13 +26,9 @@ import { routeErrorMessage } from '@/utils/route';
 import { PlaceSuggestion, usePlaceSuggestions } from '@/hooks/usePlaceSuggestions';
 import { ThemeColors } from '@/constants/theme';
 
-// Google Directions/Places calls go through our API's /navigation proxy:
-// the browser can't call Google's web services directly (no CORS), and the
-// proxy keeps the Google key server-side instead of in this bundle.
-//
-// The pump price is fetched from our API rather than hardcoded here: the
-// Ministry of Energy revises the national 95 price every month, and a constant
-// in this bundle would only be correctable by shipping a new build.
+// Google calls go through our API's /navigation proxy: no CORS on Google's web
+// services, and it keeps the API key off the client. The pump price is served
+// too, because the regulated 95 price changes monthly.
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface RouteResult {
@@ -78,14 +74,10 @@ function calcFuelWithTraffic(
 }
 
 /**
- * Best available position for the route origin, or null if the device can
- * offer none.
- *
- * Tries for a current fix first, then falls back to the last known one. The
- * fallback matters more than it looks: getCurrentPositionAsync rejects
- * outright when no fresh fix can be obtained — indoors, in a car park, or on
- * a GPS that has just been woken — and an origin from a few minutes ago
- * changes a route estimate by almost nothing.
+ * Position for the route origin, or null if the device can offer none.
+ * Falls back to the last known fix: getCurrentPositionAsync rejects outright
+ * indoors or on a cold GPS, and a position from minutes ago barely moves the
+ * estimate.
  */
 async function getOriginCoords(): Promise<{ latitude: number; longitude: number } | null> {
   try {
@@ -113,9 +105,7 @@ export default function TripPlannerScreen() {
   const styles = useStyles();
   const [vehicle, setVehicle]         = useState<Vehicle | null>(null);
   const [destination, setDestination] = useState('');
-  // Empty means "use my current location". Typing a starting point makes the
-  // planner usable for a trip you aren't standing at the start of yet — and
-  // means one flaky GPS reading can no longer take the whole screen down.
+  // Empty means "use my current location".
   const [origin, setOrigin]           = useState('');
   const [fuelInput, setFuelInput]     = useState('8.0');
   const [loading, setLoading]         = useState(false);
@@ -124,11 +114,8 @@ export default function TripPlannerScreen() {
   const { suggestions, visible: showSuggestions, search, clear } = usePlaceSuggestions();
   const inputRef = useRef<TextInput>(null);
 
-  // null until the lookup finishes or fails; the fallback covers both, so the
-  // estimate never waits on it.
   const [fuelPrice, setFuelPrice] = useState<FuelPrice | null>(null);
-  // Priced by what the car actually burns. Costing a diesel at the petrol rate
-  // was out by roughly 40%, and the fuel tab was already showing the right one.
+  // Priced by what the car burns — diesel differs from petrol by ~40%.
   const [fuelType, setFuelType]   = useState<FuelType>('95');
   const pricePerLitre =
     fuelPrice?.prices?.find(p => p.fuelType === fuelType)?.pricePerLitreILS ??
@@ -144,8 +131,8 @@ export default function TripPlannerScreen() {
     }).catch(() => {});
   }, [authUser]);
 
-  // Separate from the vehicle load: the price is not per-user, and a failure
-  // here must not cost the screen its consumption figure.
+  // Separate from the vehicle load so a price failure can't cost the
+  // screen its consumption figure.
   useEffect(() => {
     getFuelPrice().then(setFuelPrice);
   }, []);
@@ -159,9 +146,8 @@ export default function TripPlannerScreen() {
     loadFuelType(vehicle?.id).then(setFuelType);
   }, [vehicle?.id]);
 
-  // Deliberately gated on isReal: an estimated level is fine for a gauge, but
-  // "you have enough to get there" is a claim that should rest on what the car
-  // actually reported.
+  // Gated on isReal: "you'll make it" should rest on a measurement, not an
+  // estimate from a baseline typed days ago.
   const outlook =
     result && tankLevel?.isReal
       ? tripFuelOutlook(tankL, tankLevel.pct, result.estimatedFuelL, pricePerLitre)
@@ -193,9 +179,7 @@ export default function TripPlannerScreen() {
     inputRef.current?.blur();
 
     try {
-      // A typed starting point skips location entirely — no permission
-      // prompt, no GPS, nothing to fail. Google accepts a plain address as an
-      // origin exactly like it does for the destination.
+      // A typed starting point skips GPS entirely — Google accepts an address.
       let originParam = origin.trim();
 
       if (!originParam) {
@@ -206,9 +190,6 @@ export default function TripPlannerScreen() {
           return;
         }
 
-        // A fresh fix can be slow or impossible indoors, in a car park, or on
-        // a cold GPS, so getOriginCoords falls back to the last known
-        // position before giving up.
         const coords = await getOriginCoords();
         if (!coords) {
           setError('Could not get your current location. Type a starting point above instead.');

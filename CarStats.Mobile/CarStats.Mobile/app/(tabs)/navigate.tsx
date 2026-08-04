@@ -58,9 +58,7 @@ export default function MechanicFinderScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [myPos, setMyPos]           = useState<{ lat: number; lng: number } | null>(null);
   const [usedFallback, setUsedFallback] = useState(false);
-  // Starts on 'home' when one is saved: reading a stored address is instant,
-  // while a GPS fix can stall for seconds or fail outright and leave the screen
-  // spinning. The user can switch to 'current' whenever they want.
+  // Defaults to 'home': reading a saved address is instant, a GPS fix can stall.
   const [origin, setOrigin]         = useState<SearchOrigin>('home');
   const [hasHome, setHasHome]       = useState(false);
   // Phone numbers already looked up this session (placeId → phone | null)
@@ -69,11 +67,6 @@ export default function MechanicFinderScreen() {
   const load = useCallback(async (isRefresh = false, mode: SearchOrigin = origin) => {
     if (isRefresh) setRefreshing(true);
     try {
-      // Where to search, in order of preference:
-      //   "home"    → the address saved in Settings
-      //   "current" → a GPS fix, falling back to the last known position
-      // and central Tel Aviv only when neither can be had, so the screen
-      // always shows something rather than an empty list.
       let pos: { lat: number; lng: number } | null = null;
 
       if (mode === 'home') {
@@ -83,9 +76,7 @@ export default function MechanicFinderScreen() {
         }
       }
 
-      // Reached in 'current' mode, and also when 'home' was asked for but none
-      // is saved — otherwise a user who has never set a home would jump
-      // straight to the Tel Aviv fallback without their location being tried.
+      // Also runs when 'home' was asked for but none is saved.
       if (!pos) {
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
@@ -97,8 +88,7 @@ export default function MechanicFinderScreen() {
               });
               coords = loc.coords;
             } catch {
-              // No fresh fix — a slightly old position still finds the right
-              // mechanics, and beats silently searching another city.
+              // No fresh fix indoors or on a cold GPS; an old one still works.
               const last = await Location.getLastKnownPositionAsync();
               coords = last?.coords ?? null;
             }
@@ -113,8 +103,7 @@ export default function MechanicFinderScreen() {
       const center = pos ?? FALLBACK_CENTER;
       const results = await getNearbyShops(center.lat, center.lng);
 
-      // Google returns them nearest-first; distances only mean something
-      // when we actually know where the user is.
+      // Distance only means something when we know where the user is.
       setShops(results.map(shop => ({
         ...shop,
         distanceKm: pos ? haversineKm(pos.lat, pos.lng, shop.latitude, shop.longitude) : null,
@@ -128,9 +117,8 @@ export default function MechanicFinderScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Only offer the "Home" option once there is a home to search around.
-  // Re-checked on every focus, not just on mount: tabs stay mounted, so a home
-  // saved in Settings would otherwise not show up here until an app restart.
+  // On focus, not mount: tabs stay mounted, so a home saved in Settings
+  // would otherwise not appear until an app restart.
   useFocusEffect(
     useCallback(() => {
       loadPrefs().then(p => setHasHome(p.homeLat != null && p.homeLng != null));
@@ -199,8 +187,6 @@ export default function MechanicFinderScreen() {
           <Text style={styles.sheetTitle}>Nearby Mechanics</Text>
           <Text style={styles.sheetCount}>{shops.length} found</Text>
         </View>
-        {/* Only worth showing once a home exists — otherwise it is a switch
-            with nothing on the other side. */}
         {hasHome && (
           <SegmentedButtons
             style={styles.originSwitch}

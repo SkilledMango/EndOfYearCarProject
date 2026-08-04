@@ -304,11 +304,9 @@ export default function HomeScreen() {
     }));
   }, [liveData, fuelBaseline, tripKm, selectedVehicle]);
 
-  // Publish the level for the fuel tab and the trip planner. This screen is the
-  // only one that polls the adapter, so without this they have no way to know
-  // how full the tank is. A real OBD reading wins over our estimate, and which
-  // one it is travels with the value — the trip planner refuses to answer "will
-  // I make it" from a guess.
+  // Only this screen polls the adapter, so it publishes the level for the fuel
+  // tab and trip planner. A real OBD reading wins over our estimate, and which
+  // one it is travels with the value.
   useEffect(() => {
     const real = liveData?.fuelPercent ?? null;
     if (real != null)          saveTankLevel(real, true, selectedVehicle?.id);
@@ -336,9 +334,8 @@ export default function HomeScreen() {
         return;
       }
 
+      // In parallel: three codes take as long as the slowest, not the sum.
       const responses = await Promise.all(
-        // userId is optional on the API — no assertion needed, and a session
-        // that expired mid-scan must not throw here.
         codes.map(code => reportDtc(code, authUser?.id, selectedVehicle?.id))
       );
       setDtcResults(responses);
@@ -624,8 +621,7 @@ export default function HomeScreen() {
         currentEstimate={estimatedFuel ?? fuelBaseline?.pct ?? null}
         onSave={(pct, tankL) => {
           saveFuelBaseline({ pct, tankL, tripKm }, selectedVehicle?.id);
-          // Also to the shared key, so the fuel tab and trip planner see a
-          // capacity set here without having to know about fuel baselines.
+          // Shared key too, so other screens get the capacity.
           saveTankSize(tankL, selectedVehicle?.id);
           setFuelModalVisible(false);
         }}

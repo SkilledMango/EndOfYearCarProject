@@ -58,12 +58,9 @@ Notifications.setNotificationHandler({
 // ─── Geofence task (module scope — must exist before the OS wakes us) ─────────
 
 /**
- * The arrival reminder itself, separate from what triggers it.
- *
- * Split out so it can be fired directly as well as by the geofence. The
- * geofence needs background location, which Expo Go does not grant, so
- * without this the notification could not be seen at all without a
- * development build — and the notification is the part worth showing.
+ * The reminder itself, separate from what triggers it — Settings fires it
+ * directly, since Expo Go can't grant the background location the geofence
+ * needs.
  */
 export async function showChildReminderNotification(): Promise<void> {
   await Notifications.scheduleNotificationAsync({
@@ -103,24 +100,18 @@ export async function savePrefs(prefs: NotifPrefs): Promise<void> {
 
 // ─── Permissions ───────────────────────────────────────────────────────────────
 
-/** Ask for notification permission. Returns true when granted. */
 /**
- * Wipes the saved preferences.
- *
- * Called on logout. These settings — the home address above all — belong to the
- * person, not the device: without this, signing out and registering a new
- * account left the new user already knowing someone else's home address.
- *
- * The key is deliberately not scoped per user instead. The geofence task fires
- * from the OS with no session to consult, so it could not tell whose
- * preferences to read.
+ * Wipes saved preferences on logout — the home address belongs to the person,
+ * not the device. Not scoped per user instead, because the geofence task fires
+ * from the OS with no session to tell it whose prefs to read.
  */
 export async function clearPrefs(): Promise<void> {
   try {
     await AsyncStorage.removeItem(PREFS_KEY);
-  } catch { /* nothing more we can do; the next write overwrites anyway */ }
+  } catch { /* the next write overwrites anyway */ }
 }
 
+/** Ask for notification permission. Returns true when granted. */
 export async function ensureNotifPermission(): Promise<boolean> {
   const current = await Notifications.getPermissionsAsync();
   if (current.granted) return true;

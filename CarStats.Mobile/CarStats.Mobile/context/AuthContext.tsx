@@ -213,16 +213,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ── logout ───────────────────────────────────────────────────────────────
   const logout = async () => {
-    // Tear down what belongs to the person leaving, before the session goes.
-    //
-    // The geofence matters more than it looks: registered with one account's
-    // home coordinates, it stays armed across a logout and would fire "you've
-    // arrived home" at whoever signs in next, about an address that isn't
-    // theirs. Clearing the prefs alone would not stop it — the geofence lives
-    // with the OS, not in storage.
-    //
-    // Failures here must never block signing out; a stuck logout is worse than
-    // a stale reminder.
+    // The geofence lives with the OS, not in storage, so it stays armed across
+    // a logout and would fire at the next user about someone else's home.
+    // Best effort — a cleanup failure must never block signing out.
     try {
       await disableChildReminder();
       await clearPrefs();
