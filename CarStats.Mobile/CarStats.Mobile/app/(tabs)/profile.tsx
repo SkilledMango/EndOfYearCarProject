@@ -7,7 +7,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -20,6 +19,7 @@ import { useAuth } from '@/context/AuthContext';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { UserRole, Vehicle, deleteVehicle } from '@/services/api';
 import { clearVehicleData } from '@/services/tankState';
+import { confirmDestructive, notify } from '@/utils/confirm';
 
 export default function ProfileScreen() {
   const { user, logout, refreshUser } = useAuth();
@@ -75,45 +75,40 @@ export default function ProfileScreen() {
    * מקומיים לרכב, ואי אפשר להחזיר אותם.
    */
   const confirmDeleteVehicle = (v: Vehicle) => {
-    Alert.alert(
+    confirmDestructive(
       'Remove vehicle?',
       `${v.year} ${v.make} ${v.model} (${v.licensePlate})\n\n` +
       'Its fuel log and saved settings will be deleted too. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            setDeletingId(v.id);
-            try {
-              await deleteVehicle(v.id);
-              // רק אחרי שהשרת אישר — אחרת היינו מוחקים נתונים של רכב שעדיין קיים.
-              await clearVehicleData(v.id);
-              await refreshUser();
-            } catch {
-              Alert.alert('Could not remove the vehicle', 'Check your connection and try again.');
-            } finally {
-              setDeletingId(null);
-            }
-          },
-        },
-      ],
+      'Remove',
+      async () => {
+        setDeletingId(v.id);
+        try {
+          await deleteVehicle(v.id);
+          // רק אחרי שהשרת אישר — אחרת היינו מוחקים נתונים של רכב שעדיין קיים.
+          await clearVehicleData(v.id);
+          await refreshUser();
+        } catch (err: any) {
+          // מודפס כדי שכשל כאן יהיה ניתן לאבחון — בלי זה השגיאה נבלעה
+          // וההודעה האשימה את החיבור גם כשהשרת החזיר שגיאה.
+          console.warn('[profile] delete vehicle failed', err?.response?.status, err?.message);
+          notify(
+            'Could not remove the vehicle',
+            err?.response?.status
+              ? 'The server refused the request. Please try again.'
+              : 'Check your connection and try again.',
+          );
+        } finally {
+          setDeletingId(null);
+        }
+      },
     );
   };
 
   const confirmLogout = () => {
-    Alert.alert('Log out', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log out',
-        style: 'destructive',
-        onPress: async () => {
-          setLoggingOut(true);
-          await logout(); // _layout auto-redirects to /login
-        },
-      },
-    ]);
+    confirmDestructive('Log out', 'Are you sure you want to log out?', 'Log out', async () => {
+      setLoggingOut(true);
+      await logout(); // _layout auto-redirects to /login
+    });
   };
 
   return (

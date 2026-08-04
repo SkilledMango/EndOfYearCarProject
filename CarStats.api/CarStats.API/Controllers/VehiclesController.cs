@@ -80,6 +80,20 @@ namespace CarStats.API.Controllers
             if (vehicle == null) return NotFound();
             if (!User.CanActFor(vehicle.AppUserId)) return Forbid();
 
+            // Release the fault history first.
+            //
+            // The relationship is configured ClientSetNull, which only rewrites
+            // events EF is already tracking — and none are loaded here. Without
+            // this the database receives a bare DELETE against rows that still
+            // reference the vehicle and rejects it on the foreign key, so any
+            // car that has ever logged a fault could not be removed at all.
+            //
+            // Nulling rather than deleting is deliberate: the events belong to
+            // the user's history and stay in it after the car is gone.
+            await _context.VehicleEvents
+                .Where(e => e.VehicleId == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(e => e.VehicleId, (int?)null));
+
             _context.Vehicles.Remove(vehicle);
             await _context.SaveChangesAsync();
             return NoContent();
