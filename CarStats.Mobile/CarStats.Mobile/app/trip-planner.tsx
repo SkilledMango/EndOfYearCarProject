@@ -13,8 +13,15 @@ import {
 } from 'react-native';
 import * as Location from 'expo-location';
 import { useAuth } from '@/context/AuthContext';
-import { api, getUser, Vehicle } from '@/services/api';
+import { api, FuelPrice, getFuelPrice, getUser, Vehicle } from '@/services/api';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
+import {
+  FALLBACK_FUEL_PRICES,
+  FUEL_TYPE_LABELS,
+  FuelType,
+  tripFuelOutlook,
+} from '@/utils/fuel';
+import { TankLevel, loadFuelType, loadTankLevel, loadTankSize } from '@/services/tankState';
 import { routeErrorMessage } from '@/utils/route';
 import { PlaceSuggestion, usePlaceSuggestions } from '@/hooks/usePlaceSuggestions';
 import { ThemeColors } from '@/constants/theme';
@@ -22,7 +29,10 @@ import { ThemeColors } from '@/constants/theme';
 // Google Directions/Places calls go through our API's /navigation proxy:
 // the browser can't call Google's web services directly (no CORS), and the
 // proxy keeps the Google key server-side instead of in this bundle.
-const FUEL_PRICE_PER_LITRE = 7.2; // ₪ per litre
+//
+// The pump price is fetched from our API rather than hardcoded here: the
+// Ministry of Energy revises the national 95 price every month, and a constant
+// in this bundle would only be correctable by shipping a new build.
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface RouteResult {
@@ -114,6 +124,16 @@ export default function TripPlannerScreen() {
   const { suggestions, visible: showSuggestions, search, clear } = usePlaceSuggestions();
   const inputRef = useRef<TextInput>(null);
 
+  // null until the lookup finishes or fails; the fallback covers both, so the
+  // estimate never waits on it.
+  const [fuelPrice, setFuelPrice] = useState<FuelPrice | null>(null);
+  // Priced by what the car actually burns. Costing a diesel at the petrol rate
+  // was out by roughly 40%, and the fuel tab was already showing the right one.
+  const [fuelType, setFuelType]   = useState<FuelType>('95');
+  const pricePerLitre =
+    fuelPrice?.prices?.find(p => p.fuelType === fuelType)?.pricePerLitreILS ??
+    FALLBACK_FUEL_PRICES[fuelType];
+
   useEffect(() => {
     if (!authUser) return;
     getUser(authUser.id).then(u => {
@@ -123,6 +143,29 @@ export default function TripPlannerScreen() {
         setFuelInput(v.averageFuelConsumption.toFixed(1));
     }).catch(() => {});
   }, [authUser]);
+
+  // Separate from the vehicle load: the price is not per-user, and a failure
+  // here must not cost the screen its consumption figure.
+  useEffect(() => {
+    getFuelPrice().then(setFuelPrice);
+  }, []);
+
+  const [tankLevel, setTankLevel] = useState<TankLevel | null>(null);
+  const [tankL, setTankL]         = useState<number | null>(null);
+
+  useEffect(() => {
+    loadTankLevel(vehicle?.id).then(setTankLevel);
+    loadTankSize(vehicle?.id).then(setTankL);
+    loadFuelType(vehicle?.id).then(setFuelType);
+  }, [vehicle?.id]);
+
+  // Deliberately gated on isReal: an estimated level is fine for a gauge, but
+  // "you have enough to get there" is a claim that should rest on what the car
+  // actually reported.
+  const outlook =
+    result && tankLevel?.isReal
+      ? tripFuelOutlook(tankL, tankLevel.pct, result.estimatedFuelL, pricePerLitre)
+      : null;
 
   const onDestinationChange = (text: string) => {
     setDestination(text);
@@ -200,7 +243,7 @@ export default function TripPlannerScreen() {
         baseFuelL:          fuel.baseFuelL,
         estimatedFuelL:     fuel.estimatedFuelL,
         extraFuelL:         fuel.extraFuelL,
-        fuelCostILS:        fuel.estimatedFuelL * FUEL_PRICE_PER_LITRE,
+        fuelCostILS:        fuel.estimatedFuelL * pricePerLitre,
         trafficLabel:       tm.label,
         trafficColor:       tm.color,
         // Coordinates from the route itself rather than the typed text: a
@@ -390,6 +433,12 @@ export default function TripPlannerScreen() {
                 <Text style={styles.fuelUnit}>litres</Text>
               </View>
               <Text style={styles.fuelCost}>≈ ₪{result.fuelCostILS.toFixed(2)}</Text>
+              {/* The rate is stated rather than left implicit: a cost figure
+                  with no price behind it is impossible for the driver to
+                  sanity-check against what they actually pay. */}
+              <Text style={styles.fuelPriceNote}>
+                at ₪{pricePerLitre.toFixed(2)}/L for {FUEL_TYPE_LABELS[fuelType]}
+              </Text>
               <View style={styles.fuelDivider} />
               <View style={styles.fuelBreakdown}>
                 <View style={styles.fuelRow}>
@@ -408,6 +457,39 @@ export default function TripPlannerScreen() {
                 </View>
               </View>
             </View>
+
+            {/* ── Will you make it? ──
+                Only shown when the car reported its own fuel level. Telling a
+                driver they have enough to get there is a claim worth making
+                from a measurement and not from an estimate built on a baseline
+                they typed days ago. */}
+            {outlook && (
+              <View style={[styles.outlookCard, !outlook.enough && styles.outlookCardShort]}>
+                {outlook.enough ? (
+                  <>
+                    <Text style={styles.outlookTitle}>You have enough fuel</Text>
+                    <Text style={styles.outlookBody}>
+                      You should arrive with about{' '}
+                      <Text style={styles.outlookStrong}>{outlook.litresLeft.toFixed(1)}L</Text>{' '}
+                      left — roughly {outlook.pctLeft}% of a tank.
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={[styles.outlookTitle, { color: c.Severity.red }]}>
+                      Not enough fuel for this trip
+                    </Text>
+                    <Text style={styles.outlookBody}>
+                      You need about{' '}
+                      <Text style={styles.outlookStrong}>{outlook.shortfallL.toFixed(1)}L</Text>{' '}
+                      more — roughly{' '}
+                      <Text style={styles.outlookStrong}>₪{outlook.topUpCost.toFixed(0)}</Text>{' '}
+                      at ₪{pricePerLitre.toFixed(2)}/L. Fill up before you go.
+                    </Text>
+                  </>
+                )}
+              </View>
+            )}
           </>
         )}
 
@@ -506,8 +588,25 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   fuelMain:    { flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginBottom: 4 },
   fuelValue:   { fontSize: 52, fontWeight: '800', color: c.Dashboard.textPrimary, lineHeight: 56 },
   fuelUnit:    { fontSize: 18, color: c.Dashboard.textSecondary, marginBottom: 8 },
-  fuelCost:    { fontSize: 20, fontWeight: '600', color: c.Dashboard.accent, marginBottom: 16 },
+  fuelCost:    { fontSize: 20, fontWeight: '600', color: c.Dashboard.accent, marginBottom: 2 },
+  // Carries the bottom margin that used to sit on fuelCost, so the block below
+  // keeps its spacing whichever of the two is last.
+  fuelPriceNote: { fontSize: 12, color: c.Dashboard.textSecondary, marginBottom: 16 },
   fuelDivider: { height: 1, backgroundColor: c.Dashboard.cardBorder, marginBottom: 14 },
+  outlookCard: {
+    backgroundColor: c.Dashboard.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.Dashboard.cardBorder,
+    borderLeftWidth: 4,
+    borderLeftColor: c.Fuel.trendGreen,
+    padding: 16,
+    marginTop: 16,
+  },
+  outlookCardShort: { borderLeftColor: c.Severity.red },
+  outlookTitle:  { fontSize: 15, fontWeight: '700', color: c.Dashboard.textPrimary, marginBottom: 6 },
+  outlookBody:   { fontSize: 14, lineHeight: 21, color: c.Dashboard.textSecondary },
+  outlookStrong: { fontWeight: '800', color: c.Dashboard.textPrimary },
   fuelBreakdown: { gap: 8 },
   fuelRow:     { flexDirection: 'row', justifyContent: 'space-between' },
   fuelRowLabel:{ fontSize: 13, color: c.Dashboard.textSecondary },

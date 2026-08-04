@@ -104,6 +104,23 @@ export async function savePrefs(prefs: NotifPrefs): Promise<void> {
 // ─── Permissions ───────────────────────────────────────────────────────────────
 
 /** Ask for notification permission. Returns true when granted. */
+/**
+ * Wipes the saved preferences.
+ *
+ * Called on logout. These settings — the home address above all — belong to the
+ * person, not the device: without this, signing out and registering a new
+ * account left the new user already knowing someone else's home address.
+ *
+ * The key is deliberately not scoped per user instead. The geofence task fires
+ * from the OS with no session to consult, so it could not tell whose
+ * preferences to read.
+ */
+export async function clearPrefs(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(PREFS_KEY);
+  } catch { /* nothing more we can do; the next write overwrites anyway */ }
+}
+
 export async function ensureNotifPermission(): Promise<boolean> {
   const current = await Notifications.getPermissionsAsync();
   if (current.granted) return true;

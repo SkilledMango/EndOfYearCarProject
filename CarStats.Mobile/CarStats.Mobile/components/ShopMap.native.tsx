@@ -4,7 +4,7 @@
  * and outlined variants alternate. Frames itself around the pins + user.
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
@@ -23,22 +23,28 @@ export default function ShopMap({ shops, userPos }: ShopMapProps) {
   const { colors: c } = useTheme();
   const styles = useStyles();
   const mapRef = useRef<MapView>(null);
+  // On Android fitToCoordinates is a no-op until the map has laid itself out,
+  // and it fails silently — the map simply stayed on the Tel Aviv default while
+  // the list underneath showed results in Hadera. Waiting for onMapReady is
+  // what makes the fit actually take.
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
-    if (shops.length === 0) return;
+    if (!mapReady || shops.length === 0) return;
     const coords = shops.map(s => ({ latitude: s.latitude, longitude: s.longitude }));
     if (userPos) coords.push({ latitude: userPos.lat, longitude: userPos.lng });
     mapRef.current?.fitToCoordinates(coords, {
       edgePadding: { top: 60, bottom: 60, left: 60, right: 60 },
       animated: false,
     });
-  }, [shops, userPos]);
+  }, [mapReady, shops, userPos]);
 
   return (
     <MapView
       ref={mapRef}
       style={styles.map}
       initialRegion={DEFAULT_REGION}
+      onMapReady={() => setMapReady(true)}
       showsUserLocation
       showsMyLocationButton={false}
       toolbarEnabled={false}

@@ -4,7 +4,7 @@
  * and account actions (refresh, logout).
  */
 
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,7 +15,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { UserRole } from '@/services/api';
@@ -27,6 +27,23 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [refreshing, setRefreshing]   = useState(false);
   const [loggingOut, setLoggingOut]   = useState(false);
+
+  // Re-fetch on focus. Without this the screen showed the snapshot taken at
+  // login, so a fault logged or a consumption figure updated since then left
+  // Profile disagreeing with the garage — 1 fault against 3, 9 L/100km against
+  // 6.4 — on the screen a user is most likely to read as authoritative.
+  //
+  // Held in a ref because refreshUser is rebuilt on every render of the auth
+  // provider: depending on it directly would re-run this effect, set state, and
+  // loop. Must also sit above the early return below — hooks cannot run
+  // conditionally.
+  const refreshRef = useRef(refreshUser);
+  refreshRef.current = refreshUser;
+  useFocusEffect(
+    useCallback(() => {
+      refreshRef.current();
+    }, []),
+  );
 
   if (!user) return null; // _layout redirects to /login when logged out
 

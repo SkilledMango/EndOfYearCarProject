@@ -8,6 +8,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppUser, AuthSession, api, getUser, setAuthToken } from '@/services/api';
+import { clearPrefs, disableChildReminder } from '@/services/notifications';
 
 // Bumped from '@carstats_user' when sessions gained a JWT — old entries
 // (a bare AppUser with no token) can't call the API anymore, so a stored
@@ -212,6 +213,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ── logout ───────────────────────────────────────────────────────────────
   const logout = async () => {
+    // Tear down what belongs to the person leaving, before the session goes.
+    //
+    // The geofence matters more than it looks: registered with one account's
+    // home coordinates, it stays armed across a logout and would fire "you've
+    // arrived home" at whoever signs in next, about an address that isn't
+    // theirs. Clearing the prefs alone would not stop it — the geofence lives
+    // with the OS, not in storage.
+    //
+    // Failures here must never block signing out; a stuck logout is worse than
+    // a stale reminder.
+    try {
+      await disableChildReminder();
+      await clearPrefs();
+    } catch { /* best effort */ }
+
     await endSession();
   };
 

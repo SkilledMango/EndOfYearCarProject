@@ -27,9 +27,23 @@ namespace CarStats.API.Controllers
         [Authorize(Policy = "AdminOnly")]
         public async Task<ActionResult<IEnumerable<AppUser>>> GetUsers()
         {
-            return await _context.Users
+            var users = await _context.Users
                 .Include(u => u.Vehicles)
                 .ToListAsync();
+
+            // Same derivation as GetUser, so the admin panel and the app never
+            // disagree about a user's fault count. One grouped query rather
+            // than a count per user.
+            var faultCounts = await _context.VehicleEvents
+                .Where(e => e.AppUserId != null)
+                .GroupBy(e => e.AppUserId!.Value)
+                .Select(g => new { UserId = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.UserId, x => x.Count);
+
+            foreach (var u in users)
+                u.TotalFaultsLogged = faultCounts.TryGetValue(u.Id, out var n) ? n : 0;
+
+            return users;
         }
 
         // GET: Fetch a single user's profile (with vehicles) for the mobile app.
@@ -46,6 +60,17 @@ namespace CarStats.API.Controllers
 
             if (user == null) return NotFound();
             user.PasswordHash = string.Empty; // never expose the hash to clients
+
+            // Counted from the events themselves rather than read from the
+            // stored column. The column is a running total maintained at write
+            // time, so any increment that was ever missed stays missed — and
+            // because a repeated fault is deduplicated, no later scan can put
+            // the number right again. Counting here means the stat always
+            // matches what the History screen lists, and a wrong stored value
+            // corrects itself the next time the profile loads.
+            user.TotalFaultsLogged = await _context.VehicleEvents
+                .CountAsync(e => e.AppUserId == id);
+
             return user;
         }
 

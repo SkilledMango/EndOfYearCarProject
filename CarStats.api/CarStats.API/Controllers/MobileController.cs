@@ -86,21 +86,10 @@ namespace CarStats.API.Controllers
 
                 await _context.SaveChangesAsync();
 
-                // Keep the user's lifetime fault counter in sync.
-                //
-                // Incremented in the database rather than read-modify-write in
-                // memory. A scan reports every code it found at once, so three
-                // faults arrive as three concurrent requests; each would read
-                // the same starting value, add one, and save — and two of the
-                // three increments would be lost. A single scan finding three
-                // faults would raise the count by one.
-                if (request.UserId.HasValue)
-                {
-                    await _context.Users
-                        .Where(u => u.Id == request.UserId.Value)
-                        .ExecuteUpdateAsync(setters =>
-                            setters.SetProperty(u => u.TotalFaultsLogged, u => u.TotalFaultsLogged + 1));
-                }
+                // No counter to bump: AppUser.TotalFaultsLogged is derived from
+                // these rows when a profile is read. Maintaining a running total
+                // here as well would only reintroduce the drift that made it
+                // wrong — the event row is the single source of truth.
             }
 
             // 2. Look up the human-readable translation from the dictionary

@@ -32,6 +32,10 @@ namespace CarStats.API.Models
 
         public UserRole Role { get; set; } = UserRole.User;
 
+        // Filled in from a COUNT over VehicleEvents whenever a profile is read,
+        // not from this column. The stored value is left over from when it was
+        // a running total and is no longer authoritative; dropping it needs a
+        // migration, so it stays until one is convenient.
         public int TotalFaultsLogged { get; set; } = 0;
         public bool IsPremiumMember { get; set; } = false;
 

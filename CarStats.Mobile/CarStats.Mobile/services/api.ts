@@ -213,3 +213,39 @@ export const getDiagnosticCodes = async (): Promise<DiagnosticCode[]> => {
   const { data } = await api.get<DiagnosticCode[]>('/dtc');
   return data;
 };
+
+export interface FuelPriceEntry {
+  fuelType: string;
+  pricePerLitreILS: number;
+  /** True only for 95, the one type Israel regulates. */
+  isOfficial: boolean;
+}
+
+export interface FuelPrice {
+  /** The regulated 95 price, for callers that don't care about type. */
+  pricePerLitreILS: number;
+  /** ISO date the regulated price took effect. */
+  effectiveFrom: string;
+  fuelType: string;
+  prices: FuelPriceEntry[];
+}
+
+/**
+ * The current national price of 95-octane petrol.
+ *
+ * Comes from the server rather than a constant in this bundle because the
+ * Ministry of Energy changes it on the first of every month, and a price
+ * compiled into the app can only be corrected by shipping a new build.
+ *
+ * Never throws: a trip estimate based on a slightly old price is far better
+ * than a screen that fails because a price lookup did. Callers fall back to
+ * FALLBACK_FUEL_PRICE_ILS.
+ */
+export const getFuelPrice = async (): Promise<FuelPrice | null> => {
+  try {
+    const { data } = await api.get<FuelPrice>('/fuelprice');
+    return data.pricePerLitreILS > 0 ? data : null;
+  } catch {
+    return null;
+  }
+};

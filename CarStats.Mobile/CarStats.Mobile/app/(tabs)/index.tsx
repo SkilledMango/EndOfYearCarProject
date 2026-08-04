@@ -34,6 +34,7 @@ import {
 } from '@/services/scanner';
 import { decodeVin, VinDecodeResult, vinMatchesVehicle } from '@/services/vindecode';
 import { sendFaultAlert } from '@/services/notifications';
+import { saveTankLevel, saveTankSize } from '@/services/tankState';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { Plate } from '@/constants/theme';
 import { severityColor, severityMeta, worstSeverity } from '@/utils/severity';
@@ -302,6 +303,17 @@ export default function HomeScreen() {
       avgL100km: selectedVehicle?.averageFuelConsumption,
     }));
   }, [liveData, fuelBaseline, tripKm, selectedVehicle]);
+
+  // Publish the level for the fuel tab and the trip planner. This screen is the
+  // only one that polls the adapter, so without this they have no way to know
+  // how full the tank is. A real OBD reading wins over our estimate, and which
+  // one it is travels with the value — the trip planner refuses to answer "will
+  // I make it" from a guess.
+  useEffect(() => {
+    const real = liveData?.fuelPercent ?? null;
+    if (real != null)          saveTankLevel(real, true, selectedVehicle?.id);
+    else if (estimatedFuel != null) saveTankLevel(estimatedFuel, false, selectedVehicle?.id);
+  }, [liveData?.fuelPercent, estimatedFuel, selectedVehicle?.id]);
 
   // ── Auto-scan DTCs from hardware ─────────────────────────────────────────
   const handleScanDtcs = async () => {
@@ -612,6 +624,9 @@ export default function HomeScreen() {
         currentEstimate={estimatedFuel ?? fuelBaseline?.pct ?? null}
         onSave={(pct, tankL) => {
           saveFuelBaseline({ pct, tankL, tripKm }, selectedVehicle?.id);
+          // Also to the shared key, so the fuel tab and trip planner see a
+          // capacity set here without having to know about fuel baselines.
+          saveTankSize(tankL, selectedVehicle?.id);
           setFuelModalVisible(false);
         }}
         onCancel={() => setFuelModalVisible(false)}
