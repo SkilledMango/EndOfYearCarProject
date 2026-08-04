@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import ScanOverlay from '@/components/ScanOverlay';
 import { AddVehicleModal, VehiclePrefill } from '@/components/AddVehicleModal';
 import {
@@ -122,7 +122,12 @@ export default function HomeScreen() {
         getUserEvents(authUser.id),
       ]);
       setUser(userData);
-      setSelectedVehicle(prev => prev ?? userData.vehicles?.[0] ?? null);
+      // שומרים על הרכב שנבחר רק אם הוא עדיין קיים ברשימה שחזרה — אחרת
+      // רכב שנמחק מהפרופיל היה נשאר על המסך הזה עד להפעלה מחדש.
+      setSelectedVehicle(prev => {
+        const list = userData.vehicles ?? [];
+        return (prev ? list.find(v => v.id === prev.id) : null) ?? list[0] ?? null;
+      });
       setRecentEvents(events.slice(0, 3));
     } catch {
       // API unreachable — show empty state
@@ -229,6 +234,14 @@ export default function HomeScreen() {
     loadData();
     checkScanner();
   }, [loadData, checkScanner]);
+
+  // גם בכל חזרה למסך: הלשוניות נשארות טעונות, אז רכב שנמחק בפרופיל היה
+  // ממשיך להופיע כאן — כולל בבורר הרכבים — עד להפעלה מחדש של האפליקציה.
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData]),
+  );
 
   useEffect(() => {
     loadFuelBaseline(selectedVehicle?.id);

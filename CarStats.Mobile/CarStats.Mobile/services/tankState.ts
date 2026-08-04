@@ -91,6 +91,28 @@ export async function loadTankLevel(vehicleId?: number): Promise<TankLevel | nul
   }
 }
 
+/**
+ * מוחק את כל מה ששמור מקומית עבור רכב מסוים, אחרי שהוא נמחק מהמוסך.
+ *
+ * מזהי רכבים מגיעים ממסד הנתונים ויכולים לחזור על עצמם, אז בלי המחיקה הזו
+ * רכב חדש היה יכול לרשת את יומן התדלוקים ואת גודל המיכל של רכב שנמחק.
+ *
+ * הרשימה כאן היא המקום היחיד שמכיר את כל המפתחות ששייכים לרכב — שלושה מהם
+ * נכתבים בקובץ הזה, ושלושת האחרים במסך הבית ובלשונית הדלק.
+ */
+export async function clearVehicleData(vehicleId: number): Promise<void> {
+  try {
+    await AsyncStorage.multiRemove([
+      levelKey(vehicleId),
+      tankKey(vehicleId),
+      typeKey(vehicleId),
+      `fuel_fillups_${vehicleId}`,
+      `fuel_baseline_${vehicleId}`,
+      `trip_km_${vehicleId}`,
+    ]);
+  } catch { /* המחיקה בשרת כבר הצליחה — שאריות מקומיות לא שוברות כלום */ }
+}
+
 export async function saveTankSize(tankL: number, vehicleId?: number): Promise<void> {
   if (!Number.isFinite(tankL) || tankL <= 0) return;
   try {

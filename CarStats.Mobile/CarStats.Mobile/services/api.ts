@@ -157,6 +157,16 @@ export const createVehicle = async (dto: CreateVehicleDto): Promise<Vehicle> => 
   return data;
 };
 
+/**
+ * Removes a vehicle from the signed-in user's garage.
+ *
+ * The API refuses the call unless the car belongs to the caller, so a guessed
+ * id cannot delete someone else's vehicle.
+ */
+export const deleteVehicle = async (id: number): Promise<void> => {
+  await api.delete(`/vehicles/${id}`);
+};
+
 export const getNearbyShops = async (lat: number, lng: number): Promise<NearbyShop[]> => {
   const { data } = await api.get<NearbyShop[]>('/navigation/nearby-shops', {
     params: { lat, lng },

@@ -18,7 +18,8 @@ import {
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
-import { UserRole } from '@/services/api';
+import { UserRole, Vehicle, deleteVehicle } from '@/services/api';
+import { clearVehicleData } from '@/services/tankState';
 
 export default function ProfileScreen() {
   const { user, logout, refreshUser } = useAuth();
@@ -27,6 +28,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [refreshing, setRefreshing]   = useState(false);
   const [loggingOut, setLoggingOut]   = useState(false);
+  const [deletingId, setDeletingId]   = useState<number | null>(null);
 
   // Re-fetch on focus. Without this the screen showed the snapshot taken at
   // login, so a fault logged or a consumption figure updated since then left
@@ -64,6 +66,40 @@ export default function ProfileScreen() {
     setRefreshing(true);
     await refreshUser();
     setRefreshing(false);
+  };
+
+  /**
+   * מוחק רכב מהמוסך, אחרי אישור מפורש.
+   *
+   * ההודעה מזכירה את הרכב בשמו ואת מה שנמחק איתו — יומן התדלוקים וההיסטוריה
+   * מקומיים לרכב, ואי אפשר להחזיר אותם.
+   */
+  const confirmDeleteVehicle = (v: Vehicle) => {
+    Alert.alert(
+      'Remove vehicle?',
+      `${v.year} ${v.make} ${v.model} (${v.licensePlate})\n\n` +
+      'Its fuel log and saved settings will be deleted too. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingId(v.id);
+            try {
+              await deleteVehicle(v.id);
+              // רק אחרי שהשרת אישר — אחרת היינו מוחקים נתונים של רכב שעדיין קיים.
+              await clearVehicleData(v.id);
+              await refreshUser();
+            } catch {
+              Alert.alert('Could not remove the vehicle', 'Check your connection and try again.');
+            } finally {
+              setDeletingId(null);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const confirmLogout = () => {
@@ -136,6 +172,16 @@ export default function ProfileScreen() {
             <Text style={s.vehicleFuel}>
               {v.averageFuelConsumption > 0 ? `${v.averageFuelConsumption} L/100km` : '—'}
             </Text>
+            <Pressable
+              onPress={() => confirmDeleteVehicle(v)}
+              disabled={deletingId != null}
+              hitSlop={10}
+              style={s.vehicleDelete}
+            >
+              {deletingId === v.id
+                ? <ActivityIndicator size="small" color={c.Severity.red} />
+                : <Text style={s.vehicleDeleteText}>✕</Text>}
+            </Pressable>
           </View>
         ))
       )}
@@ -238,6 +284,8 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
     borderColor: c.Dashboard.cardBorder,
     padding: 14,
   },
+  vehicleDelete:     { paddingHorizontal: 4, paddingVertical: 2, marginLeft: 10 },
+  vehicleDeleteText: { fontSize: 17, color: c.Dashboard.textSecondary, fontWeight: '600' },
   vehicleName:  { fontSize: 15, fontWeight: '600', color: c.Dashboard.textPrimary },
   vehiclePlate: { fontSize: 12, color: c.Dashboard.textSecondary, marginTop: 2 },
   vehicleFuel:  { fontSize: 12, color: c.Dashboard.textSecondary, fontWeight: '600' },

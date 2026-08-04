@@ -1,8 +1,3 @@
-/**
- * Shared severity helpers — the single place that maps SeverityLevel to
- * colors/labels and folds scan results down to their worst severity.
- * (Previously copy-pasted across the home, history, and scan-overlay screens.)
- */
 
 import { ReportDtcResponse, SeverityLevel } from '@/services/api';
 import { ThemeColors } from '@/constants/theme';
