@@ -67,7 +67,7 @@ export async function showChildReminderNotification(): Promise<void> {
     trigger: null, // להציג מיד, בלי תזמון
   });
 }
-// מכין את הפונקציה ככה שהיא תעבוד גם כשהאפליקציה סגורה
+// מגדיר את הפונקציה ככה שהיא תעבוד גם כשהאפליקציה סגורה (מערכת ההפעלה עוקבת אחרי המיקום)
 TaskManager.defineTask(CHILD_REMINDER_TASK, async ({ data, error }) => {
   if (error || !data) return;
   // סוג האירוע שקרה: כניסה לעיגול או יציאה ממנו.
@@ -149,7 +149,7 @@ export async function enableChildReminder(lat: number, lng: number): Promise<voi
     );
   }
 
-  await Location.startGeofencingAsync(CHILD_REMINDER_TASK, [
+  await Location.startGeofencingAsync(CHILD_REMINDER_TASK, [ // מערכת ההפעלה עוקבת אחרי העיגול והפונקציה תופעל כשנכנס אליו
     {
       latitude: lat,
       longitude: lng,

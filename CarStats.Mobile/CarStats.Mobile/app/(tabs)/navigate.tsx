@@ -8,6 +8,13 @@
  * With location denied, results center on Tel Aviv instead.
  */
 
+import ShopMap from '@/components/ShopMap';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { createThemedStyles, useTheme } from '@/context/ThemeContext';
+import { NearbyShop, getNearbyShops, getShopPhone } from '@/services/api';
+import { loadPrefs } from '@/services/notifications';
+import * as Location from 'expo-location';
+import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -20,14 +27,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
-import * as Location from 'expo-location';
 import { SegmentedButtons } from 'react-native-paper';
-import ShopMap from '@/components/ShopMap';
-import { NearbyShop, getNearbyShops, getShopPhone } from '@/services/api';
-import { loadPrefs } from '@/services/notifications';
-import { createThemedStyles, useTheme } from '@/context/ThemeContext';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 
 // Search center when location permission is denied
 const FALLBACK_CENTER = { lat: 32.0853, lng: 34.7818 }; // Tel Aviv
@@ -70,22 +70,20 @@ export default function MechanicFinderScreen() {
   const [hasHome, setHasHome]       = useState(false);
   // Phone numbers already looked up this session (placeId → phone | null)
   const phoneCache = useRef<Record<string, string | null>>({});
-
+      
   const load = useCallback(async (isRefresh = false, mode: SearchOrigin = origin) => {
-    if (isRefresh) setRefreshing(true); // origin = current location
+    if (isRefresh) setRefreshing(true); // origin = current location (home or current)
     try {
       let pos: { lat: number; lng: number } | null = null;
 
       if (mode === 'home') {
-        const prefs = await loadPrefs(); // what saved from settings
+        const prefs = await loadPrefs(); //takes what home address is saved from settings
         if (prefs.homeLat != null && prefs.homeLng != null) {
-          pos = { lat: prefs.homeLat, lng: prefs.homeLng };
+          pos = { lat: prefs.homeLat, lng: prefs.homeLng }; // lattitude and longitude of home address
         }
       }
 
-      // רץ גם כשביקשו חיפוש לפי הבית אבל אין כתובת שמורה — ברירת
-      // המחדל היא 'home' גם כשאין בית, אז בלי זה לא היינו מנסים איכון כלל.
-      if (!pos) {
+      if (!pos) { //(means the mode is current and we don't have a home address saved)
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status === 'granted') {
@@ -96,7 +94,7 @@ export default function MechanicFinderScreen() {
               });
               coords = loc.coords;
             } catch {
-              // אין איכון עדכני בתוך מבנה או בחניון; ישן עדיין מוצא אותם מוסכים.
+              // במקרה והמיקום של המכשיר לא זמין(כלומר חניון או משהו בסגנון) ניגש למיקום האחרון שהיה זמין
               const last = await Location.getLastKnownPositionAsync();
               coords = last?.coords ?? null;
             }
@@ -106,15 +104,14 @@ export default function MechanicFinderScreen() {
       }
 
       if (mode === 'current') setMyPos(pos);
-      setUsedFallback(!pos);
+      setUsedFallback(!pos); //  records a plain boolean: did we end up with no position at all? if so, fallback = tel aviv
 
       const center = pos ?? FALLBACK_CENTER; // מרכז תל אביב אם אין מיקום
       const results = await getNearbyShops(center.lat, center.lng);
 
-      // מרחק הוא מספר אמיתי רק כשיודעים היכן המשתמש נמצא.
       setShops(results.map(shop => ({
         ...shop,
-        distanceKm: pos ? haversineKm(pos.lat, pos.lng, shop.latitude, shop.longitude) : null,
+        distanceKm: pos ? haversineKm(pos.lat, pos.lng, shop.latitude, shop.longitude) : null, //פונקציה מחשבת את המרחק בין המיקום שלנו לבין החנות
       })));
     } catch { /* השרת לא זמין — משאירים את הרשימה הקודמת */ }
     finally {
@@ -125,8 +122,6 @@ export default function MechanicFinderScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  // בכל כניסה למסך ולא רק בטעינה: הלשוניות נשארות טעונות, אז בית
-  // שנשמר בהגדרות לא היה מופיע כאן עד להפעלה מחדש של האפליקציה.
   useFocusEffect(
     useCallback(() => {
       loadPrefs().then(p => setHasHome(p.homeLat != null && p.homeLng != null));

@@ -1,3 +1,17 @@
+import { ThemeColors } from '@/constants/theme';
+import { useAuth } from '@/context/AuthContext';
+import { createThemedStyles, useTheme } from '@/context/ThemeContext';
+import { PlaceSuggestion, usePlaceSuggestions } from '@/hooks/usePlaceSuggestions';
+import { api, FuelPrice, getFuelPrice, getUser, Vehicle } from '@/services/api';
+import { loadFuelType, loadTankLevel, loadTankSize, TankLevel } from '@/services/tankState';
+import {
+  FALLBACK_FUEL_PRICES,
+  FUEL_TYPE_LABELS,
+  FuelType,
+  tripFuelOutlook,
+} from '@/utils/fuel';
+import { routeErrorMessage } from '@/utils/route';
+import * as Location from 'expo-location';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,20 +25,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import * as Location from 'expo-location';
-import { useAuth } from '@/context/AuthContext';
-import { api, FuelPrice, getFuelPrice, getUser, Vehicle } from '@/services/api';
-import { createThemedStyles, useTheme } from '@/context/ThemeContext';
-import {
-  FALLBACK_FUEL_PRICES,
-  FUEL_TYPE_LABELS,
-  FuelType,
-  tripFuelOutlook,
-} from '@/utils/fuel';
-import { TankLevel, loadFuelType, loadTankLevel, loadTankSize } from '@/services/tankState';
-import { routeErrorMessage } from '@/utils/route';
-import { PlaceSuggestion, usePlaceSuggestions } from '@/hooks/usePlaceSuggestions';
-import { ThemeColors } from '@/constants/theme';
 
 // Google calls go through our API's /navigation proxy: no CORS on Google's web
 // services, and it keeps the API key off the client. The pump price is served
@@ -66,10 +66,10 @@ function calcFuelWithTraffic(
   durationTrafficSec: number,
   avgL100: number,
 ) {
-  const baseFuelL      = (distanceKm / 100) * avgL100;
-  const trafficRatio   = durationSec > 0 ? durationTrafficSec / durationSec : 1;
-  const trafficMult    = 1 + Math.max(0, (trafficRatio - 1) * 0.5);
-  const estimatedFuelL = baseFuelL * trafficMult;
+  const baseFuelL      = (distanceKm / 100) * avgL100; // בודק את כמות הדלק שהרכב צורך לפי המרחק והצריכה הממוצעת
+  const trafficRatio   = durationSec > 0 ? durationTrafficSec / durationSec : 1; //מחשב ביחס כמה יותר זמן לקח בפקקים לעומת הנסיעה הרגילה
+  const trafficMult    = 1 + Math.max(0, (trafficRatio - 1) * 0.5); // כמה דלק נוסף יידרש בגלל הפקקים
+  const estimatedFuelL = baseFuelL * trafficMult; //התוצאה הסופית — בסיס כפול המכפיל 
   return { baseFuelL, estimatedFuelL, extraFuelL: estimatedFuelL - baseFuelL, trafficRatio };
 }
 
