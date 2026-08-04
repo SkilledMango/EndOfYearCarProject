@@ -83,7 +83,7 @@ export default function MechanicFinderScreen() {
         }
       }
 
-      if (!pos) { //(means the mode is current and we don't have a home address saved)
+      if (!pos) { //(means the mode is current or we don't have a home address saved)
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status === 'granted') {
