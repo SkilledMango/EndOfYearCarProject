@@ -99,34 +99,44 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
   const applyFallbackFuel = async (
     make: string, model: string, year: number, hFuelType: string,
   ) => {
-    // Stage 3: NRCan (European petrol + all Asian/US)
-    const nrcanL100km = await getNRCanL100km(make, model, year);
-    if (nrcanL100km) {
-      console.log(`[fuel] Stage 3 NRCan: ${nrcanL100km} L/100km`);
-      setFuelL100km(String(nrcanL100km));
-      setFuelSource('nrcan');
-    } else {
-      // Stage 3.5: Gemini AI (global knowledge — covers any model)
-      console.log('[fuel] Stage 3 NRCan: no match — trying Gemini');
-      const aiL100km = await getGeminiL100km(make, model, year, hFuelType);
-      if (aiL100km) {
-        console.log(`[fuel] Stage 3.5 Gemini: ${aiL100km} L/100km`);
-        setFuelL100km(String(aiL100km));
-        setFuelSource('ai');
+    try {
+      // Stage 3: NRCan (European petrol + all Asian/US)
+      const nrcanL100km = await getNRCanL100km(make, model, year);
+      if (nrcanL100km) {
+        console.log(`[fuel] Stage 3 NRCan: ${nrcanL100km} L/100km`);
+        setFuelL100km(String(nrcanL100km));
+        setFuelSource('nrcan');
       } else {
-        // Stage 4: Smart default from fuel type
-        const suggested = suggestL100kmByFuelType(hFuelType);
-        console.log(`[fuel] Stage 3.5 Gemini: no result — fallback suggested=${suggested}`);
-        if (suggested !== null) {
-          setFuelL100km(String(suggested));
-          setFuelSource('suggested');
+        // Stage 3.5: Gemini AI (global knowledge — covers any model)
+        console.log('[fuel] Stage 3 NRCan: no match — trying Gemini');
+        const aiL100km = await getGeminiL100km(make, model, year, hFuelType);
+        if (aiL100km) {
+          console.log(`[fuel] Stage 3.5 Gemini: ${aiL100km} L/100km`);
+          setFuelL100km(String(aiL100km));
+          setFuelSource('ai');
         } else {
-          setFuelSource('manual');  // electric — L/100km not applicable
+          // Stage 4: Smart default from fuel type
+          const suggested = suggestL100kmByFuelType(hFuelType);
+          console.log(`[fuel] Stage 3.5 Gemini: no result — fallback suggested=${suggested}`);
+          if (suggested !== null) {
+            setFuelL100km(String(suggested));
+            setFuelSource('suggested');
+          } else {
+            setFuelSource('manual');  // electric — L/100km not applicable
+          }
         }
       }
+    } catch {
+      // Every lookup stage failed. The driver can still type the figure in —
+      // far better than leaving them on a screen that never stops loading.
+      setFuelSource('manual');
+    } finally {
+      // In a finally so a throw from any stage above cannot strand the modal
+      // with loading stuck true, which leaves every step showing a spinner
+      // instead of its content.
+      setLoading(false);
+      setStep('details');
     }
-    setLoading(false);
-    setStep('details');
   };
 
   const runFuelLookupChain = async (
@@ -168,6 +178,11 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
 
   // ── Reset ─────────────────────────────────────────────────────────────────
   const reset = () => {
+    // Clearing these first matters: going back to the start is the driver's
+    // last way out of a screen that is stuck loading, and leaving either flag
+    // set would carry the stuck spinner into the fresh flow.
+    setLoading(false);
+    setSaving(false);
     setStep('plate');
     setPlateText('');
     setLookupError(null);
@@ -312,26 +327,33 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
   const handleSelectTrim = async (trimId: string) => {
     setLoading(true);
     setError(null);
+    // Wrapped so every exit clears loading. The success path below returns
+    // early, and without this it left the modal loading forever — the details
+    // step and every step behind it then render a spinner instead of their
+    // content, so Back appears to do nothing.
     try {
-      const details = await getVehicleDetails(trimId);
-      if (details.comb08 > 0) {
-        setFuelL100km(String(mpgToL100km(details.comb08)));
-        setFuelSource('epa');
-        setStep('details');
+      try {
+        const details = await getVehicleDetails(trimId);
+        if (details.comb08 > 0) {
+          setFuelL100km(String(mpgToL100km(details.comb08)));
+          setFuelSource('epa');
+          setStep('details');
+          return;
+        }
+      } catch { /* fall through */ }
+
+      // EPA trim had no fuel data — run the shared NRCan → Gemini → default chain
+      const year = parseInt(yearText, 10);
+      if (selectedMake && selectedModel && year) {
+        await applyFallbackFuel(selectedMake, selectedModel, year, fuelType);
         return;
       }
-    } catch { /* fall through */ }
-
-    // EPA trim had no fuel data — run the shared NRCan → Gemini → default chain
-    const year = parseInt(yearText, 10);
-    if (selectedMake && selectedModel && year) {
-      await applyFallbackFuel(selectedMake, selectedModel, year, fuelType);
-      return;
+      const suggested = suggestL100kmByFuelType(fuelType);
+      if (suggested !== null) { setFuelL100km(String(suggested)); setFuelSource('suggested'); } else { setFuelSource('manual'); }
+      setStep('details');
+    } finally {
+      setLoading(false);
     }
-    const suggested = suggestL100kmByFuelType(fuelType);
-    if (suggested !== null) { setFuelL100km(String(suggested)); setFuelSource('suggested'); } else { setFuelSource('manual'); }
-    setStep('details');
-    setLoading(false);
   };
 
   // ─────────────────────────────────────────────────────────────────────────
