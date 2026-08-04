@@ -324,7 +324,7 @@ export default function HomeScreen() {
     }
 
     setScanning(true);
-    setScanOverlayVisible(true); // full-screen scan experience (ring + tiles)
+    setScanOverlayVisible(true); // מסך סריקה מלא
     try {
       const { codes } = await scanDtcs();
 
@@ -334,7 +334,7 @@ export default function HomeScreen() {
         return;
       }
 
-      // In parallel: three codes take as long as the slowest, not the sum.
+      // במקביל: שלושה קודים לוקחים כמו האיטי ביותר, לא כמו הסכום.
       const responses = await Promise.all(
         codes.map(code => reportDtc(code, authUser?.id, selectedVehicle?.id))
       );
@@ -342,7 +342,7 @@ export default function HomeScreen() {
       setScannedCodes(codes);
       loadData();
 
-      // Local notification (Settings → "Fault scan alerts")
+      // התראה מקומית (נשלטת בהגדרות)
       const worst = worstSeverity(responses) ?? SeverityLevel.Green;
       sendFaultAlert(responses.length, severityMeta(c, worst).label);
     } catch {

@@ -18,7 +18,7 @@ import { demoDtcs, demoLiveData, demoStatus, demoVin } from './demoScanner';
 // The ESP32 connects to the phone's hotspot, so no WiFi switching needed.
 const SCANNER_BASE_URL = 'http://192.168.148.100';
 
-/** How long (ms) before a fetch is considered failed */
+/** כמה מילישניות לחכות לפני שבקשה נחשבת כשלונה */
 const FETCH_TIMEOUT_MS = 3000;
 
 // ─── Types ────────────────────────────────────────────────────────────────────

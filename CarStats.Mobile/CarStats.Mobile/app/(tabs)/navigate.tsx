@@ -39,15 +39,22 @@ interface LocatedShop extends NearbyShop {
   distanceKm: number | null;
 }
 
-/** Great-circle distance in km. */
+/**
+ * מרחק אווירי בק"מ לפי נוסחת ההברסין.
+ * פיתגורס לא מתאים כאן — כדור הארץ עגול, ומעלות של קו אורך
+ * מתקרבות זו לזו ככל שמתרחקים מקו המשווה.
+ */
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371;
+  const R = 6371;                                    // רדיוס כדור הארץ בק"מ
+  // המרת מעלות לרדיאנים — פונקציות הטריגונומטריה עובדות ברדיאנים
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  // הכפלת הקוסינוסים מתקנת את הפרש קווי האורך לפי קו הרוחב:
+  // בקו המשווה מעלה אחת היא כ-111 ק"מ, וליד הקטבים כמעט כלום
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));   // מהזווית חזרה לק"מ
 }
 
 export default function MechanicFinderScreen() {
@@ -58,25 +65,26 @@ export default function MechanicFinderScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [myPos, setMyPos]           = useState<{ lat: number; lng: number } | null>(null);
   const [usedFallback, setUsedFallback] = useState(false);
-  // Defaults to 'home': reading a saved address is instant, a GPS fix can stall.
+  // ברירת מחדל 'home': קריאת כתובת שמורה מיידית, איכון עלול להיתקע.
   const [origin, setOrigin]         = useState<SearchOrigin>('home');
   const [hasHome, setHasHome]       = useState(false);
   // Phone numbers already looked up this session (placeId → phone | null)
   const phoneCache = useRef<Record<string, string | null>>({});
 
   const load = useCallback(async (isRefresh = false, mode: SearchOrigin = origin) => {
-    if (isRefresh) setRefreshing(true);
+    if (isRefresh) setRefreshing(true); // origin = current location
     try {
       let pos: { lat: number; lng: number } | null = null;
 
       if (mode === 'home') {
-        const prefs = await loadPrefs();
+        const prefs = await loadPrefs(); // what saved from settings
         if (prefs.homeLat != null && prefs.homeLng != null) {
           pos = { lat: prefs.homeLat, lng: prefs.homeLng };
         }
       }
 
-      // Also runs when 'home' was asked for but none is saved.
+      // רץ גם כשביקשו חיפוש לפי הבית אבל אין כתובת שמורה — ברירת
+      // המחדל היא 'home' גם כשאין בית, אז בלי זה לא היינו מנסים איכון כלל.
       if (!pos) {
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
@@ -88,27 +96,27 @@ export default function MechanicFinderScreen() {
               });
               coords = loc.coords;
             } catch {
-              // No fresh fix indoors or on a cold GPS; an old one still works.
+              // אין איכון עדכני בתוך מבנה או בחניון; ישן עדיין מוצא אותם מוסכים.
               const last = await Location.getLastKnownPositionAsync();
               coords = last?.coords ?? null;
             }
             if (coords) pos = { lat: coords.latitude, lng: coords.longitude };
           }
-        } catch { /* location unavailable — fall back */ }
+        } catch { /* המיקום לא זמין — נופלים לברירת המחדל */ }
       }
 
       if (mode === 'current') setMyPos(pos);
       setUsedFallback(!pos);
 
-      const center = pos ?? FALLBACK_CENTER;
+      const center = pos ?? FALLBACK_CENTER; // מרכז תל אביב אם אין מיקום
       const results = await getNearbyShops(center.lat, center.lng);
 
-      // Distance only means something when we know where the user is.
+      // מרחק הוא מספר אמיתי רק כשיודעים היכן המשתמש נמצא.
       setShops(results.map(shop => ({
         ...shop,
         distanceKm: pos ? haversineKm(pos.lat, pos.lng, shop.latitude, shop.longitude) : null,
       })));
-    } catch { /* API unreachable — keep previous list */ }
+    } catch { /* השרת לא זמין — משאירים את הרשימה הקודמת */ }
     finally {
       setLoading(false);
       setRefreshing(false);
@@ -117,8 +125,8 @@ export default function MechanicFinderScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  // On focus, not mount: tabs stay mounted, so a home saved in Settings
-  // would otherwise not appear until an app restart.
+  // בכל כניסה למסך ולא רק בטעינה: הלשוניות נשארות טעונות, אז בית
+  // שנשמר בהגדרות לא היה מופיע כאן עד להפעלה מחדש של האפליקציה.
   useFocusEffect(
     useCallback(() => {
       loadPrefs().then(p => setHasHome(p.homeLat != null && p.homeLng != null));

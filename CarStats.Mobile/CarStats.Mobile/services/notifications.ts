@@ -55,28 +55,24 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// ─── Geofence task (module scope — must exist before the OS wakes us) ─────────
 
-/**
- * The reminder itself, separate from what triggers it — Settings fires it
- * directly, since Expo Go can't grant the background location the geofence
- * needs.
- */
 export async function showChildReminderNotification(): Promise<void> {
+  // פונקציה מוכנה של ספריית ההתראות: בונה את ההתראה מהתוכן שנתנו לה
   await Notifications.scheduleNotificationAsync({
     content: {
       title: '👶 Arrived — check the back seat',
       body: "You've reached your saved location. Make sure no child or pet is left in the car.",
       sound: true,
     },
-    trigger: null, // immediately
+    trigger: null, // להציג מיד, בלי תזמון
   });
 }
-
+// מכין את הפונקציה ככה שהיא תעבוד גם כשהאפליקציה סגורה
 TaskManager.defineTask(CHILD_REMINDER_TASK, async ({ data, error }) => {
   if (error || !data) return;
+  // סוג האירוע שקרה: כניסה לעיגול או יציאה ממנו.
   const { eventType } = data as { eventType: Location.GeofencingEventType };
-  if (eventType === Location.GeofencingEventType.Enter) {
+  if (eventType === Location.GeofencingEventType.Enter) { // only on enter, not exit
     await showChildReminderNotification();
   }
 });
@@ -100,18 +96,13 @@ export async function savePrefs(prefs: NotifPrefs): Promise<void> {
 
 // ─── Permissions ───────────────────────────────────────────────────────────────
 
-/**
- * Wipes saved preferences on logout — the home address belongs to the person,
- * not the device. Not scoped per user instead, because the geofence task fires
- * from the OS with no session to tell it whose prefs to read.
- */
 export async function clearPrefs(): Promise<void> {
   try {
     await AsyncStorage.removeItem(PREFS_KEY);
-  } catch { /* the next write overwrites anyway */ }
+  } catch { /* הכתיבה הבאה תדרוס את זה בלאו הכי */ }
 }
 
-/** Ask for notification permission. Returns true when granted. */
+/** מבקש הרשאת התראות. מחזיר אמת כשההרשאה ניתנה. */
 export async function ensureNotifPermission(): Promise<boolean> {
   const current = await Notifications.getPermissionsAsync();
   if (current.granted) return true;
@@ -140,9 +131,8 @@ export async function sendFaultAlert(faultCount: number, worstLabel: string) {
 // ─── Child safety arrival reminder ─────────────────────────────────────────────
 
 /**
- * Starts geofencing around the saved home location.
- * Requires notification + foreground + background location permissions;
- * throws with a user-readable message when something is missing.
+ * מתחיל מעקב אחר עיגול סביב הכתובת השמורה.
+ * דורש שלוש הרשאות: התראות, מיקום רגיל ומיקום ברקע
  */
 export async function enableChildReminder(lat: number, lng: number): Promise<void> {
   if (!(await ensureNotifPermission())) {
@@ -177,7 +167,7 @@ export async function disableChildReminder(): Promise<void> {
   } catch { /* task was never registered on this device */ }
 }
 
-/** Grabs the current position to save as "home" for the geofence. */
+/** לוקח את המיקום הנוכחי כדי לשמור אותו כבית עבור הגאופנס. */
 export async function captureHomeLocation(): Promise<{ lat: number; lng: number }> {
   const fg = await Location.requestForegroundPermissionsAsync();
   if (fg.status !== 'granted') {

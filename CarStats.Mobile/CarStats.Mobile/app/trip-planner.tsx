@@ -105,7 +105,7 @@ export default function TripPlannerScreen() {
   const styles = useStyles();
   const [vehicle, setVehicle]         = useState<Vehicle | null>(null);
   const [destination, setDestination] = useState('');
-  // Empty means "use my current location".
+  // ריק פירושו להשתמש במיקום הנוכחי.
   const [origin, setOrigin]           = useState('');
   const [fuelInput, setFuelInput]     = useState('8.0');
   const [loading, setLoading]         = useState(false);
@@ -115,7 +115,7 @@ export default function TripPlannerScreen() {
   const inputRef = useRef<TextInput>(null);
 
   const [fuelPrice, setFuelPrice] = useState<FuelPrice | null>(null);
-  // Priced by what the car burns — diesel differs from petrol by ~40%.
+  // מתמחר לפי הדלק שהרכב צורך — הפרש של כ-40 אחוז בין סולר לבנזין.
   const [fuelType, setFuelType]   = useState<FuelType>('95');
   const pricePerLitre =
     fuelPrice?.prices?.find(p => p.fuelType === fuelType)?.pricePerLitreILS ??
@@ -131,8 +131,8 @@ export default function TripPlannerScreen() {
     }).catch(() => {});
   }, [authUser]);
 
-  // Separate from the vehicle load so a price failure can't cost the
-  // screen its consumption figure.
+  // נפרד מטעינת הרכב, כדי שכשל בקבלת המחיר לא יעלה למסך
+  // את נתוני הצריכה.
   useEffect(() => {
     getFuelPrice().then(setFuelPrice);
   }, []);
@@ -146,8 +146,8 @@ export default function TripPlannerScreen() {
     loadFuelType(vehicle?.id).then(setFuelType);
   }, [vehicle?.id]);
 
-  // Gated on isReal: "you'll make it" should rest on a measurement, not an
-  // estimate from a baseline typed days ago.
+  // מותנה בקריאה אמיתית מהרכב: אמירה שתגיע צריכה להסתמך על
+  // מדידה, לא על אומדן מנקודת ייחוס שהוקלדה לפני ימים.
   const outlook =
     result && tankLevel?.isReal
       ? tripFuelOutlook(tankL, tankLevel.pct, result.estimatedFuelL, pricePerLitre)
@@ -179,7 +179,7 @@ export default function TripPlannerScreen() {
     inputRef.current?.blur();
 
     try {
-      // A typed starting point skips GPS entirely — Google accepts an address.
+      // נקודת מוצא שהוקלדה מדלגת על האיכון — גוגל מקבלת גם כתובת.
       let originParam = origin.trim();
 
       if (!originParam) {
