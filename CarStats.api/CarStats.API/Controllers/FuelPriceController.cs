@@ -3,22 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace CarStats.API.Controllers
 {
-    /// <summary>
-    /// Current pump prices per fuel type.
-    ///
-    /// Only 95-octane is regulated in Israel: the Ministry of Energy sets one
-    /// national maximum for self-service 95 and revises it at midnight before
-    /// the first working day of each month. Since 2007 the state has not
-    /// regulated the others, so 98 and diesel are free-market and vary by
-    /// station and company — there is no authoritative number to serve for
-    /// them, only a typical one.
-    ///
-    /// That difference is carried in the response as IsOfficial, so the app can
-    /// present a regulated price as fact and a free-market one as a starting
-    /// figure the driver is expected to correct. Serving all of them from here
-    /// rather than baking them into the app means the monthly update is one
-    /// value in appsettings.json instead of a new build on every phone.
-    /// </summary>
+
     [Route("api/[controller]")]
     [ApiController]
     [Authorize]
@@ -29,10 +14,7 @@ namespace CarStats.API.Controllers
         /// <summary>The regulated type. Its price is the one we can state as fact.</summary>
         private const string RegulatedFuelType = "95";
 
-        // Used when configuration is missing or malformed, so a bad deploy
-        // shows a slightly stale price rather than no cost estimate at all.
-        // Only the 95 figure is an official number; the others are placeholders
-        // meant to be replaced from a real receipt.
+
         private static readonly (string Type, decimal Price)[] Fallbacks =
         {
             (RegulatedFuelType, 8.09m),
