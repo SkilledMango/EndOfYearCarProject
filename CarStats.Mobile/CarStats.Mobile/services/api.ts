@@ -15,7 +15,14 @@ export const API_BASE_URL = `${HOST}/api`;
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 8000,
+  // Somee's free tier puts the site to sleep when nobody has used it, and the
+  // first request after that has to wait for it to start again. Eight seconds
+  // was not enough for that: the very first sign-in of the day failed with
+  // "could not reach the server" while a second attempt straight after
+  // answered in about a second. Everything here is a deliberate tap rather
+  // than a background poll, so waiting longer on the rare cold one is better
+  // than telling the driver the server is down when it is not.
+  timeout: 20000,
   headers: { 'Content-Type': 'application/json' },
 });
 

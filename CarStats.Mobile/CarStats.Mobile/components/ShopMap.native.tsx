@@ -29,6 +29,21 @@ export default function ShopMap({ shops, userPos }: ShopMapProps) {
   // what makes the fit actually take.
   const [mapReady, setMapReady] = useState(false);
 
+  // A pin drawn from child views is rasterised to a bitmap, and while this is
+  // true it is re-rasterised on every render pass. Twenty of those allocate
+  // faster than the GC frees them and the app dies with an OutOfMemoryError
+  // inside the maps renderer. Turning it off outright is not the answer
+  // either — the pin then never draws once and the map comes up bare. So it
+  // stays on just long enough for the pins to appear, then stops.
+  const [trackPins, setTrackPins] = useState(true);
+
+  useEffect(() => {
+    if (!mapReady || shops.length === 0) return;
+    setTrackPins(true);
+    const timer = setTimeout(() => setTrackPins(false), 1500);
+    return () => clearTimeout(timer);
+  }, [mapReady, shops]);
+
   useEffect(() => {
     if (!mapReady || shops.length === 0) return;
     const coords = shops.map(s => ({ latitude: s.latitude, longitude: s.longitude }));
@@ -56,6 +71,7 @@ export default function ShopMap({ shops, userPos }: ShopMapProps) {
           title={shop.name}
           description={shop.specialty}
           anchor={{ x: 0.5, y: 0.5 }}
+          tracksViewChanges={trackPins}
         >
           {/* Design alternates filled / outlined circular wrench pins */}
           <View style={[styles.pin, i % 2 === 1 && styles.pinOutlined]}>

@@ -27,7 +27,7 @@ const GEMINI_API_KEY: string = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
  * second model is a genuinely separate allowance rather than a retry of the
  * same exhausted one — a code still gets explained after the first runs out.
  */
-const GEMINI_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+const GEMINI_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
 
 const modelUrl = (model: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -37,6 +37,13 @@ const CACHE_PREFIX = '@carstats_dtc_ai_';
 
 /** True when the response means "out of quota" rather than a real failure. */
 const isRateLimited = (status: number) => status === 429;
+
+/**
+ * True when the model itself is momentarily unavailable — 503 is Google
+ * saying "overloaded, try later", not that the request was wrong. It applies
+ * to one model at a time, so the other one is worth asking.
+ */
+const isOverloaded = (status: number) => status >= 500;
 
 export interface AiFaultExplanation {
   humanTitle:     string;
@@ -50,7 +57,10 @@ export type AiFailureReason = 'no-key' | 'rate-limited' | 'unavailable';
 
 export type AiLookupResult =
   | { ok: true;  explanation: AiFaultExplanation; cached: boolean }
-  | { ok: false; reason: AiFailureReason };
+  // tryNextModel marks a failure that is about this model rather than about
+  // the request, so the caller knows the other model is worth asking. Kept off
+  // AiFailureReason so the screen still only has three cases to say.
+  | { ok: false; reason: AiFailureReason; tryNextModel?: boolean };
 
 async function readCache(code: string): Promise<AiFaultExplanation | null> {
   try {
@@ -108,7 +118,11 @@ async function askModel(
 
     if (isRateLimited(res.status)) {
       console.warn(`[dtcLookup] ${model} is out of quota`);
-      return { ok: false, reason: 'rate-limited' };
+      return { ok: false, reason: 'rate-limited', tryNextModel: true };
+    }
+    if (isOverloaded(res.status)) {
+      console.warn(`[dtcLookup] ${model} is overloaded (${res.status})`);
+      return { ok: false, reason: 'unavailable', tryNextModel: true };
     }
     if (!res.ok) {
       console.warn(`[dtcLookup] ${model} returned`, res.status);
@@ -227,9 +241,11 @@ export async function explainFaultWithAi(
       return result;
     }
     lastReason = result.reason;
-    // Only a quota failure is worth trying another model for — its daily cap
-    // is counted separately. Anything else would fail the same way twice.
-    if (result.reason !== 'rate-limited') break;
+    // Only a failure that belongs to this model is worth asking the other one
+    // about: a spent daily cap is counted per model, and a 503 overload lifts
+    // per model too. A bad prompt or an unparseable answer would fail the same
+    // way twice, so those stop here.
+    if (!result.tryNextModel) break;
   }
 
   return { ok: false, reason: lastReason };
