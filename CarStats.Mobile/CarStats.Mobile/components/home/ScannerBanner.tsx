@@ -1,7 +1,7 @@
 /**
- * Connection banner for the ESP32 OBD-II adapter, shown at the top of the
- * Garage screen. Also carries the RETRY control, which is the user's way back
- * after the adapter has been marked offline.
+ * שורת מצב החיבור למתאם, בראש מסך המוסך.
+ * מכילה גם את כפתור הניסיון החוזר, שהוא הדרך היחידה לחזור אחרי
+ * שהמתאם סומן כמנותק.
  */
 
 import React from 'react';
@@ -19,11 +19,11 @@ export default function ScannerBanner({
 }: {
   online: boolean;
   status: ScannerStatus | null;
-  /** True while the demo connection is standing in for the adapter. */
+  /** אמת כל עוד מצב ההדגמה מחליף את המתאם. */
   demo: boolean;
   onRetry: () => void;
   onToggleDemo: () => void;
-  /** Ends the session with the adapter without unplugging it. */
+  /** מסיים את החיבור למתאם בלי לנתק אותו פיזית. */
   onDisconnect: () => void;
 }) {
   const { colors: c } = useTheme();
@@ -43,8 +43,8 @@ export default function ScannerBanner({
         <Text style={bannerStyles.title}>
           {demo ? 'Demo Connection' : online ? 'OBD-II Adapter Connected' : 'Adapter Not Found'}
         </Text>
-        {/* Demo readings are always labelled as such — nobody should be able
-            to mistake this screen for data off a real car. */}
+        {/* נתוני הדגמה מסומנים תמיד ככאלה, כדי שאי אפשר יהיה לבלבל
+            בינם לבין נתונים מרכב אמיתי. */}
         {demo ? (
           <Text style={bannerStyles.sub}>Simulated readings — no car connected</Text>
         ) : online && status ? (

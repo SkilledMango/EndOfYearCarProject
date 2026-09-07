@@ -1,9 +1,10 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CarStats.API.Controllers
 {
-
+    // מחירי הדלק. מגיעים מהקונפיגורציה ולא מהקוד, כי מחיר ה-95 מתעדכן
+    // כל חודש וקבוע בקוד היה מחייב העלאת גרסה חדשה של השרת.
     [Route("api/[controller]")]
     [ApiController]
     [Authorize]
@@ -11,10 +12,10 @@ namespace CarStats.API.Controllers
     {
         private readonly IConfiguration _config;
 
-        /// <summary>The regulated type. Its price is the one we can state as fact.</summary>
+        /// <summary>סוג הדלק המפוקח. רק המחיר שלו הוא עובדה רשמית.</summary>
         private const string RegulatedFuelType = "95";
 
-
+        // ערכי גיבוי, למקרה שהקונפיגורציה חסרה או שגויה
         private static readonly (string Type, decimal Price)[] Fallbacks =
         {
             (RegulatedFuelType, 8.09m),
@@ -29,7 +30,7 @@ namespace CarStats.API.Controllers
             _config = config;
         }
 
-        // GET: api/fuelprice
+        // GET: api/fuelprice — מחזיר את שלושת סוגי הדלק, כל אחד מסומן אם הוא רשמי
         [HttpGet]
         public ActionResult<FuelPriceResponse> GetFuelPrice()
         {
@@ -52,9 +53,8 @@ namespace CarStats.API.Controllers
 
             return Ok(new FuelPriceResponse
             {
-                // The regulated price stays at the top level so callers that
-                // only need "the" petrol price — the trip planner — do not have
-                // to know the list exists.
+                // המחיר המפוקח מוחזר גם ברמה העליונה, כדי שקורא שצריך
+                // רק "מחיר בנזין" — כמו מתכנן הנסיעה — לא יצטרך את הרשימה
                 PricePerLitreILS = regulated.PricePerLitreILS,
                 FuelType         = RegulatedFuelType,
                 EffectiveFrom    = effectiveFrom,
@@ -63,9 +63,8 @@ namespace CarStats.API.Controllers
         }
 
         /// <summary>
-        /// Reads one price from configuration, falling back on anything that
-        /// would produce a nonsensical estimate. A typo in appsettings must not
-        /// take the endpoint down, and a zero would silently make fuel free.
+        /// קורא מחיר אחד מהקונפיגורציה, עם נפילה לערך הגיבוי בכל מקרה חריג.
+        /// שגיאת הקלדה בקובץ ההגדרות לא תפיל את הנקודה, ואפס היה הופך את הדלק לחינם.
         /// </summary>
         private static decimal ReadPrice(IConfigurationSection section, string fuelType, decimal fallback)
         {
@@ -82,18 +81,19 @@ namespace CarStats.API.Controllers
             return value > 0 ? value : fallback;
         }
 
+        // מבנה התשובה שהאפליקציה מקבלת
         public class FuelPriceResponse
         {
-            /// <summary>The regulated 95 price — the default for anything not fuel-type aware.</summary>
+            /// <summary>מחיר ה-95 המפוקח — ברירת המחדל לכל מי שלא מבדיל בין סוגי דלק.</summary>
             public decimal PricePerLitreILS { get; set; }
 
-            /// <summary>Which type the top-level price refers to. Always 95.</summary>
+            /// <summary>לאיזה סוג המחיר העליון מתייחס. תמיד 95.</summary>
             public string FuelType { get; set; } = string.Empty;
 
-            /// <summary>ISO date the regulated price took effect, so the app can show where it came from.</summary>
+            /// <summary>התאריך שממנו המחיר המפוקח בתוקף, כדי שהאפליקציה תוכל להציג מקור.</summary>
             public string EffectiveFrom { get; set; } = string.Empty;
 
-            /// <summary>Every type the app offers, regulated or not.</summary>
+            /// <summary>כל סוגי הדלק שהאפליקציה מציעה, מפוקחים או לא.</summary>
             public List<FuelPriceEntry> Prices { get; set; } = new();
         }
 
@@ -101,12 +101,12 @@ namespace CarStats.API.Controllers
         {
             public string FuelType { get; set; } = string.Empty;
 
-            /// <summary>Price per litre in shekels, VAT included.</summary>
+            /// <summary>מחיר לליטר בשקלים, כולל מע"מ.</summary>
             public decimal PricePerLitreILS { get; set; }
 
             /// <summary>
-            /// True only for 95. False means free-market: a typical figure the
-            /// driver should check against their receipt, not a fact.
+            /// אמת רק עבור 95. שקר משמעו מחיר שוק חופשי: נתון אופייני
+            /// שהנהג אמור לאמת מול הקבלה, ולא עובדה.
             /// </summary>
             public bool IsOfficial { get; set; }
         }

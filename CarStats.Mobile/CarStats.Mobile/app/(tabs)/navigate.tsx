@@ -1,11 +1,10 @@
 /**
- * Mechanic Finder — map + "Nearby Mechanics" bottom sheet.
- * Layout and values follow design/stitch_carstats_diagnostic_suite/mechanic_finder.
+ * מוצא המוסכים: מפה ומגירת "מוסכים בסביבה".
  *
- * Shops are LIVE results from Google Places (car_repair near the user),
- * fetched through the API's /navigation proxy — names, ratings and review
- * counts are real. Phone numbers are fetched lazily when the user taps Call.
- * With location denied, results center on Tel Aviv instead.
+ * המוסכים הם תוצאות אמיתיות מ-Google Places שנשלפות דרך הפרוקסי בשרת,
+ * כולל שמות, דירוגים ומספר ביקורות. מספרי טלפון נשלפים רק בלחיצה על חיוג,
+ * כי כל שליפה כזו מחויבת בנפרד.
+ * כשאין הרשאת מיקום, החיפוש מתרכז בתל אביב.
  */
 
 import ShopMap from '@/components/ShopMap';
@@ -29,7 +28,7 @@ import {
 } from 'react-native';
 import { SegmentedButtons } from 'react-native-paper';
 
-// Search center when location permission is denied
+// מרכז החיפוש כשאין הרשאת מיקום
 const FALLBACK_CENTER = { lat: 32.0853, lng: 34.7818 }; // Tel Aviv
 
 /** Which point the shop search is centred on. */
@@ -68,22 +67,22 @@ export default function MechanicFinderScreen() {
   // ברירת מחדל 'home': קריאת כתובת שמורה מיידית, איכון עלול להיתקע.
   const [origin, setOrigin]         = useState<SearchOrigin>('home');
   const [hasHome, setHasHome]       = useState(false);
-  // Phone numbers already looked up this session (placeId → phone | null)
+  // מספרי טלפון שכבר נשלפו בסשן הזה, כדי לא לשלוף פעמיים
   const phoneCache = useRef<Record<string, string | null>>({});
       
   const load = useCallback(async (isRefresh = false, mode: SearchOrigin = origin) => {
-    if (isRefresh) setRefreshing(true); // origin = current location (home or current)
+    if (isRefresh) setRefreshing(true); // נקודת המוצא של החיפוש: הבית או המיקום הנוכחי
     try {
       let pos: { lat: number; lng: number } | null = null;
 
       if (mode === 'home') {
-        const prefs = await loadPrefs(); //takes what home address is saved from settings
+        const prefs = await loadPrefs(); // לוקח את כתובת הבית שנשמרה בהגדרות
         if (prefs.homeLat != null && prefs.homeLng != null) {
-          pos = { lat: prefs.homeLat, lng: prefs.homeLng }; // lattitude and longitude of home address
+          pos = { lat: prefs.homeLat, lng: prefs.homeLng }; // קו הרוחב וקו האורך של כתובת הבית
         }
       }
 
-      if (!pos) { //(means the mode is current or we don't have a home address saved)
+      if (!pos) { // כלומר המצב הוא מיקום נוכחי, או שאין כתובת בית שמורה
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status === 'granted') {
@@ -104,14 +103,14 @@ export default function MechanicFinderScreen() {
       }
 
       if (mode === 'current') setMyPos(pos);
-      setUsedFallback(!pos); //  records a plain boolean: did we end up with no position at all? if so, fallback = tel aviv
+      setUsedFallback(!pos); // אם לא הצלחנו לקבל שום מיקום, נופלים לתל אביב
 
       const center = pos ?? FALLBACK_CENTER; // מרכז תל אביב אם אין מיקום
       const results = await getNearbyShops(center.lat, center.lng);
 
       setShops(results.map(shop => ({
         ...shop,
-        distanceKm: pos ? haversineKm(pos.lat, pos.lng, shop.latitude, shop.longitude) : null, //פונקציה מחשבת את המרחק בין המיקום שלנו לבין החנות
+        distanceKm: pos ? haversineKm(pos.lat, pos.lng, shop.latitude, shop.longitude) : null, // חישוב המרחק בין המיקום שלנו לבין המוסך
       })));
     } catch { /* השרת לא זמין — משאירים את הרשימה הקודמת */ }
     finally {
@@ -169,7 +168,7 @@ export default function MechanicFinderScreen() {
 
   return (
     <View style={styles.container}>
-      {/* ── Map (native) / placeholder (web) ── */}
+      {/* ── מפה בנייטיב, מלבן מעוצב בווב ── */}
       <View style={styles.mapArea}>
         <ShopMap
           shops={shops.map(s => ({
@@ -183,7 +182,7 @@ export default function MechanicFinderScreen() {
         />
       </View>
 
-      {/* ── Bottom sheet ── */}
+      {/* ── המגירה התחתונה ── */}
       <View style={styles.sheet}>
         <View style={styles.sheetHandle} />
         <View style={styles.sheetHeader}>
@@ -269,14 +268,14 @@ export default function MechanicFinderScreen() {
   );
 }
 
-// ─── Styles (values from the mechanic_finder Stitch export) ───────────────────
+// ─── סגנונות, לפי קובץ העיצוב של מוצא המוסכים ────────────────────────────────
 
 const useStyles = createThemedStyles((c) => StyleSheet.create({
   container:      { flex: 1, backgroundColor: c.Dashboard.bg },
   centered:       { justifyContent: 'center', alignItems: 'center' },
   mapArea:        { flex: 1 },
 
-  // Bottom sheet
+  // המגירה התחתונה
   sheet:          {
     height: '52%',
     backgroundColor: c.Dashboard.card,
@@ -302,7 +301,7 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
   sheetList:      { paddingHorizontal: 20, paddingBottom: 32, gap: 16 },
 
-  // Shop cards
+  // כרטיסי המוסכים
   shopCard:       {
     backgroundColor: c.Dashboard.card,
     borderRadius: 8,
@@ -342,7 +341,7 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
   directionsBtnText: { fontSize: 15, fontWeight: '700', color: c.Dashboard.onAccent },
 
-  // Empty state
+  // מצב ריק
   emptyState:     { alignItems: 'center', paddingTop: 40 },
   emptyIcon:      { fontSize: 48 },
   emptyText:      { fontSize: 17, fontWeight: '600', color: c.Dashboard.textPrimary, marginTop: 12 },

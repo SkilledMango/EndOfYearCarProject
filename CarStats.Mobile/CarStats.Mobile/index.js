@@ -1,12 +1,9 @@
 /**
- * App entry point.
+ * נקודת הכניסה של האפליקציה.
  *
- * Exists only so LogBox is configured before expo-router starts. expo-router
- * enumerates and loads every file under app/ itself, in its own order, so a
- * route module can pull in a noisy library before app/_layout.tsx has run —
- * which is why configuring LogBox inside the layout does not work.
- *
- * Everything here must run before `expo-router/entry`.
+ * קיימת רק בשביל סדר הטעינה: expo-router טוען את המסכים בעצמו ובסדר שלו,
+ * ולכן הגדרה שחייבת לרוץ לפני כל השאר לא יכולה לשבת בתוך מסך.
+ * כל מה שכאן רץ לפני expo-router.
  */
 
 import './utils/logbox';

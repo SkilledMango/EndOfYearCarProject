@@ -1,17 +1,13 @@
 /**
- * Notification preferences + the two notification features:
+ * העדפות ההתראות ושתי תכונות ההתראה:
  *
- *  1. Fault scan alerts — a local notification when an OBD-II scan finds
- *     fault codes (fires from the scan flow on the home screen).
+ *  1. התראת סריקה — התראה מקומית כשסריקה מוצאת קודי תקלה.
  *
- *  2. Child safety arrival reminder — a geofence around the user's saved
- *     home location; arriving there fires a "check the back seat" reminder
- *     even when the app is backgrounded (expo-location geofencing +
- *     expo-task-manager).
+ *  2. תזכורת בטיחות ילדים — גדר גיאוגרפית סביב כתובת הבית השמורה.
+ *     הגעה אליה מפעילה תזכורת "בדוק את המושב האחורי" גם כשהאפליקציה סגורה.
  *
- * Preferences persist in AsyncStorage and are edited on the Settings screen.
- * This module is imported from the root layout so the geofence task is
- * registered on every app launch, including background launches.
+ * ההעדפות נשמרות במכשיר ונערכות במסך ההגדרות. הקובץ מיובא מהפריסה הראשית
+ * כדי שהגדר תירשם מחדש בכל הפעלה, כולל הפעלה ברקע.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -29,10 +25,10 @@ export interface NotifPrefs {
   homeLat: number | null;
   homeLng: number | null;
   /**
-   * The saved home as the user would describe it, e.g. "Agmon 13, Hadera".
-   * Coordinates are what the geofence needs, but they are not what anyone
-   * wants to read back. Null for homes saved before this existed, so the UI
-   * has to cope with its absence.
+   * כתובת הבית כפי שהמשתמש היה מתאר אותה, למשל "אגמון 13, חדרה".
+   * הגדר צריכה קואורדינטות, אבל אף אחד לא רוצה לקרוא אותן.
+   * null עבור בתים שנשמרו לפני שהשדה הזה נוסף, ולכן הממשק חייב להתמודד
+   * עם היעדרו.
    */
   homeLabel: string | null;
 }
@@ -45,7 +41,7 @@ export const DEFAULT_PREFS: NotifPrefs = {
   homeLabel: null,
 };
 
-// Show alerts even while the app is foregrounded
+// להציג התראות גם כשהאפליקציה פתוחה
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
@@ -72,12 +68,12 @@ TaskManager.defineTask(CHILD_REMINDER_TASK, async ({ data, error }) => {
   if (error || !data) return;
   // סוג האירוע שקרה: כניסה לעיגול או יציאה ממנו.
   const { eventType } = data as { eventType: Location.GeofencingEventType };
-  if (eventType === Location.GeofencingEventType.Enter) { // only on enter, not exit
+  if (eventType === Location.GeofencingEventType.Enter) { // רק בכניסה לעיגול, לא ביציאה ממנו
     await showChildReminderNotification();
   }
 });
 
-// ─── Preferences ───────────────────────────────────────────────────────────────
+// ─── העדפות ──────────────────────────────────────────────────────────────────
 
 export async function loadPrefs(): Promise<NotifPrefs> {
   try {
@@ -91,10 +87,10 @@ export async function loadPrefs(): Promise<NotifPrefs> {
 export async function savePrefs(prefs: NotifPrefs): Promise<void> {
   try {
     await AsyncStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
-  } catch { /* storage unavailable — settings just won't survive a restart */ }
+  } catch { /* האחסון לא זמין — ההגדרות פשוט לא ישרדו הפעלה מחדש */ }
 }
 
-// ─── Permissions ───────────────────────────────────────────────────────────────
+// ─── הרשאות ──────────────────────────────────────────────────────────────────
 
 export async function clearPrefs(): Promise<void> {
   try {
@@ -110,9 +106,9 @@ export async function ensureNotifPermission(): Promise<boolean> {
   return asked.granted;
 }
 
-// ─── Fault scan alerts ─────────────────────────────────────────────────────────
+// ─── התראות סריקה ────────────────────────────────────────────────────────────
 
-/** Fires a local notification summarizing a completed scan (if enabled). */
+/** שולחת התראה מקומית שמסכמת סריקה שהסתיימה, אם ההתראות מופעלות. */
 export async function sendFaultAlert(faultCount: number, worstLabel: string) {
   const prefs = await loadPrefs();
   if (!prefs.faultAlerts) return;
@@ -125,10 +121,10 @@ export async function sendFaultAlert(faultCount: number, worstLabel: string) {
       },
       trigger: null,
     });
-  } catch { /* notifications unavailable on this platform/runtime */ }
+  } catch { /* התראות לא זמינות בסביבה הזו */ }
 }
 
-// ─── Child safety arrival reminder ─────────────────────────────────────────────
+// ─── תזכורת בטיחות ילדים ─────────────────────────────────────────────────────
 
 /**
  * מתחיל מעקב אחר עיגול סביב הכתובת השמורה.
@@ -164,7 +160,7 @@ export async function disableChildReminder(): Promise<void> {
   try {
     const started = await Location.hasStartedGeofencingAsync(CHILD_REMINDER_TASK);
     if (started) await Location.stopGeofencingAsync(CHILD_REMINDER_TASK);
-  } catch { /* task was never registered on this device */ }
+  } catch { /* המשימה מעולם לא נרשמה במכשיר הזה */ }
 }
 
 /** לוקח את המיקום הנוכחי כדי לשמור אותו כבית עבור הגאופנס. */

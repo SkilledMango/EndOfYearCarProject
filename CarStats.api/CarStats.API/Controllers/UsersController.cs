@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using CarStats.API.Data;
@@ -7,10 +7,9 @@ using CarStats.API.Services;
 
 namespace CarStats.API.Controllers
 {
-    // User management is admin-panel territory (each action carries AdminOnly),
-    // except GetUser: any signed-in user may read their OWN profile. The gate
-    // lives per-action because [Authorize] attributes stack — a controller-level
-    // AdminOnly would apply to GetUser too, locking drivers out of their profile.
+    // ניהול משתמשים לפאנל הניהול, חוץ מ-GetUser שכל משתמש מחובר רשאי לקרוא
+    // על עצמו. ההרשאה מוגדרת לכל פעולה בנפרד ולא על הבקר כולו, אחרת גם
+    // קריאת פרופיל הייתה נחסמת למנהלים בלבד.
     [Route("api/[controller]")]
     [ApiController]
     public class UsersController : ControllerBase
@@ -22,7 +21,7 @@ namespace CarStats.API.Controllers
             _context = context;
         }
 
-        // GET: Fetch all users (with their vehicles) for the admin panel
+        // GET: api/users — כל המשתמשים והרכבים שלהם, לפאנל הניהול
         [HttpGet]
         [Authorize(Policy = "AdminOnly")]
         public async Task<ActionResult<IEnumerable<AppUser>>> GetUsers()
@@ -31,9 +30,8 @@ namespace CarStats.API.Controllers
                 .Include(u => u.Vehicles)
                 .ToListAsync();
 
-            // Same derivation as GetUser, so the admin panel and the app never
-            // disagree about a user's fault count. One grouped query rather
-            // than a count per user.
+            // ספירת התקלות מחושבת בשאילתה מקובצת אחת, באותה דרך כמו ב-GetUser,
+            // כדי שהפאנל והאפליקציה לא יציגו מספרים שונים
             var faultCounts = await _context.VehicleEvents
                 .Where(e => e.AppUserId != null)
                 .GroupBy(e => e.AppUserId!.Value)
@@ -46,8 +44,8 @@ namespace CarStats.API.Controllers
             return users;
         }
 
-        // GET: Fetch a single user's profile (with vehicles) for the mobile app.
-        // Any signed-in user may read their own; admins may read anyone's.
+        // GET: api/users/{id} — פרופיל משתמש בודד לאפליקציה.
+        // כל אחד רשאי לקרוא את עצמו, מנהל רשאי לקרוא כל אחד.
         [HttpGet("{id}")]
         [Authorize]
         public async Task<ActionResult<AppUser>> GetUser(int id)
@@ -59,33 +57,29 @@ namespace CarStats.API.Controllers
                 .FirstOrDefaultAsync(u => u.Id == id);
 
             if (user == null) return NotFound();
-            user.PasswordHash = string.Empty; // never expose the hash to clients
+            user.PasswordHash = string.Empty; // הגיבוב לעולם לא יוצא ללקוח
 
-            // Counted from the events themselves rather than read from the
-            // stored column. The column is a running total maintained at write
-            // time, so any increment that was ever missed stays missed — and
-            // because a repeated fault is deduplicated, no later scan can put
-            // the number right again. Counting here means the stat always
-            // matches what the History screen lists, and a wrong stored value
-            // corrects itself the next time the profile loads.
+            // הספירה נעשית על האירועים עצמם ולא נקראת מהעמודה השמורה:
+            // מונה שמור מאבד עדכונים כששולחים כמה קודים במקביל, ואחרי
+            // שהוא שגוי הדדופליקציה מונעת ממנו לתקן את עצמו לנצח.
             user.TotalFaultsLogged = await _context.VehicleEvents
                 .CountAsync(e => e.AppUserId == id);
 
             return user;
         }
 
-        // POST: Create a brand new user
+        // POST: api/users — יצירת משתמש חדש מפאנל הניהול
         [HttpPost]
         [Authorize(Policy = "AdminOnly")]
         public async Task<ActionResult<AppUser>> CreateUser(AppUser newUser)
         {
-            // Same uniqueness rule as self-service registration — two accounts
-            // with one email would make login's email lookup ambiguous.
+            // אותו כלל ייחודיות כמו בהרשמה עצמית: שני חשבונות לאותו מייל
+            // היו הופכים את חיפוש המשתמש בהתחברות לדו-משמעי
             newUser.Email = newUser.Email.ToLower().Trim();
             if (await _context.Users.AnyAsync(u => u.Email.ToLower() == newUser.Email))
                 return Conflict("An account with that email already exists.");
 
-            // Secure the password immediately before saving
+            // הסיסמה מגובבת מיד לפני השמירה
             if (!string.IsNullOrEmpty(newUser.NewPassword))
             {
                 if (!PasswordPolicy.IsAcceptable(newUser.NewPassword))
@@ -95,9 +89,8 @@ namespace CarStats.API.Controllers
             }
             else
             {
-                // Fallback if an admin creates an account without setting a
-                // password. The value satisfies PasswordPolicy, so an account
-                // created this way can still be logged into and changed later.
+                // ברירת מחדל אם מנהל יצר חשבון בלי סיסמה. היא עומדת בתנאי
+                // המדיניות, ולכן אפשר להתחבר עם החשבון ולהחליף אותה אחר כך.
                 newUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword("DefaultPass123!");
             }
 
@@ -107,32 +100,31 @@ namespace CarStats.API.Controllers
             return CreatedAtAction(nameof(GetUsers), new { id = newUser.Id }, newUser);
         }
 
-        // PUT: Edit a user's stats securely
+        // PUT: api/users/{id} — עדכון פרטי משתמש ותפקיד
         [HttpPut("{id}")]
         [Authorize(Policy = "AdminOnly")]
         public async Task<IActionResult> UpdateUser(int id, AppUser updatedUser)
         {
             if (id != updatedUser.Id) return BadRequest();
 
-            // 1. Find the existing user in the database first
+            // 1. איתור המשתמש הקיים
             var existingUser = await _context.Users.FindAsync(id);
             if (existingUser == null) return NotFound();
 
-            // Changing the email must not collide with another account
+            // שינוי מייל לא יכול להתנגש בחשבון אחר
             var newEmail = updatedUser.Email.ToLower().Trim();
             if (await _context.Users.AnyAsync(u => u.Id != id && u.Email.ToLower() == newEmail))
                 return Conflict("Another account already uses that email.");
 
-            // 2. Update the normal fields
+            // 2. עדכון השדות הרגילים
             existingUser.FullName = updatedUser.FullName;
             existingUser.Email = newEmail;
             existingUser.Role = updatedUser.Role;
             existingUser.TotalFaultsLogged = updatedUser.TotalFaultsLogged;
             existingUser.IsPremiumMember = updatedUser.IsPremiumMember;
 
-            // 3. THE SECURITY MAGIC: If the Admin typed a new password, hash it!
-            //    Same policy as registration — an admin-set password must not
-            //    be weaker than one a user could choose for themselves.
+            // 3. אם המנהל הזין סיסמה חדשה — היא נבדקת מול אותה מדיניות
+            //    כמו בהרשמה, ונשמרת מגובבת בלבד
             if (!string.IsNullOrEmpty(updatedUser.NewPassword))
             {
                 if (!PasswordPolicy.IsAcceptable(updatedUser.NewPassword))
@@ -144,7 +136,8 @@ namespace CarStats.API.Controllers
             await _context.SaveChangesAsync();
             return NoContent();
         }
-        // DELETE: Remove a user
+
+        // DELETE: api/users/{id} — מחיקת משתמש. הרכבים והאירועים שלו נמחקים איתו.
         [HttpDelete("{id}")]
         [Authorize(Policy = "AdminOnly")]
         public async Task<IActionResult> DeleteUser(int id)

@@ -1,6 +1,6 @@
 /**
- * One fault code from a completed scan: plain-language title, description and
- * the estimated repair cost, tinted by severity.
+ * כרטיס תקלה בודדת מסריקה שהסתיימה: כותרת בשפה פשוטה, הסבר והערכת מחיר,
+ * צבוע לפי דרגת החומרה.
  */
 
 import React from 'react';
@@ -15,9 +15,8 @@ export default function DtcResultCard({
   rawCode,
 }: {
   result: ReportDtcResponse;
-  /** The code that was scanned. Needed because an untranslated fault has no
-      translation object to read it from — and those are precisely the ones
-      whose detail screen has something to add, via the AI explanation. */
+  /** הקוד שנסרק. נדרש כי לתקלה ללא תרגום אין אובייקט שממנו לקרוא אותו,
+      ודווקא אלה הקודים שלמסך הפירוט יש מה להוסיף עליהם דרך ה-AI. */
   rawCode?: string;
 }) {
   const { colors: c } = useTheme();
@@ -31,13 +30,12 @@ export default function DtcResultCard({
     <Pressable
       style={[styles.resultCard, { borderColor: meta.color }]}
       onPress={code ? () => router.push({ pathname: '/fault/[code]', params: { code } }) : undefined}
-      // Only inert if we genuinely have no code to look up.
+      // לא לחיץ רק כשאין באמת קוד לחפש
       disabled={!code}
     >
       <View style={styles.resultHeader}>
         <Text style={[styles.resultBadge, { color: meta.color }]}>{meta.label}</Text>
-        {/* The code is worth showing whether or not we have an entry for it —
-            it is what a mechanic will ask for. */}
+        {/* הקוד מוצג בין אם יש לנו רשומה עליו ובין אם לא: זה מה שהמוסך ישאל. */}
         {!!code && <Text style={styles.resultCode}>{code}</Text>}
       </View>
 
@@ -61,8 +59,7 @@ export default function DtcResultCard({
           </Text>
         </View>
       ) : code ? (
-        // Says plainly that there is more behind the card. Without it the
-        // card reads as a dead end, which is what it used to be.
+        // אומר במפורש שיש עוד מידע מאחורי הכרטיס. בלעדיו הוא נראה כמו סוף הדרך.
         <View style={[styles.costPill, { borderColor: meta.color }]}>
           <Text style={[styles.costValue, styles.tapHint, { color: meta.color }]}>
             ✨ TAP FOR AI EXPLANATION
@@ -96,6 +93,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
   costLabel:             { fontSize: 10, color: c.Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 4 },
   costValue:             { fontSize: 22, fontWeight: '700' },
-  // Same pill as the cost, but this is a label rather than a number.
+  // אותה גלולה כמו המחיר, אבל כאן זו תווית ולא מספר
   tapHint:               { fontSize: 13, fontWeight: '800', letterSpacing: 1 },
 }));

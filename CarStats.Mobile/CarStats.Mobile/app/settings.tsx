@@ -1,7 +1,6 @@
 /**
- * Settings — appearance (dark mode), notifications (fault alerts + child
- * safety arrival reminder), account, and about. Styled in the app's
- * Soft Tech card idiom; every toggle is wired to a real feature.
+ * מסך ההגדרות: מצב תצוגה, התראות סריקה, תזכורת בטיחות הילדים,
+ * כתובת הבית, החשבון ופרטי הגרסה. כל מתג כאן מחובר לתכונה אמיתית.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -13,8 +12,8 @@ import {
   Text,
   View,
 } from 'react-native';
-// Paper's Switch/Divider/Button pick their colors up from the themed
-// PaperProvider in app/_layout.tsx, so they need no explicit color props.
+// רכיבי הספרייה יורשים את הצבעים מערכת הנושא שהוגדרה בפריסה הראשית,
+// ולכן אין צורך להעביר להם צבעים במפורש.
 import { Button, Divider, SegmentedButtons, Switch, TextInput } from 'react-native-paper';
 import * as Location from 'expo-location';
 import Constants from 'expo-constants';
@@ -42,8 +41,7 @@ const MODE_OPTIONS: { mode: ThemeMode; label: string }[] = [
 
 export default function SettingsScreen() {
   const { user } = useAuth();
-  // No `colors` needed here any more — every control on this screen now takes
-  // its colors from the themed PaperProvider.
+  // אין צורך בצבעים מפורשים: כל פקד במסך הזה מקבל אותם מערכת הנושא.
   const { mode, setMode } = useTheme();
   const s = useStyles();
 
@@ -69,7 +67,7 @@ export default function SettingsScreen() {
     await savePrefs(next);
   };
 
-  // ── Fault alerts toggle ────────────────────────────────────────────────────
+  // ── מתג התראות הסריקה ────────────────────────────────────────────────────
   const toggleFaultAlerts = async (value: boolean) => {
     if (value && !(await ensureNotifPermission())) {
       Alert.alert('Permission needed', 'Allow notifications for CarStats to get scan alerts.');
@@ -78,7 +76,7 @@ export default function SettingsScreen() {
     await update({ ...prefs, faultAlerts: value });
   };
 
-  // ── Child reminder toggle ──────────────────────────────────────────────────
+  // ── מתג תזכורת הילדים ────────────────────────────────────────────────────
   const toggleChildReminder = async (value: boolean) => {
     if (!value) {
       setBusy(true);
@@ -105,10 +103,9 @@ export default function SettingsScreen() {
     }
   };
 
-  // Fires the arrival reminder directly, without waiting to drive home.
-  // The geofence that normally triggers it needs background location, which
-  // Expo Go does not grant — so this is how the notification can be seen and
-  // shown at all outside a development build.
+  // מפעיל את התזכורת ישירות, בלי לחכות להגעה הביתה.
+  // הגדר הגיאוגרפית דורשת הרשאת מיקום ברקע ש-Expo Go לא נותן, ולכן זו
+  // הדרך היחידה להראות את ההתראה בהדגמה.
   const previewChildReminder = async () => {
     if (!(await ensureNotifPermission())) {
       Alert.alert('Permission needed', 'Allow notifications for CarStats to see the reminder.');
@@ -117,8 +114,8 @@ export default function SettingsScreen() {
     await showChildReminderNotification();
   };
 
-  // ── Capture home location ──────────────────────────────────────────────────
-  /** Stores a home position and re-anchors an active geofence to it. */
+  // ── שמירת כתובת הבית ─────────────────────────────────────────────────────
+  /** שומר את מיקום הבית ומעגן מחדש גדר פעילה סביבו. */
   const saveHome = async (lat: number, lng: number, label: string) => {
     const next = { ...prefs, homeLat: lat, homeLng: lng, homeLabel: label };
     await update(next);
@@ -132,8 +129,8 @@ export default function SettingsScreen() {
     );
   };
 
-  // Typing an address needs no GPS at all, which matters on a device that
-  // cannot get a fix — and lets you set a home you are not currently at.
+  // הקלדת כתובת לא דורשת GPS כלל, וזה חשוב במכשיר שלא מצליח לאכן —
+  // וגם מאפשרת להגדיר בית שלא נמצאים בו כרגע.
   const setHomeFromAddress = async () => {
     const query = homeAddress.trim();
     if (!query) { Alert.alert('Enter an address', 'Type your home address first.'); return; }
@@ -169,9 +166,8 @@ export default function SettingsScreen() {
     try {
       const { lat, lng } = await captureHomeLocation();
 
-      // Turn the fix into something readable. Done on the device rather than
-      // through our API — expo-location can already do it, and it saves a
-      // round trip for a label.
+      // המרת הקואורדינטות לכתובת קריאה. נעשה במכשיר ולא דרך השרת, כי
+      // הספרייה כבר יודעת לעשות זאת וזה חוסך פנייה שלמה בשביל תווית.
       let label = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
       try {
         const [place] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
@@ -182,7 +178,7 @@ export default function SettingsScreen() {
           ].filter(Boolean);
           if (parts.length) label = parts.join(', ');
         }
-      } catch { /* no reverse geocode available — the coordinates will do */ }
+      } catch { /* אין המרה הפוכה זמינה — הקואורדינטות יספיקו */ }
 
       await saveHome(lat, lng, label);
     } catch (err: any) {
@@ -197,7 +193,7 @@ export default function SettingsScreen() {
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
 
-      {/* ── Appearance ── */}
+      {/* ── מצב תצוגה ── */}
       <Text style={s.sectionLabel}>APPEARANCE</Text>
       <View style={s.card}>
         <Text style={s.rowTitle}>Theme</Text>
@@ -210,7 +206,7 @@ export default function SettingsScreen() {
         />
       </View>
 
-      {/* ── Notifications ── */}
+      {/* ── התראות ── */}
       <Text style={s.sectionLabel}>NOTIFICATIONS</Text>
       <View style={s.card}>
         <View style={s.switchRow}>
@@ -309,14 +305,14 @@ export default function SettingsScreen() {
 
         {prefs.homeLat != null && (
           <Text style={s.homeSetBadge} numberOfLines={2}>
-            {/* Falls back to coordinates for homes saved before the label
-                existed, so an older install still shows something. */}
+            {/* נופל לקואורדינטות עבור בתים שנשמרו לפני שהתווית נוספה,
+                כדי שגם התקנה ישנה תציג משהו. */}
             Home: {prefs.homeLabel ?? `${prefs.homeLat.toFixed(4)}, ${prefs.homeLng?.toFixed(4)}`}
           </Text>
         )}
       </View>
 
-      {/* ── Account ── */}
+      {/* ── חשבון ── */}
       <Text style={s.sectionLabel}>ACCOUNT</Text>
       <View style={s.card}>
         <Text style={s.rowTitle}>{user?.fullName ?? '—'}</Text>
@@ -326,7 +322,7 @@ export default function SettingsScreen() {
         </Text>
       </View>
 
-      {/* ── About ── */}
+      {/* ── אודות ── */}
       <Text style={s.sectionLabel}>ABOUT</Text>
       <View style={s.card}>
         <View style={s.aboutRow}>
@@ -367,15 +363,15 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   rowTitle: { fontSize: 15, fontWeight: '700', color: c.Dashboard.textPrimary },
   rowSub:   { fontSize: 13, color: c.Dashboard.textSecondary, marginTop: 2, lineHeight: 18 },
 
-  // Theme segmented control
+  // בורר מצב התצוגה
   segmentRow: { flexDirection: 'row', gap: 8, marginTop: 14 },
   switchRow: { flexDirection: 'row', alignItems: 'center' },
-  // Paper's Divider draws its own hairline — this only spaces it.
+  // הקו עצמו מגיע מהספרייה; כאן רק המרווח סביבו
   divider:   { marginVertical: 14 },
 
   homeInput:      { marginTop: 12 },
-  // Overlays the content below rather than pushing it down, so the card does
-  // not jump every time a suggestion list appears.
+  // רשימת ההצעות מרחפת מעל התוכן ולא דוחפת אותו, כדי שהכרטיס לא יקפוץ
+  // בכל פעם שההצעות מופיעות.
   dropdown: {
     position: 'absolute',
     top: '100%',

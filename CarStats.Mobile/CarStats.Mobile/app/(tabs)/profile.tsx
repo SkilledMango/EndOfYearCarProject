@@ -1,7 +1,5 @@
 /**
- * Profile / settings tab.
- * Shows the logged-in user's identity, account stats, their garage,
- * and account actions (refresh, logout).
+ * מסך הפרופיל: פרטי המשתמש, נתוני החשבון, המוסך שלו ופעולות החשבון.
  */
 
 import React, { useCallback, useRef, useState } from 'react';
@@ -30,15 +28,13 @@ export default function ProfileScreen() {
   const [loggingOut, setLoggingOut]   = useState(false);
   const [deletingId, setDeletingId]   = useState<number | null>(null);
 
-  // Re-fetch on focus. Without this the screen showed the snapshot taken at
-  // login, so a fault logged or a consumption figure updated since then left
-  // Profile disagreeing with the garage — 1 fault against 3, 9 L/100km against
-  // 6.4 — on the screen a user is most likely to read as authoritative.
+  // רענון בכל כניסה למסך. בלעדיו הוצג הצילום שנלקח בזמן ההתחברות,
+  // וכל תקלה או עדכון צריכה שקרו מאז יצרו סתירה בין הפרופיל למוסך —
+  // דווקא במסך שהמשתמש נוטה להאמין לו.
   //
-  // Held in a ref because refreshUser is rebuilt on every render of the auth
-  // provider: depending on it directly would re-run this effect, set state, and
-  // loop. Must also sit above the early return below — hooks cannot run
-  // conditionally.
+  // נשמר ב-ref כי פונקציית הרענון נבנית מחדש בכל רינדור של ההקשר, ותלות
+  // ישירה בה הייתה יוצרת לולאה אינסופית. חייב לשבת מעל היציאה המוקדמת
+  // שלמטה, כי אי אפשר להפעיל הוקים באופן מותנה.
   const refreshRef = useRef(refreshUser);
   refreshRef.current = refreshUser;
   useFocusEffect(
@@ -47,7 +43,7 @@ export default function ProfileScreen() {
     }, []),
   );
 
-  if (!user) return null; // _layout redirects to /login when logged out
+  if (!user) return null; // הפריסה הראשית מפנה למסך ההתחברות כשאין משתמש
 
   const initials = user.fullName
     .split(/\s+/)
@@ -121,7 +117,7 @@ export default function ProfileScreen() {
     >
       <Text style={s.pageTitle}>PROFILE</Text>
 
-      {/* Identity card */}
+      {/* כרטיס הזהות */}
       <View style={s.card}>
         <View style={s.identityRow}>
           <View style={s.avatar}>
@@ -139,7 +135,7 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Stats */}
+      {/* נתוני החשבון */}
       <View style={s.statsRow}>
         <View style={s.statCard}>
           <Text style={s.statValue}>{user.vehicles?.length ?? 0}</Text>
@@ -151,7 +147,7 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Garage */}
+      {/* המוסך */}
       <Text style={s.sectionLabel}>MY GARAGE</Text>
       {(user.vehicles ?? []).length === 0 ? (
         <View style={s.card}>
@@ -181,7 +177,7 @@ export default function ProfileScreen() {
         ))
       )}
 
-      {/* Account actions */}
+      {/* פעולות החשבון */}
       <Text style={s.sectionLabel}>ACCOUNT</Text>
       <Pressable style={s.settingsRow} onPress={() => router.push('/settings')}>
         <Text style={s.settingsIcon}>⚙️</Text>

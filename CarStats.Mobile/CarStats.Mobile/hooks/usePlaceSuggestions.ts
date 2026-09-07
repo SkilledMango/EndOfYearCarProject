@@ -1,12 +1,10 @@
 /**
- * Debounced Google Places autocomplete.
+ * השלמה אוטומטית של כתובות, עם השהיה בין הקלדות.
  *
- * Extracted from the trip planner so the home-address field in Settings can
- * use the same behaviour rather than a second copy of it — same debounce,
- * same result limit, same silent-failure rule.
+ * הופרד ממתכנן הנסיעה כדי ששדה כתובת הבית בהגדרות ישתמש באותה התנהגות
+ * במקום בעותק שני שלה.
  *
- * Requests go through the API's /navigation proxy, which keeps the Google key
- * server-side.
+ * הבקשות עוברות דרך הפרוקסי בשרת, שמחזיק את מפתח Google אצלו.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -17,9 +15,9 @@ export interface PlaceSuggestion {
   description: string;
 }
 
-/** Below this many characters Google returns noise, so don't spend a request. */
+/** מתחת לאורך הזה Google מחזירה רעש, ולא שווה לבזבז בקשה. */
 const MIN_QUERY_LENGTH = 3;
-/** Typing pause before a request goes out. */
+/** הפסקת ההקלדה שאחריה נשלחת בקשה. */
 const DEBOUNCE_MS = 350;
 const MAX_RESULTS = 5;
 
@@ -28,8 +26,8 @@ export function usePlaceSuggestions() {
   const [visible, setVisible]         = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // A pending request must not repopulate the list after the caller cleared
-  // it — otherwise picking a suggestion makes the dropdown flash back open.
+  // בקשה שכבר בדרך לא צריכה למלא את הרשימה אחרי שהיא נוקתה,
+  // אחרת בחירת הצעה גורמת לרשימה להיפתח שוב לרגע.
   const requestId = useRef(0);
 
   const clear = useCallback(() => {
@@ -55,7 +53,7 @@ export function usePlaceSuggestions() {
         const { data } = await api.get('/navigation/autocomplete', {
           params: { input: text.trim() },
         });
-        if (id !== requestId.current) return;  // superseded or cleared
+        if (id !== requestId.current) return;  // הבקשה כבר לא רלוונטית
 
         if (data.status === 'OK' && Array.isArray(data.predictions)) {
           setSuggestions(
@@ -70,7 +68,7 @@ export function usePlaceSuggestions() {
           setVisible(false);
         }
       } catch {
-        // Autocomplete is a convenience — a failure must never block typing.
+        // ההשלמה היא נוחות בלבד; כישלון שלה לא יעצור את ההקלדה
         if (id === requestId.current) {
           setSuggestions([]);
           setVisible(false);
@@ -79,7 +77,7 @@ export function usePlaceSuggestions() {
     }, DEBOUNCE_MS);
   }, []);
 
-  // Don't leave a timer running after the screen goes away.
+  // ניקוי הטיימר כשהמסך נסגר
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
   return { suggestions, visible, search, clear };

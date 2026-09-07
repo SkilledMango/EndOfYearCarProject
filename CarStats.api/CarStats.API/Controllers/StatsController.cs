@@ -1,13 +1,14 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using CarStats.API.Data;
 
 namespace CarStats.API.Controllers
 {
+    // הסטטיסטיקות של דאשבורד הניהול. פתוח למנהלים בלבד.
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Policy = "AdminOnly")] // analytics dashboard is admin-panel only
+    [Authorize(Policy = "AdminOnly")]
     public class StatsController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -17,26 +18,25 @@ namespace CarStats.API.Controllers
             _context = context;
         }
 
-        // GET: api/stats
+        // GET: api/stats — כל נתוני הדאשבורד בקריאה אחת
         [HttpGet]
         public async Task<IActionResult> GetStats()
         {
-            // ── Totals ────────────────────────────────────────────────────────
+            // ── סך הכול ───────────────────────────────────────────────────────
             var totalUsers    = await _context.Users.CountAsync();
             var totalVehicles = await _context.Vehicles.CountAsync();
             var totalFaults   = await _context.VehicleEvents.CountAsync();
 
-            // ── Fetch DTC dictionary into memory (small table) ────────────────
+            // ── מילון התקלות נטען לזיכרון, כי הטבלה קטנה ──────────────────────
             var allDtcs = await _context.DiagnosticCodes
                 .Select(d => new { d.ErrorCode, d.HumanTitle, d.Severity })
                 .ToListAsync();
-            // DistinctBy guards against duplicate ErrorCode rows in the
-            // dictionary table (same defense as MobileController).
+            // הגנה מפני קוד שמופיע פעמיים במילון
             var dtcMap = allDtcs
                 .DistinctBy(d => d.ErrorCode)
                 .ToDictionary(d => d.ErrorCode);
 
-            // ── Most common fault codes (top 6) ───────────────────────────────
+            // ── ששת הקודים הנפוצים ביותר ──────────────────────────────────────
             var topCodes = await _context.VehicleEvents
                 .GroupBy(e => e.RawErrorCode)
                 .Select(g => new { code = g.Key, count = g.Count() })
@@ -44,6 +44,7 @@ namespace CarStats.API.Controllers
                 .Take(6)
                 .ToListAsync();
 
+            // חיבור כל קוד לכותרת ולחומרה מהמילון
             var topCodesEnriched = topCodes.Select(tc =>
             {
                 dtcMap.TryGetValue(tc.code, out var dtc);
@@ -56,7 +57,7 @@ namespace CarStats.API.Controllers
                 };
             }).ToList();
 
-            // ── Faults per day (last 14 days) — group in memory ───────────────
+            // ── תקלות ליום ב-14 הימים האחרונים ────────────────────────────────
             var twoWeeksAgo = DateTime.UtcNow.AddDays(-14);
             var recentTimestamps = await _context.VehicleEvents
                 .Where(e => e.Timestamp >= twoWeeksAgo)
@@ -69,7 +70,7 @@ namespace CarStats.API.Controllers
                 .OrderBy(x => x.date)
                 .ToList();
 
-            // ── Recent fault events (last 8) ──────────────────────────────────
+            // ── שמונת האירועים האחרונים ───────────────────────────────────────
             var recentEvents = await _context.VehicleEvents
                 .OrderByDescending(e => e.Timestamp)
                 .Take(8)
@@ -82,7 +83,7 @@ namespace CarStats.API.Controllers
                 })
                 .ToListAsync();
 
-            // Fetch user names for those events sequentially (safe with DbContext)
+            // שמות המשתמשים של אותם אירועים, בשאילתה אחת
             var userIds = recentEvents
                 .Where(e => e.AppUserId.HasValue)
                 .Select(e => e.AppUserId!.Value)
@@ -111,11 +112,9 @@ namespace CarStats.API.Controllers
                 };
             }).ToList();
 
-            // ── Severity breakdown ────────────────────────────────────────────
-            // Counted per distinct code on the SERVER. Pulling every raw code
-            // back to group in memory transferred one row per fault ever
-            // logged, which grows without bound; this returns at most one row
-            // per code in the dictionary.
+            // ── התפלגות לפי חומרה ─────────────────────────────────────────────
+            // הקיבוץ נעשה בשרת הנתונים ולא בזיכרון: משיכת כל האירועים
+            // הייתה מעבירה שורה לכל תקלה שנרשמה אי פעם, בלי גבול עליון.
             var countsByCode = await _context.VehicleEvents
                 .GroupBy(e => e.RawErrorCode)
                 .Select(g => new { code = g.Key, count = g.Count() })

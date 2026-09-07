@@ -1,10 +1,12 @@
-namespace CarStats.API.Services
+﻿namespace CarStats.API.Services
 {
+    // ממשק שליחת המייל. הבקר תלוי ביכולת לשלוח, לא בספק מסוים,
+    // ולכן החלפת ספק נוגעת במחלקה אחת בלבד.
     public interface IEmailService
     {
         /// <summary>
-        /// Sends a verification code to the given address.
-        /// Returns true if the provider accepted the message, false otherwise.
+        /// שולח קוד אימות לכתובת הנתונה.
+        /// מחזיר אמת אם הספק קיבל את ההודעה, ושקר אחרת.
         /// </summary>
         Task<bool> SendVerificationCodeAsync(string toEmail, string toName, string code);
     }

@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using CarStats.API.Data;
@@ -7,6 +7,7 @@ using CarStats.API.Services;
 
 namespace CarStats.API.Controllers
 {
+    // מבני הבקשות שמגיעות מהאפליקציה
     public class LoginRequest
     {
         public string Email    { get; set; } = string.Empty;
@@ -31,17 +32,19 @@ namespace CarStats.API.Controllers
         public string Email { get; set; } = string.Empty;
     }
 
+    // הרשמה, אימות מייל והתחברות.
+    // הבקר היחיד שפתוח בלי טוקן — כי הוא זה שמחלק אותם.
     [Route("api/[controller]")]
     [ApiController]
-    [AllowAnonymous] // the one controller reachable without a token — it hands them out
+    [AllowAnonymous]
     public class AuthController : ControllerBase
     {
         private const int CodeLifetimeMinutes = 15;
 
-        /// <summary>Wrong codes allowed before a fresh one must be requested.</summary>
+        /// <summary>כמה ניחושים שגויים מותרים לפני שצריך לבקש קוד חדש.</summary>
         private const int MaxVerificationAttempts = 5;
 
-        /// <summary>Minimum gap between verification emails to one account.</summary>
+        /// <summary>המרווח המינימלי בין שני מיילי אימות לאותו חשבון.</summary>
         private static readonly TimeSpan ResendCooldown = TimeSpan.FromSeconds(60);
 
         private readonly AppDbContext _context;
@@ -55,20 +58,18 @@ namespace CarStats.API.Controllers
             _tokens  = tokens;
         }
 
-        /// <summary>
-        /// The shape both session-granting endpoints (login, verify-code) return:
-        /// the bearer token plus the user it belongs to.
-        /// </summary>
+        /// <summary>התשובה האחידה של login ו-verify-code: הטוקן והמשתמש שלו.</summary>
         private IActionResult Session(AppUser user)
         {
             user.PasswordHash = string.Empty;
             return Ok(new { token = _tokens.CreateToken(user), user });
         }
 
-        // POST: api/auth/register
+        // POST: api/auth/register — יוצר משתמש חדש ושולח לו קוד אימות
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterRequest request)
         {
+            // בדיקות קלט: שדות חובה, חוזק סיסמה ותקינות מייל
             if (string.IsNullOrWhiteSpace(request.FullName) ||
                 string.IsNullOrWhiteSpace(request.Email)    ||
                 string.IsNullOrWhiteSpace(request.Password))
@@ -86,7 +87,7 @@ namespace CarStats.API.Controllers
             if (emailTaken)
                 return Conflict("An account with that email already exists.");
 
-            // Create the new user — unverified until they confirm the emailed code.
+            // המשתמש נוצר לא מאומת, והסיסמה נשמרת מגובבת ב-BCrypt
             var newUser = new AppUser
             {
                 FullName        = request.FullName.Trim(),
@@ -99,13 +100,13 @@ namespace CarStats.API.Controllers
 
             await IssueVerificationCodeAsync(newUser);
 
-            // Do NOT return a session — the client must verify the code first.
+            // לא מוחזר טוקן: קודם צריך לאמת את הקוד
             newUser.PasswordHash          = string.Empty;
             newUser.EmailVerificationCode = null;
             return Ok(newUser);
         }
 
-        // POST: api/auth/verify-code
+        // POST: api/auth/verify-code — מאמת את הקוד שנשלח במייל ופותח סשן
         [HttpPost("verify-code")]
         public async Task<IActionResult> VerifyCode([FromBody] VerifyCodeRequest request)
         {
@@ -120,21 +121,15 @@ namespace CarStats.API.Controllers
             if (user == null)
                 return NotFound("No account found for that email.");
 
-            // Already verified — say so, but do NOT hand out a session.
-            //
-            // This previously returned Session(user) for idempotency, which
-            // made the endpoint an authentication bypass: it is [AllowAnonymous],
-            // so anyone who knew a verified account's email address could post
-            // any code at all and receive a valid token for it. Verification
-            // proves control of an inbox; it is not a substitute for a password.
+            // חשבון שכבר אומת לא מקבל כאן טוקן — אחרת אפשר היה להתחבר
+            // לכל חשבון מאומת בלי סיסמה, רק לפי כתובת המייל
             if (user.IsEmailVerified)
                 return BadRequest("This email is already verified. Please log in with your password.");
 
             if (user.VerificationCodeExpiresAt == null || user.VerificationCodeExpiresAt < DateTime.UtcNow)
                 return BadRequest("That code has expired. Request a new one.");
 
-            // Cap the guesses. Six digits is a million combinations, which is
-            // nothing to a script running for the code's whole lifetime.
+            // הגבלת ניחושים: קוד בן שש ספרות הוא מיליון אפשרויות בלבד
             if (user.VerificationAttempts >= MaxVerificationAttempts)
                 return BadRequest("Too many incorrect codes. Request a new one.");
 
@@ -145,7 +140,7 @@ namespace CarStats.API.Controllers
                 return BadRequest("Incorrect code. Please check and try again.");
             }
 
-            // Success — mark verified and clear the code.
+            // הצליח: מסמנים כמאומת ומוחקים את הקוד
             user.IsEmailVerified           = true;
             user.EmailVerificationCode     = null;
             user.VerificationCodeExpiresAt = null;
@@ -155,7 +150,7 @@ namespace CarStats.API.Controllers
             return Session(user);
         }
 
-        // POST: api/auth/resend-code
+        // POST: api/auth/resend-code — שולח קוד חדש למשתמש שעדיין לא אומת
         [HttpPost("resend-code")]
         public async Task<IActionResult> ResendCode([FromBody] ResendCodeRequest request)
         {
@@ -171,13 +166,8 @@ namespace CarStats.API.Controllers
             if (user.IsEmailVerified)
                 return BadRequest("This email is already verified.");
 
-            // Throttle. This endpoint is anonymous and sends a real email every
-            // time, so without a limit it is both an inbox-flooding tool aimed
-            // at any registered address and a fast way to burn the free email
-            // quota the whole signup flow depends on.
-            //
-            // The issue time is derived from the expiry rather than stored
-            // separately — one less column for the same information.
+            // הגבלת קצב: הנקודה פתוחה לכולם ושולחת מייל אמיתי בכל קריאה.
+            // זמן ההנפקה נגזר מזמן התפוגה, כדי לא לשמור עמודה נוספת.
             var issuedAt = user.VerificationCodeExpiresAt?.AddMinutes(-CodeLifetimeMinutes);
             if (issuedAt != null && DateTime.UtcNow - issuedAt < ResendCooldown)
                 return BadRequest("A code was just sent. Please wait a minute before asking for another.");
@@ -186,7 +176,7 @@ namespace CarStats.API.Controllers
             return Ok(new { message = "A new code has been sent." });
         }
 
-        // POST: api/auth/login
+        // POST: api/auth/login — התחברות עם מייל וסיסמה
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
@@ -206,7 +196,7 @@ namespace CarStats.API.Controllers
             if (!passwordValid)
                 return Unauthorized("Invalid email or password.");
 
-            // Block unverified accounts — resend a fresh code so they can finish.
+            // חשבון לא מאומת חסום — ונשלח לו קוד חדש כדי שיוכל להשלים
             if (!user.IsEmailVerified)
             {
                 await IssueVerificationCodeAsync(user);
@@ -220,28 +210,27 @@ namespace CarStats.API.Controllers
             return Session(user);
         }
 
-        // ── Helpers ───────────────────────────────────────────────────────────
+        // ── פונקציות עזר ──────────────────────────────────────────────────────
 
         /// <summary>
-        /// Generates a fresh verification code for the user, saves it, and
-        /// emails it. Shared by register, resend-code, and unverified login.
+        /// מייצר קוד אימות חדש, שומר אותו ושולח אותו במייל.
+        /// משותף להרשמה, לשליחה חוזרת ולהתחברות של חשבון לא מאומת.
         /// </summary>
         private async Task IssueVerificationCodeAsync(AppUser user)
         {
             user.EmailVerificationCode     = GenerateCode();
             user.VerificationCodeExpiresAt = DateTime.UtcNow.AddMinutes(CodeLifetimeMinutes);
-            // A fresh code gets a fresh allowance, otherwise a locked-out user
-            // could never recover.
+            // קוד חדש מאפס את מונה הניחושים, אחרת משתמש חסום לא היה יכול להשתחרר
             user.VerificationAttempts      = 0;
             await _context.SaveChangesAsync();
             await _email.SendVerificationCodeAsync(user.Email, user.FullName, user.EmailVerificationCode!);
         }
 
-        /// <summary>Random 6-digit numeric code, e.g. "048213".</summary>
+        /// <summary>קוד אקראי בן שש ספרות, לדוגמה "048213".</summary>
         private static string GenerateCode() =>
             Random.Shared.Next(0, 1_000_000).ToString("D6");
 
-        /// <summary>Basic email-format check using the framework's mail parser.</summary>
+        /// <summary>בדיקת תקינות כתובת מייל בעזרת המנתח של הפריימוורק.</summary>
         private static bool IsValidEmail(string email)
         {
             var trimmed = email.Trim();

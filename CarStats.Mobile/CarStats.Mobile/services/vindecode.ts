@@ -1,20 +1,11 @@
 /**
- * vindecode.ts
+ * פענוח מספר שלדה בן 17 תווים מול שירות NHTSA האמריקאי. חינמי, בלי מפתח.
  *
- * Decodes a 17-char VIN using the free NHTSA vPIC API.
- * No API key required.
+ * השירות מכסה רכבים מתוצרת ארה"ב וגם רוב הרכבים המיובאים, כי שלושת התווים
+ * הראשונים של מספר השלדה הם תקן עולמי שמזהה את היצרן.
  *
- * Endpoint:
- *   GET https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/{VIN}?format=json
- *
- * The API covers:
- *  - All US-manufactured vehicles
- *  - Most imported vehicles (Kia, Hyundai, Toyota, Mercedes-Benz, BMW, etc.)
- *    — identified via the WMI (first 3 chars of VIN, a global ISO 3779 standard)
- *
- * Note: for non-US-market models (e.g. EU diesels), NHTSA may return the make
- * and year correctly but leave model as generic (e.g. "E-Class" instead of "E220d").
- * That's still enough to detect the car and suggest adding it to the garage.
+ * לדגמים שאינם נמכרים בארה"ב הוא עשוי להחזיר יצרן ושנה נכונים אבל דגם כללי.
+ * גם זה מספיק כדי לזהות את הרכב ולהציע להוסיף אותו למוסך.
  */
 
 import { Vehicle } from './api';
@@ -24,16 +15,16 @@ const NHTSA_BASE = 'https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin';
 
 export interface VinDecodeResult {
   vin:   string;
-  make:  string;   // e.g. "KIA", "MERCEDES-BENZ" (NHTSA returns uppercase)
-  model: string;   // e.g. "Sportage", "E-Class"
+  make:  string;   // היצרן, מוחזר באותיות גדולות
+  model: string;   // הדגם
   year:  number;
 }
 
-// ─── Main function ────────────────────────────────────────────────────────────
+// ─── הפונקציה הראשית ─────────────────────────────────────────────────────────
 
 /**
- * Decodes a VIN string into make / model / year.
- * Returns null if the VIN is invalid or NHTSA doesn't recognise it.
+ * מפענחת מספר שלדה ליצרן, דגם ושנה.
+ * מחזירה null אם המספר אינו תקין או שהשירות לא מזהה אותו.
  */
 export async function decodeVin(vin: string): Promise<VinDecodeResult | null> {
   if (!vin || vin.length !== 17) return null;
@@ -43,7 +34,7 @@ export async function decodeVin(vin: string): Promise<VinDecodeResult | null> {
     if (!res.ok) return null;
 
     const json = await res.json();
-    // NHTSA returns an array of {Variable, Value, ValueId, VariableId} objects
+    // התשובה מגיעה כמערך של זוגות שם ערך
     const results: { Variable: string; Value: string }[] = json?.Results ?? [];
 
     const get = (name: string) =>
@@ -54,10 +45,10 @@ export async function decodeVin(vin: string): Promise<VinDecodeResult | null> {
     const yearStr  = get('Model Year');
     const year     = parseInt(yearStr, 10);
 
-    // NHTSA decodes can be partial — proceed if we got at least a make and year
+    // הפענוח יכול להיות חלקי; מספיק שקיבלנו יצרן ושנה
     if (!make || !year) return null;
 
-    // Title-case the make so "KIA" → "Kia", "MERCEDES-BENZ" → "Mercedes-Benz"
+    // המרת שם היצרן לאות גדולה בתחילת מילה בלבד
     const titleMake = make
       .toLowerCase()
       .split('-')
@@ -74,12 +65,11 @@ export async function decodeVin(vin: string): Promise<VinDecodeResult | null> {
   }
 }
 
-// ─── Matching helper ──────────────────────────────────────────────────────────
+// ─── עזר להשוואה ─────────────────────────────────────────────────────────────
 
 /**
- * Returns true if a decoded VIN result matches a vehicle already in the garage.
- * Uses fuzzy matching because NHTSA make/model strings may differ from what
- * the user entered (e.g. "Kia" vs "KIA", "Sportage" vs "sportage").
+ * בודקת אם השלדה שפוענחה מתאימה לרכב שכבר קיים במוסך.
+ * ההשוואה גמישה, כי הכתיב שהשירות מחזיר עשוי להיות שונה ממה שהמשתמש הקליד.
  */
 export function vinMatchesVehicle(decoded: VinDecodeResult, vehicle: Vehicle): boolean {
   const norm = (s: string) => s.toLowerCase().replace(/[\s\-_]/g, '');
@@ -89,7 +79,7 @@ export function vinMatchesVehicle(decoded: VinDecodeResult, vehicle: Vehicle): b
     norm(vehicle.make).includes(norm(decoded.make));
 
   const modelMatch =
-    !decoded.model ||                                    // if NHTSA didn't return a model, skip check
+    !decoded.model ||                                    // אם לא הוחזר דגם, מדלגים על הבדיקה
     norm(decoded.model).includes(norm(vehicle.model)) ||
     norm(vehicle.model).includes(norm(decoded.model));
 

@@ -1,10 +1,8 @@
 /**
- * Login screen.
+ * מסך ההתחברות.
  *
- * Built with react-native-paper components (TextInput, Button, Card,
- * HelperText) themed to the CarStats palette via constants/paperTheme.ts —
- * so the app gets the library's accessibility, focus states and floating
- * labels for free without adopting Paper's stock Material look.
+ * בנוי מרכיבי react-native-paper שנצבעו בערכת הצבעים שלנו, וכך מתקבלות
+ * נגישות, מצבי מיקוד ותוויות צפות בלי לאמץ את המראה הסטנדרטי של הספרייה.
  */
 
 import React, { useState } from 'react';
@@ -43,10 +41,10 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(email.trim(), password);
-      // AuthContext sets the user → _layout.tsx automatically navigates to tabs
+      // ההקשר מעדכן את המשתמש, והפריסה הראשית מנווטת מכאן אוטומטית
     } catch (err: any) {
-      // Unverified account — the API just emailed a fresh code. Send them to
-      // the verification step with their email pre-filled.
+      // חשבון לא מאומת: השרת בדיוק שלח קוד חדש, ולכן מעבירים לשלב האימות
+      // כשכתובת המייל כבר מולאה.
       if (err?.code === 'EMAIL_NOT_VERIFIED') {
         router.push({ pathname: '/register', params: { verifyEmail: err.email ?? email.trim() } });
         return;
@@ -66,7 +64,7 @@ export default function LoginScreen() {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Logo / branding */}
+        {/* הלוגו */}
         <View style={styles.brand}>
           <View style={styles.logoSquare}>
             <MaterialIcons name="directions-car" size={40} color={c.Dashboard.onAccent} />
@@ -107,14 +105,14 @@ export default function LoginScreen() {
                 <TextInput.Icon
                   icon={showPass ? 'eye-off' : 'eye'}
                   onPress={() => setShowPass(s => !s)}
-                  // Screen readers otherwise announce this as an unlabelled button
+                  // בלי זה קורא מסך היה מכריז על כפתור בלי שם
                   accessibilityLabel={showPass ? 'Hide password' : 'Show password'}
                 />
               }
             />
 
-            {/* visible={false} keeps the row's height reserved, so the button
-                doesn't jump down when an error appears. */}
+            {/* השורה שומרת על גובהה גם כשאין שגיאה, כדי שהכפתור לא יקפוץ
+                למטה ברגע שמופיעה הודעה. */}
             <HelperText type="error" visible={!!error}>
               {error ?? ' '}
             </HelperText>
@@ -152,7 +150,7 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
     paddingBottom: 48,
   },
 
-  // Branding
+  // הלוגו והכותרת
   brand:      { alignItems: 'center', marginBottom: 32 },
   logoSquare: {
     width: 84,
@@ -176,8 +174,7 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
   tagline: { fontSize: 16, color: c.Dashboard.textSecondary, marginTop: 8 },
 
-  // Card — Paper handles the surface color and elevation; the 24pt radius is
-  // ours, larger than the theme's global roundness.
+  // הכרטיס: הספרייה מטפלת בצבע וברמת ההגבהה, והעיגול הגדול הוא שלנו.
   card:        { borderRadius: 24 },
   cardContent: { paddingVertical: 8, gap: 10 },
 

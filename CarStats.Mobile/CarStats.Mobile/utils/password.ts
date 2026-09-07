@@ -1,10 +1,9 @@
 /**
- * Password rules, mirroring the server's PasswordPolicy.
+ * כללי הסיסמה, משוכפלים מ-PasswordPolicy.cs בשרת.
  *
- * This exists for immediate feedback while typing — the server is what
- * actually enforces the rules, since any client can be bypassed. If you change
- * a rule here, change Services/PasswordPolicy.cs to match, or the app will
- * accept passwords the API then rejects.
+ * קיימים כאן רק לצורך משוב מיידי בזמן ההקלדה; האכיפה האמיתית היא בשרת,
+ * כי כל לקוח ניתן לעקיפה. שינוי כלל כאן מחייב שינוי מקביל בשרת, אחרת
+ * האפליקציה תאשר סיסמה שה-API ידחה.
  */
 
 export const PASSWORD_MIN_LENGTH = 8;
@@ -13,12 +12,10 @@ export const PASSWORD_REQUIREMENTS =
   'Password must be at least 8 characters and include at least one letter and one number.';
 
 /**
- * Returns null when the password is acceptable, otherwise the reason it is
- * not — phrased for the user rather than as a rule name.
+ * מחזירה null אם הסיסמה תקינה, אחרת את הסיבה בניסוח שמובן למשתמש.
  *
- * Deliberately no maximum length and no required symbols: length is what makes
- * a password hard to guess, and forcing symbols mostly produces predictable
- * substitutions rather than stronger secrets.
+ * במכוון אין אורך מקסימלי ואין דרישה לתווים מיוחדים: האורך הוא מה שמקשה
+ * על ניחוש, ודרישת סימנים מייצרת בעיקר החלפות צפויות.
  */
 export function validatePassword(password: string): string | null {
   if (!password) return 'Please enter a password.';
@@ -30,7 +27,7 @@ export function validatePassword(password: string): string | null {
   return null;
 }
 
-/** True when the password passes every rule. */
+/** אמת כשהסיסמה עומדת בכל הכללים. */
 export function isPasswordAcceptable(password: string): boolean {
   return validatePassword(password) === null;
 }

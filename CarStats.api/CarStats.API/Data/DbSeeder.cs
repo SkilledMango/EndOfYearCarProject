@@ -1,24 +1,22 @@
-using CarStats.API.Models;
+﻿using CarStats.API.Models;
 
 namespace CarStats.API.Data
 {
     public static class DbSeeder
     {
         /// <summary>
-        /// Seeds the DiagnosticCodes table with real OBD-II codes if it is empty.
-        /// Safe to call on every startup — does nothing if data already exists.
+        /// טוען את מילון קודי התקלה לבסיס הנתונים.
+        /// בטוח לקרוא בכל עלייה של השרת: קוד שכבר קיים לא נוסף שוב.
         /// </summary>
         public static async Task SeedDiagnosticCodesAsync(AppDbContext context)
         {
-            // Deliberately NOT an early return on "some code already exists":
-            // that made the dictionary un-extendable, because a database seeded
-            // once would skip every code added later. Instead each code is
-            // inserted only if it is missing, so a deploy can grow the
-            // dictionary without touching what is already there.
+            // אין כאן יציאה מוקדמת כשהטבלה כבר מלאה: בגרסה כזו בסיס נתונים
+            // שנטען פעם אחת היה מדלג לנצח על כל קוד שנוסיף בעתיד.
+            // במקום זה כל קוד נבדק בנפרד ונוסף רק אם הוא חסר.
 
             var codes = new List<DiagnosticCode>
             {
-                // ── GREEN — Minor / Informational ────────────────────────────────────
+                // ── ירוק: תקלות קלות או לידיעה בלבד ─────────────────────────────────
 
                 new() {
                     ErrorCode        = "P0128",
@@ -48,7 +46,7 @@ namespace CarStats.API.Data
                     EstimatedCostMax = 1200,
                 },
 
-                // ── YELLOW — Warning, check soon ─────────────────────────────────────
+                // ── צהוב: אזהרה, כדאי לטפל בקרוב ────────────────────────────────────
 
                 new() {
                     ErrorCode        = "P0101",
@@ -141,7 +139,7 @@ namespace CarStats.API.Data
                     EstimatedCostMax = 1200,
                 },
 
-                // ── RED — Critical, stop safely ──────────────────────────────────────
+                // ── אדום: קריטי, יש לעצור בבטחה ─────────────────────────────────────
 
                 new() {
                     ErrorCode        = "P0300",
@@ -208,7 +206,8 @@ namespace CarStats.API.Data
                 },
             };
 
-            // The hand-written set above plus the wider generic catalogue.
+            // הקודים שנכתבו כאן ידנית, בתוספת הקטלוג הגנרי הרחב.
+            // אחר כך נוספים רק הקודים שעדיין לא קיימים בבסיס הנתונים.
             codes.AddRange(DtcCatalog.Codes);
 
             var existing = context.DiagnosticCodes

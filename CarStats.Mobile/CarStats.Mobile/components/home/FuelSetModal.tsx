@@ -1,7 +1,6 @@
 /**
- * Lets the driver enter the current fuel level and tank size by hand, which
- * becomes the baseline the estimate depletes from. Only reachable on cars
- * whose adapter cannot report the fuel level itself.
+ * הזנה ידנית של מפלס הדלק וגודל המיכל, שהופכת לנקודת ההתחלה שממנה
+ * ההערכה יורדת. נגיש רק ברכבים שלא מדווחים מפלס דלק בעצמם.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -51,7 +50,7 @@ export default function FuelSetModal({
             Set your current level and the app will track usage automatically.
           </Text>
 
-          {/* ── Quick-fill buttons ── */}
+          {/* ── כפתורי מילוי מהיר ── */}
           <View style={modalStyles.quickRow}>
             {QUICK_FILL.map(q => (
               <Pressable
@@ -72,7 +71,7 @@ export default function FuelSetModal({
             ))}
           </View>
 
-          {/* ── Manual % input ── */}
+          {/* ── הזנת אחוז ידנית ── */}
           <View style={modalStyles.inputRow}>
             <Text style={modalStyles.inputLabel}>Custom %</Text>
             <TextInput
@@ -86,7 +85,7 @@ export default function FuelSetModal({
             />
           </View>
 
-          {/* ── Tank capacity input ── */}
+          {/* ── גודל המיכל ── */}
           <View style={modalStyles.inputRow}>
             <Text style={modalStyles.inputLabel}>Tank size (L)</Text>
             <TextInput
@@ -101,7 +100,7 @@ export default function FuelSetModal({
           </View>
           <Text style={modalStyles.hint}>Kia Sportage ≈ 55 L  ·  Most sedans 50–65 L</Text>
 
-          {/* ── Buttons ── */}
+          {/* ── כפתורים ── */}
           <View style={modalStyles.btnRow}>
             <Pressable style={modalStyles.cancelBtn} onPress={onCancel}>
               <Text style={modalStyles.cancelText}>CANCEL</Text>

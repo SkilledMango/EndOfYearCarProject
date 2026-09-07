@@ -9,15 +9,15 @@ import 'react-native-reanimated';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ThemeProvider, useTheme } from '@/context/ThemeContext';
 import { PaperDarkTheme, PaperLightTheme } from '@/constants/paperTheme';
-// Side-effect import: registers the child-reminder geofence task + the
-// notification handler on every launch (including background launches).
+// ייבוא לצורך תופעת הלוואי: רושם את הגדר הגיאוגרפית של תזכורת הילדים
+// ואת מטפל ההתראות בכל הפעלה, כולל הפעלה ברקע.
 import '@/services/notifications';
 
 export const unstable_settings = {
   anchor: '(tabs)',
 };
 
-// ─── Inner navigator — has access to AuthContext ───────────────────────────────
+// ─── הניווט הפנימי, זה שיש לו גישה למשתמש המחובר ─────────────────────────────
 function RootNavigator() {
   const { user, isLoading } = useAuth();
   const { colors: c, isDark } = useTheme();
@@ -32,17 +32,17 @@ function RootNavigator() {
     const inAuthFlow       = onLoginScreen || onRegisterScreen;
 
     if (!user && !inAuthFlow) {
-      // Not logged in and not on an auth screen — go to login
+      // לא מחובר ולא במסך התחברות: מפנים למסך ההתחברות
       router.replace('/login');
     } else if (user && onLoginScreen) {
-      // Already logged in on the login screen — go to main app.
-      // NOTE: we intentionally do NOT redirect away from the register screen
-      // when a user exists, so the post-signup "add your first car" step can show.
+      // כבר מחובר ונמצא במסך ההתחברות: מפנים לאפליקציה.
+      // במכוון לא מפנים ממסך ההרשמה, כדי ששלב "הוסף את הרכב הראשון"
+      // שאחרי ההרשמה יוכל להופיע.
       router.replace('/(tabs)');
     }
   }, [user, isLoading, segments]);
 
-  // Splash while restoring session from storage
+  // מסך פתיחה בזמן שחזור הסשן מהאחסון
   if (isLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: c.Dashboard.bg, justifyContent: 'center', alignItems: 'center' }}>
@@ -51,8 +51,7 @@ function RootNavigator() {
     );
   }
 
-  // Match the navigation chrome to the active palette so transitions
-  // don't flash a mismatched color.
+  // התאמת צבעי הניווט לערכה הפעילה, כדי שמעברים לא יהבהבו בצבע לא נכון.
   const navTheme = {
     ...(isDark ? DarkTheme : DefaultTheme),
     colors: {
@@ -82,7 +81,7 @@ function RootNavigator() {
   );
 }
 
-// ─── Root layout — provides Theme + Auth contexts to the whole app ────────────
+// ─── הפריסה הראשית: מספקת את ערכת הצבעים ואת המשתמש לכל האפליקציה ────────────
 export default function RootLayout() {
   return (
     <ThemeProvider>

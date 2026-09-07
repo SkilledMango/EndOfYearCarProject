@@ -1,19 +1,15 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 
 namespace CarStats.API.Services
 {
     /// <summary>
-    /// Sends transactional email through Brevo's HTTP API
-    /// (https://api.brevo.com/v3/smtp/email). Uses HTTPS so it works on hosts
-    /// that block outbound SMTP ports (e.g. Somee free hosting).
+    /// שולח את מייל האימות דרך ה-API של Brevo מעל HTTPS.
+    /// לא דרך SMTP במכוון: אחסון חינמי חוסם את פורטי ה-SMTP והמייל
+    /// פשוט לא היה נשלח.
     ///
-    /// Config (appsettings / appsettings.Production.json):
-    ///   "Brevo": {
-    ///     "ApiKey":      "xkeysib-...",
-    ///     "SenderEmail": "you@yourverifiedsender.com",
-    ///     "SenderName":  "CarStats"
-    ///   }
+    /// ההגדרות יושבות ב-appsettings.Production.json תחת "Brevo":
+    /// ApiKey, SenderEmail, SenderName.
     /// </summary>
     public class BrevoEmailService : IEmailService
     {
@@ -36,12 +32,14 @@ namespace CarStats.API.Services
             var senderEmail = _config["Brevo:SenderEmail"];
             var senderName  = _config["Brevo:SenderName"] ?? "CarStats";
 
+            // בלי מפתח או כתובת שולח אין מה לשלוח
             if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(senderEmail))
             {
                 _logger.LogError("Brevo is not configured — set Brevo:ApiKey and Brevo:SenderEmail.");
                 return false;
             }
 
+            // גוף הבקשה בפורמט שהספק מצפה לו
             var payload = new
             {
                 sender      = new { name = senderName, email = senderEmail },
@@ -55,6 +53,8 @@ namespace CarStats.API.Services
             req.Headers.Add("accept", "application/json");
             req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
+            // כישלון נרשם ללוג ומוחזר כשקר, ולא נזרק כשגיאה:
+            // תקלה אצל ספק המיילים לא אמורה להפיל את ההרשמה כולה
             try
             {
                 var res = await _http.SendAsync(req);
@@ -71,6 +71,7 @@ namespace CarStats.API.Services
             }
         }
 
+        // תבנית ה-HTML של המייל שהמשתמש מקבל
         private static string BuildHtml(string code) => $@"
 <!DOCTYPE html>
 <html>

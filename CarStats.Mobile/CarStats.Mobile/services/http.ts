@@ -1,8 +1,9 @@
 /**
- * Shared fetch() wrapper that aborts after `timeoutMs` so the UI never hangs
- * on an unreachable host (government API, ESP32 scanner, NHTSA, Gemini…).
+ * עטיפה ל-fetch שמבטלת את הבקשה אחרי הזמן שנקבע.
  *
- * Defaults to `Accept: application/json`; pass `init.headers` to override.
+ * ל-fetch אין timeout כברירת מחדל, ולכן פנייה לשרת שלא זמין — מתאם שלא
+ * ברשת, שירות ממשלתי שנפל — נתקעת לנצח והמסך מסתובב איתה.
+ * כל קריאה יוצאת באפליקציה עוברת דרך כאן.
  */
 export async function fetchWithTimeout(
   url: string,

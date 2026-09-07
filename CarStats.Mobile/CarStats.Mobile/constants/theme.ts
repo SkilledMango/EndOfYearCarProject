@@ -1,48 +1,47 @@
 /**
- * CarStats theme tokens — single source of truth for colors used across the app.
+ * צבעי האפליקציה — המקור היחיד לכל צבע במערכת.
  *
- * Two full palettes (light "Soft Tech" from the Stitch design system, plus a
- * derived dark variant). Screens never import palettes directly — they read
- * the active one through useTheme() / createThemedStyles() in
- * context/ThemeContext so the Dark Mode setting applies everywhere at once.
+ * שתי ערכות מלאות: בהירה מהעיצוב המקורי, וכהה שנגזרת ממנה. מסכים לעולם
+ * לא מייבאים ערכה ישירות אלא קוראים את הפעילה דרך ThemeContext, וכך
+ * מתג המצב הכהה משנה את כל האפליקציה בבת אחת.
  */
 
 export interface ThemeColors {
   Dashboard: {
-    bg: string;            // page background
-    card: string;          // surface cards
-    cardBorder: string;    // subtle card/input outline
-    textPrimary: string;   // ink
+    bg: string;            // רקע הדף
+    card: string;          // כרטיסים
+    cardBorder: string;    // מסגרת עדינה לכרטיס ולשדה קלט
+    textPrimary: string;   // טקסט ראשי
     textSecondary: string;
-    accent: string;        // Engine Blue — buttons, active states
-    accentDeep: string;    // pressed / emphasis blue (FABs, titles)
-    accentSoft: string;    // light blue tint (icon chips, active tab pill)
-    onAccent: string;      // text/icons sitting on accent surfaces
+    accent: string;        // הכחול הראשי: כפתורים ומצבים פעילים
+    accentDeep: string;    // כחול כהה יותר ללחיצה ולהדגשה
+    accentSoft: string;    // גוון בהיר לרקע אייקונים וטאב פעיל
+    onAccent: string;      // טקסט ואייקונים על גבי הצבע הראשי
   };
-  // OBD-II severity colors — maps to SeverityLevel enum (Green=1, Yellow=2, Red=3)
+  // צבעי דרגות החומרה, מקבילים ל-SeverityLevel בשרת
   Severity: { green: string; yellow: string; red: string; unknown: string };
-  // Soft tinted containers behind status content (design "containers")
+  // רקעים רכים לכרטיסי מצב
   SeveritySoft: { green: string; yellow: string; red: string };
-  // Fuel screen accents (Stitch fuel_tracking export tokens)
+  // צבעי מסך הדלק
   Fuel: {
-    mintBar: string;    // hero card left accent bar
-    trendGreen: string; // "% from last month" improving trend
-    chipBg: string;     // circle chip behind pump icon / soft button bg
-    gridLine: string;   // chart grid lines
-    axisLabel: string;  // chart Y-axis labels / unit text
-    starAmber: string;  // mechanic rating star
+    mintBar: string;    // פס ההדגשה בכרטיס העליון
+    trendGreen: string; // מגמת שיפור מול החודש הקודם
+    chipBg: string;     // עיגול רקע לאייקון ולכפתור רך
+    gridLine: string;   // קווי הרשת בגרף
+    axisLabel: string;  // תוויות ציר וטקסט יחידות
+    starAmber: string;  // כוכב הדירוג של מוסך
   };
-  // Live-scan screen accents (Stitch live_scan export tokens)
+  // צבעי מסך הסריקה
   Scan: {
-    ringTrack: string; // progress ring background
-    ringGlow: string;  // decorative inner ring
-    errorDeep: string; // text inside red fault chips
-    amberInk: string;  // text on amber chips
-    greenInk: string;  // text on green chips
+    ringTrack: string; // רקע טבעת ההתקדמות
+    ringGlow: string;  // הטבעת הפנימית הדקורטיבית
+    errorDeep: string; // טקסט בתגי תקלה אדומים
+    amberInk: string;  // טקסט בתגים כתומים
+    greenInk: string;  // טקסט בתגים ירוקים
   };
 }
 
-// ── Light — CarStats "Soft Tech" palette (from the Stitch design system) ──────
+// ── ערכה בהירה — הפלטה מהעיצוב המקורי ──────────────────────────────────────
 export const LightColors: ThemeColors = {
   Dashboard: {
     bg: '#F1F1F9',
@@ -74,7 +73,7 @@ export const LightColors: ThemeColors = {
   },
 };
 
-// ── Dark — Material-3-style dark mapping of the same seed colors ──────────────
+// ── ערכה כהה — אותם צבעי בסיס במיפוי כהה ───────────────────────────────────
 export const DarkColors: ThemeColors = {
   Dashboard: {
     bg: '#121318',
@@ -106,7 +105,7 @@ export const DarkColors: ThemeColors = {
   },
 };
 
-// Israeli license-plate component colors — a physical object, same in both themes
+// צבעי לוחית הרישוי הישראלית. עצם פיזי, ולכן זהה בשתי הערכות.
 export const Plate = {
   yellow: '#FFD700',
   border: '#191B23',

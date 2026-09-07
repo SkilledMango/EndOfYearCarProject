@@ -1,9 +1,6 @@
 /**
- * ScanOverlay — full-screen OBD-II scanning experience.
- * Layout and values follow design/stitch_carstats_diagnostic_suite/live_scan:
- * progress ring (r=44, stroke 8, dasharray 276) over decorative rings, a
- * 2-column live-data tile grid, and the "Found Faults" card with an
- * accent-bar + severity chip.
+ * מסך הסריקה המלא: טבעת התקדמות, אריחי נתונים חיים וכרטיס התקלות שנמצאו.
+ * הפריסה והמידות לקוחות מקובץ העיצוב live_scan.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -16,14 +13,14 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { resultSeverity, worstSeverity } from '@/utils/severity';
 
 const RING_R = 44;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_R; // ≈276, matches the design's dasharray
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_R; // היקף הטבעת, לפי המידה שבעיצוב
 
 interface Props {
   visible: boolean;
   scanning: boolean;
   vehicleName: string;
   results: ReportDtcResponse[];
-  /** Set when the scan ended without fault codes or failed outright */
+  /** מתמלא כשהסריקה הסתיימה בלי תקלות או נכשלה */
   finishedMessage: string | null;
   liveData: LiveData | null;
   estimatedFuelPct: number | null;
@@ -43,12 +40,11 @@ export default function ScanOverlay({
   const { colors: c } = useTheme();
   const styles = useStyles();
 
-  // The car's own reading wins; the baseline estimate is the fallback for
-  // cars that cannot report fuel level over OBD-II.
+  // הקריאה של הרכב עצמו קודמת; ההערכה משמשת רק לרכבים שלא מדווחים מפלס דלק.
   const fuelPct = liveData?.fuelPercent ?? estimatedFuelPct;
 
-  // Simulated progress while the hardware scan runs (the design's own script
-  // does the same) — creeps to 90%, then snaps to 100% when results land.
+  // התקדמות מדומה בזמן שהסריקה רצה: זוחלת עד 90 אחוז וקופצת ל-100
+  // כשהתוצאות מגיעות.
   const [progress, setProgress] = useState(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -76,7 +72,7 @@ export default function ScanOverlay({
     <Modal visible={visible} animationType="fade" onRequestClose={onClose}>
       <View style={styles.container}>
         <ScrollView contentContainerStyle={styles.content}>
-          {/* ── Header ── */}
+          {/* ── כותרת ── */}
           <Text style={styles.title} numberOfLines={1}>
             {scanning ? `Scanning ${vehicleName}...` : `Scan Complete`}
           </Text>
@@ -85,7 +81,7 @@ export default function ScanOverlay({
             <Text style={styles.statusText}>OBD-II Connected</Text>
           </View>
 
-          {/* ── Progress ring ── */}
+          {/* ── טבעת ההתקדמות ── */}
           <View style={styles.ringWrap}>
             <View style={styles.ringOuterDecor} />
             <View style={styles.ringMidDecor} />
@@ -114,7 +110,7 @@ export default function ScanOverlay({
             </View>
           </View>
 
-          {/* ── Live data tiles ── */}
+          {/* ── אריחי הנתונים החיים ── */}
           <View style={styles.tileGrid}>
             <Tile icon="gauge" label="RPM"
               value={liveData ? String(liveData.rpm) : '—'} unit="rev/min" />
@@ -122,16 +118,13 @@ export default function ScanOverlay({
               value={liveData ? String(liveData.speedKmh) : '—'} unit="km/h" />
             <Tile icon="thermometer" label="COOLANT"
               value={liveData ? `${liveData.coolantCelsius}°C` : '—'} />
-            {/* Prefers the car's own reading and falls back to the estimate.
-                This used to show only the estimate, so any car that actually
-                reports fuel over OBD displayed a dash here while the Garage
-                gauge showed the real number — the estimate is deliberately
-                null whenever a real reading exists. */}
+            {/* מעדיף את הקריאה של הרכב ונופל להערכה רק בהיעדרה. ההערכה היא
+                null במכוון כשקיימת קריאה אמיתית. */}
             <Tile icon="fuelpump.fill" label="FUEL"
               value={fuelPct != null ? `${Math.round(fuelPct)}%` : '—'} />
           </View>
 
-          {/* ── Found faults ── */}
+          {/* ── התקלות שנמצאו ── */}
           {done && results.length > 0 && (
             <View style={styles.faultsCard}>
               <View style={[

@@ -1,19 +1,15 @@
 /**
- * AI explanation for fault codes that are not in our dictionary.
+ * הסבר מבוסס AI לקודים שאינם במילון שלנו.
  *
- * The dictionary covers the generic codes a car is most likely to throw, but
- * manufacturer-specific codes (P1xxx and up) differ per make and there are
- * thousands of them. Rather than showing a driver a bare code and "check the
- * manual", this asks Gemini to explain it in the same plain language the
- * dictionary uses.
+ * המילון מכסה את הקודים הגנריים הנפוצים, אבל קודים ייחודיים ליצרן מגיעים
+ * לאלפים ומשתנים בין יצרן ליצרן. במקום להציג לנהג קוד עירום ו"עיין במדריך",
+ * מתבקש כאן הסבר באותה שפה פשוטה שבה כתוב המילון.
  *
- * Two deliberate limits:
- *  - No repair price is requested. A wrong number here would be worse than no
- *    number, and a model cannot know Israeli garage rates for a specific car.
- *  - The result is always labelled as AI-generated in the UI, never presented
- *    as a curated entry.
- *
- * Uses the same key and model as the fuel-economy lookup in fueleconomy.ts.
+ * שתי מגבלות מכוונות:
+ *  - לא מבקשים מחיר תיקון. מספר שגוי גרוע ממספר חסר, ומודל שפה לא יכול
+ *    לדעת מחירי מוסכים בישראל לרכב מסוים.
+ *  - התוצאה מסומנת תמיד בממשק כתוכן שנוצר ע"י AI, ולעולם לא מוצגת
+ *    כרשומה מהמילון.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -23,19 +19,19 @@ import { SeverityLevel } from './api';
 const GEMINI_API_KEY: string = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
 
 /**
- * Models tried in order. The free tier's daily cap is counted per model, so a
- * second model is a genuinely separate allowance rather than a retry of the
- * same exhausted one — a code still gets explained after the first runs out.
+ * המודלים מנוסים לפי הסדר. המכסה היומית בשכבה החינמית נספרת לכל מודל
+ * בנפרד, ולכן מודל שני הוא מכסה נוספת אמיתית ולא ניסיון חוזר באותה מכסה
+ * שכבר נגמרה.
  */
 const GEMINI_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.0-flash'];
 
 const modelUrl = (model: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
-/** Cached explanations, so a code is only ever paid for once. */
+/** מטמון ההסברים, כדי שכל קוד יעלה בקשה אחת בלבד אי פעם. */
 const CACHE_PREFIX = '@carstats_dtc_ai_';
 
-/** True when the response means "out of quota" rather than a real failure. */
+/** אמת כשהתשובה אומרת "נגמרה המכסה" ולא תקלה אמיתית. */
 const isRateLimited = (status: number) => status === 429;
 
 export interface AiFaultExplanation {
@@ -45,7 +41,7 @@ export interface AiFaultExplanation {
   severity:       SeverityLevel;
 }
 
-/** Why no explanation came back — so the screen can say something true. */
+/** למה לא חזר הסבר, כדי שהמסך יוכל להגיד משהו מדויק. */
 export type AiFailureReason = 'no-key' | 'rate-limited' | 'unavailable';
 
 export type AiLookupResult =
@@ -64,23 +60,22 @@ async function readCache(code: string): Promise<AiFaultExplanation | null> {
 async function writeCache(code: string, value: AiFaultExplanation): Promise<void> {
   try {
     await AsyncStorage.setItem(CACHE_PREFIX + code.toUpperCase(), JSON.stringify(value));
-  } catch { /* storage full — the explanation just costs a request next time */ }
+  } catch { /* האחסון מלא — ההסבר פשוט יעלה בקשה נוספת בפעם הבאה */ }
 }
 
-/** Maps the model's one-word severity onto our enum, defaulting to caution. */
+/** ממפה את מילת החומרה שהמודל החזיר לדרגות שלנו. ברירת המחדל היא אזהרה. */
 function parseSeverity(word: string): SeverityLevel {
   const w = word.trim().toLowerCase();
   if (w.startsWith('low'))  return SeverityLevel.Green;
   if (w.startsWith('high')) return SeverityLevel.Red;
-  // Anything unrecognised is a warning — never silently "all clear".
+  // כל ערך לא מוכר הופך לאזהרה. לעולם לא "הכול תקין" בשקט.
   return SeverityLevel.Yellow;
 }
 
 /**
- * Asks one model for an explanation.
- *
- * Returns the explanation, or a reason. Separated from the caller so the
- * retry-on-another-model logic stays readable.
+ * מבקשת הסבר ממודל אחד.
+ * מחזירה את ההסבר או את הסיבה לכישלון. מופרדת מהקורא כדי שהלוגיקה של
+ * המעבר למודל אחר תישאר קריאה.
  */
 async function askModel(
   model: string,
@@ -95,12 +90,11 @@ async function askModel(
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0,
-          // Asking for JSON directly rather than parsing it out of prose. The
-          // model then cannot wrap the object in a ``` fence or add a sentence
-          // in front of it, which made this succeed only sometimes.
+          // מבקשים JSON ישירות במקום לחלץ אותו מטקסט חופשי, אחרת המודל
+          // עוטף את האובייקט או מוסיף משפט לפניו, וזה הצליח רק לפעמים.
           responseMimeType: 'application/json',
-          // Generous on purpose: 2.5 models spend part of this budget on
-          // internal reasoning, and running out truncates the JSON mid-object.
+          // מרווח בכוונה: חלק מהתקציב נשרף על חשיבה פנימית של המודל,
+          // ואם הוא נגמר ה-JSON נחתך באמצע.
           maxOutputTokens: 800,
         },
       }),
@@ -127,9 +121,8 @@ async function askModel(
       return { ok: false, reason: 'unavailable' };
     }
 
-    // Tolerate a fence or stray prose anyway: responseMimeType makes that
-    // unlikely rather than impossible, and one odd response should not lose
-    // an explanation the model actually produced.
+    // בכל זאת סובלניים לטקסט מיותר: הבקשה ל-JSON הופכת את זה לנדיר ולא
+    // לבלתי אפשרי, ותשובה חריגה אחת לא צריכה לאבד הסבר שהמודל כבר יצר.
     const open  = text.indexOf('{');
     const close = text.lastIndexOf('}');
     const jsonText = open >= 0 && close > open ? text.slice(open, close + 1) : text;
@@ -146,7 +139,7 @@ async function askModel(
     const description    = String(parsed.description ?? '').trim();
     const actionRequired = String(parsed.action ?? '').trim();
 
-    // Half an explanation is worse than none.
+    // חצי הסבר גרוע מכלום
     if (!humanTitle || !description) return { ok: false, reason: 'unavailable' };
 
     return {
@@ -166,15 +159,14 @@ async function askModel(
 }
 
 /**
- * Explains an OBD-II code in plain language.
+ * מסבירה קוד תקלה בשפה פשוטה.
  *
- * Answers are cached permanently per code, so a given fault costs one request
- * ever. That matters more than it sounds: the free tier caps requests per day
- * per model, and without caching simply reopening the same fault burns through
- * the allowance until explanations stop working.
+ * התשובות נשמרות במטמון לצמיתות לכל קוד, ולכן תקלה עולה בקשה אחת בלבד.
+ * זה קריטי: המכסה החינמית מוגבלת ליום, ובלי מטמון עצם הפתיחה החוזרת של
+ * אותה תקלה הייתה שורפת אותה עד שההסברים מפסיקים לעבוד.
  *
- * Never throws — an explanation is a bonus on top of the dictionary, and a
- * failure here must leave the screen usable.
+ * לעולם לא זורקת שגיאה — ההסבר הוא תוספת מעל המילון, וכישלון שלו חייב
+ * להשאיר את המסך שמיש.
  */
 export async function explainFaultWithAi(
   code: string,
@@ -186,9 +178,9 @@ export async function explainFaultWithAi(
   if (cached) return { ok: true, explanation: cached, cached: true };
 
   if (!GEMINI_API_KEY) {
-    // Also happens when the key IS in .env but Metro served a bundle cached
-    // from before it was added, since EXPO_PUBLIC_* values are inlined at
-    // transform time. Restart with `npx expo start --clear`.
+    // קורה גם כשהמפתח קיים ב-env. אבל Metro הגיש חבילה מהמטמון מלפני
+    // שהוא נוסף, כי הערכים מוטמעים בזמן הבנייה.
+    // הפתרון: הרצה מחדש עם npx expo start --clear
     console.warn('[dtcLookup] no Gemini key in this bundle');
     return { ok: false, reason: 'no-key' };
   }
@@ -227,8 +219,8 @@ export async function explainFaultWithAi(
       return result;
     }
     lastReason = result.reason;
-    // Only a quota failure is worth trying another model for — its daily cap
-    // is counted separately. Anything else would fail the same way twice.
+    // רק כישלון מכסה שווה ניסיון במודל אחר, כי המכסה שלו נספרת בנפרד.
+    // כל שגיאה אחרת תיכשל פעמיים באותה צורה.
     if (result.reason !== 'rate-limited') break;
   }
 
