@@ -44,8 +44,8 @@ import LiveGauges from '@/components/home/LiveGauges';
 import FuelSetModal from '@/components/home/FuelSetModal';
 import DtcResultCard from '@/components/home/DtcResultCard';
 
-// ─── Fuel baseline (stored in AsyncStorage per vehicle) ───────────────────────
-// FuelBaseline and the estimation maths live in utils/fuel.ts.
+// ─── נקודת ההתחלה של מפלס הדלק, נשמרת במכשיר לכל רכב ─────────────────────────
+// החישוב עצמו יושב ב-utils/fuel.ts כדי שאפשר יהיה לבדוק אותו בלי המסך.
 
 function fuelKey(vehicleId?: number) {
   return `fuel_baseline_${vehicleId ?? 'default'}`;
@@ -56,13 +56,13 @@ function tripKey(vehicleId?: number) {
 }
 
 /**
- * Accumulated trip distance is written back to storage at most once per this
- * many km. The poll runs every second, so persisting on every tick would mean
- * ~3600 storage writes an hour for a number that barely moves.
+ * המרחק המצטבר נשמר לכל היותר פעם בכל כמות הק"מ הזו.
+ * הדגימה רצה כל שנייה, ושמירה בכל דגימה הייתה כ-3600 כתיבות בשעה
+ * עבור מספר שכמעט לא זז.
  */
 const TRIP_PERSIST_KM = 1;
 
-// ─── Home Screen ──────────────────────────────────────────────────────────────
+// ─── מסך הבית ────────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
   const { user: authUser } = useAuth();
@@ -70,32 +70,32 @@ export default function HomeScreen() {
   const styles = useStyles();
   const router = useRouter();
 
-  // ── User / vehicle state ──
+  // ── המשתמש והרכב הנבחר ──
   const [user, setUser]                     = useState<AppUser | null>(null);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
   const [recentEvents, setRecentEvents]     = useState<VehicleEventEnriched[]>([]);
   const [loading, setLoading]               = useState(true);
 
-  // ── Scanner state ──
+  // ── מצב המתאם ──
   const [scannerOnline, setScannerOnline]   = useState(false);
-  // Demo connection: simulated readings for showing the diagnostics flow
-  // without the ESP32 adapter on the network. Always user-initiated.
+  // מצב הדגמה: נתונים מדומים להצגת זרימת האבחון בלי המתאם ברשת.
+  // מופעל תמיד ביוזמת המשתמש.
   const [demo, setDemo]                     = useState(false);
   const [scannerStatus, setScannerStatus]   = useState<ScannerStatus | null>(null);
   const [liveData, setLiveData]             = useState<LiveData | null>(null);
   const [liveError, setLiveError]           = useState(false);
 
-  // ── DTC scan state ──
+  // ── מצב סריקת התקלות ──
   const [scanning, setScanning]             = useState(false);
   const [dtcResults, setDtcResults]         = useState<ReportDtcResponse[]>([]);
-  // Scanned codes, index-aligned with dtcResults. The API response omits the
-  // raw code when it has no dictionary entry, so this is how an unknown fault
-  // still knows what it is.
+  // הקודים שנסרקו, באותו סדר כמו התוצאות. תשובת השרת משמיטה את הקוד
+  // הגולמי כשאין לו רשומה במילון, ולכן זו הדרך שתקלה לא מוכרת עדיין
+  // יודעת מה היא.
   const [scannedCodes, setScannedCodes]     = useState<string[]>([]);
   const [scanError, setScanError]           = useState<string | null>(null);
   const [scanOverlayVisible, setScanOverlayVisible] = useState(false);
 
-  // ── Fuel estimation ──
+  // ── הערכת מפלס הדלק ──
   const [tripKm, setTripKm]                 = useState(0);
   const [fuelBaseline, setFuelBaseline]     = useState<FuelBaseline | null>(null);
   const [estimatedFuel, setEstimatedFuel]   = useState<number | null>(null);
@@ -103,17 +103,17 @@ export default function HomeScreen() {
   const [addVehicleVisible, setAddVehicleVisible]     = useState(false);
   const [prefillData, setPrefillData]       = useState<VehiclePrefill | undefined>();
   const lastPollTimeRef = useRef(Date.now());
-  // Highest tripKm already written to storage — throttles the persist below.
+  // המרחק הגבוה ביותר שכבר נשמר, לצורך ויסות הכתיבות
   const lastPersistedTripRef = useRef(0);
 
-  // ── OBD vehicle detection ──
+  // ── זיהוי הרכב לפי מספר שלדה ──
   const [detectedVehicle, setDetectedVehicle] = useState<VinDecodeResult | null>(null);
-  const vinCheckDoneRef = useRef(false);  // prevent re-checking in the same session
+  const vinCheckDoneRef = useRef(false);  // מונע בדיקה חוזרת באותו סשן
 
-  // ── Polling timer ref ──
+  // ── הטיימר של הדגימה ──
   const liveInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ── Load user + events ────────────────────────────────────────────────────
+  // ── טעינת המשתמש והאירועים ───────────────────────────────────────────────
   const loadData = useCallback(async () => {
     if (!authUser) return;
     try {
@@ -130,17 +130,17 @@ export default function HomeScreen() {
       });
       setRecentEvents(events.slice(0, 3));
     } catch {
-      // API unreachable — show empty state
+      // השרת לא זמין — מוצג מצב ריק
     } finally {
       setLoading(false);
     }
-    // Keyed on the id, not the whole object: refreshUser() hands back a new
-    // AppUser instance on every call, and depending on that would refetch on
-    // each one. An empty array here would capture the user from first render
-    // and keep loading their data after a different account signs in.
+    // תלוי במזהה בלבד ולא באובייקט השלם: פונקציית הרענון מחזירה אובייקט חדש
+    // בכל קריאה, ותלות בו הייתה גורמת לטעינה חוזרת בכל פעם. מערך ריק כאן
+    // היה נועל את המשתמש מהרינדור הראשון וממשיך לטעון את הנתונים שלו
+    // גם אחרי שחשבון אחר התחבר.
   }, [authUser?.id]);   // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Load fuel baseline when vehicle changes ───────────────────────────────
+  // ── טעינת נקודת ההתחלה של הדלק בכל החלפת רכב ─────────────────────────────
   const loadFuelBaseline = useCallback(async (vehicleId?: number) => {
     try {
       const stored = await AsyncStorage.getItem(fuelKey(vehicleId));
@@ -149,33 +149,32 @@ export default function HomeScreen() {
       const baseline: FuelBaseline = JSON.parse(stored);
       setFuelBaseline(baseline);
 
-      // Restore the distance driven since the baseline was set. Without this
-      // tripKm restarts at 0 every launch, kmDriven comes out 0, and the gauge
-      // snaps back to the baseline percentage — reading HIGHER than the tank
-      // actually is, which is the wrong direction to be wrong about fuel.
+      // שחזור המרחק שנסע מאז נקודת ההתחלה. בלי זה המונה מתאפס בכל הפעלה
+      // והמחוון קופץ חזרה לאחוז ההתחלתי — כלומר מציג יותר דלק ממה שיש
+      // בפועל, וזה הכיוון הלא נכון לטעות בו.
       const storedTrip = await AsyncStorage.getItem(tripKey(vehicleId));
       const restored   = storedTrip ? parseFloat(storedTrip) : 0;
       const safeTrip   = Number.isFinite(restored) ? restored : 0;
 
       setTripKm(prev => Math.max(prev, safeTrip, baseline.tripKm));
       lastPersistedTripRef.current = Math.max(safeTrip, baseline.tripKm);
-    } catch { /* ignore storage errors */ }
+    } catch { /* מתעלמים משגיאות אחסון */ }
   }, []);
 
   const saveFuelBaseline = useCallback(async (baseline: FuelBaseline, vehicleId?: number) => {
     try {
       await AsyncStorage.multiSet([
         [fuelKey(vehicleId), JSON.stringify(baseline)],
-        // Anchor the odometer to the baseline so the next launch measures
-        // depletion from here rather than from a stale larger number.
+        // מעגנים את מונה המרחק לנקודת ההתחלה, כדי שההפעלה הבאה תמדוד
+        // ירידה מכאן ולא ממספר ישן וגדול יותר.
         [tripKey(vehicleId), String(baseline.tripKm)],
       ]);
       lastPersistedTripRef.current = baseline.tripKm;
       setFuelBaseline(baseline);
-    } catch { /* ignore */ }
+    } catch { /* מתעלמים */ }
   }, []);
 
-  // ── Check scanner & start live-data polling ───────────────────────────────
+  // ── בדיקת המתאם והתחלת הדגימה ────────────────────────────────────────────
   const checkScanner = useCallback(async () => {
     const reachable = await isScannerReachable();
     setScannerOnline(reachable);
@@ -187,9 +186,8 @@ export default function HomeScreen() {
     }
   }, []);
 
-  // Flipping demo mode re-runs the connection check, so the banner, the
-  // gauges and the scan button all follow from the same state as a real
-  // adapter appearing or disappearing.
+  // החלפת מצב ההדגמה מריצה מחדש את בדיקת החיבור, כך שהשורה, השעונים
+  // וכפתור הסריקה מתנהגים בדיוק כמו בחיבור או ניתוק של מתאם אמיתי.
   const toggleDemo = useCallback(async () => {
     const next = !demo;
     setDemo(next);
@@ -201,8 +199,8 @@ export default function HomeScreen() {
     await checkScanner();
   }, [demo, checkScanner]);
 
-  // Ends the session deliberately. The adapter stays powered — this just stops
-  // this app talking to it, which is what a driver means by "disconnect".
+  // מסיים את החיבור ביוזמת המשתמש. המתאם נשאר דולק; רק האפליקציה
+  // מפסיקה לדבר איתו, וזה מה שנהג מתכוון אליו כשהוא אומר "נתק".
   const disconnect = useCallback(() => {
     setScannerOnline(false);
     setScannerStatus(null);
@@ -216,7 +214,7 @@ export default function HomeScreen() {
       const now = Date.now();
       const data = await getLiveData();
 
-      // Accumulate trip distance for fuel estimation
+      // צבירת מרחק הנסיעה עבור הערכת הדלק
       if (data.speedKmh > 0) {
         const dtHours = (now - lastPollTimeRef.current) / 3_600_000;
         setTripKm(prev => prev + data.speedKmh * dtHours);
@@ -247,21 +245,21 @@ export default function HomeScreen() {
     loadFuelBaseline(selectedVehicle?.id);
   }, [selectedVehicle, loadFuelBaseline]);
 
-  // ── Persist accumulated distance so the estimate survives a restart ───────
+  // ── שמירת המרחק המצטבר, כדי שההערכה תשרוד הפעלה מחדש ─────────────────────
   useEffect(() => {
     if (tripKm - lastPersistedTripRef.current < TRIP_PERSIST_KM) return;
     lastPersistedTripRef.current = tripKm;
     AsyncStorage.setItem(tripKey(selectedVehicle?.id), String(tripKm))
-      .catch(() => { /* storage full or unavailable — estimate degrades, no crash */ });
+      .catch(() => { /* האחסון מלא או לא זמין — ההערכה נחלשת, אבל שום דבר לא קורס */ });
   }, [tripKm, selectedVehicle]);
 
-  // ── OBD vehicle detection — runs once per real-car connection ────────────
+  // ── זיהוי הרכב, פעם אחת לכל חיבור לרכב אמיתי ─────────────────────────────
   useEffect(() => {
     if (!scannerOnline || scannerStatus?.simMode) {
-      vinCheckDoneRef.current = false;   // reset when disconnected / in sim
+      vinCheckDoneRef.current = false;   // איפוס בניתוק או במצב הדגמה
       return;
     }
-    if (vinCheckDoneRef.current) return; // already checked this session
+    if (vinCheckDoneRef.current) return; // כבר נבדק בסשן הזה
     vinCheckDoneRef.current = true;
 
     (async () => {
@@ -272,18 +270,18 @@ export default function HomeScreen() {
         const decoded = await decodeVin(vinResult.vin);
         if (!decoded) return;
 
-        // Only suggest adding if no vehicle in garage already matches
+        // מציעים להוסיף רק אם אף רכב במוסך לא מתאים
         const vehicles = user?.vehicles ?? [];
         const alreadyInGarage = vehicles.some(v => vinMatchesVehicle(decoded, v));
         if (!alreadyInGarage) setDetectedVehicle(decoded);
-      } catch { /* VIN detection is best-effort — silent failure is fine */ }
+      } catch { /* זיהוי השלדה הוא בונוס; כישלון שקט הוא בסדר */ }
     })();
   }, [scannerOnline, scannerStatus, user]);
 
-  // Start / stop the 1 s live-data polling based on scanner availability
+  // הפעלה או עצירה של הדגימה כל שנייה, לפי זמינות המתאם
   useEffect(() => {
     if (scannerOnline) {
-      pollLive(); // immediate first read
+      pollLive(); // קריאה ראשונה מיידית
       liveInterval.current = setInterval(pollLive, 1000);
     } else {
       if (liveInterval.current) {
@@ -297,10 +295,10 @@ export default function HomeScreen() {
     };
   }, [scannerOnline, pollLive]);
 
-  // ── Recalculate estimated fuel whenever distance or baseline changes ───────
+  // ── חישוב מחדש של הערכת הדלק בכל שינוי מרחק או נקודת התחלה ───────────────
   useEffect(() => {
     if (!liveData || liveData.fuelPercent != null) {
-      // Real OBD fuel reading available — no estimation needed
+      // יש קריאת דלק אמיתית מהרכב — אין צורך בהערכה
       setEstimatedFuel(null);
       return;
     }
@@ -308,8 +306,8 @@ export default function HomeScreen() {
       setEstimatedFuel(null);
       return;
     }
-    // Arithmetic and its edge cases live in utils/fuel.ts so they can be
-    // tested without mounting this screen — see __tests__/fuel.test.ts.
+    // החשבון ומקרי הקצה שלו יושבים ב-utils/fuel.ts כדי שאפשר יהיה לבדוק
+    // אותם בלי להריץ את המסך הזה.
     setEstimatedFuel(estimateFuelPercent({
       baseline:  fuelBaseline,
       tripKm,
@@ -317,16 +315,16 @@ export default function HomeScreen() {
     }));
   }, [liveData, fuelBaseline, tripKm, selectedVehicle]);
 
-  // Only this screen polls the adapter, so it publishes the level for the fuel
-  // tab and trip planner. A real OBD reading wins over our estimate, and which
-  // one it is travels with the value.
+  // רק המסך הזה דוגם את המתאם, ולכן הוא מפרסם את המפלס עבור מסך הדלק
+  // ומתכנן הנסיעה. קריאה אמיתית גוברת על ההערכה, והמידע איזו מהן זו
+  // נשמר יחד עם הערך.
   useEffect(() => {
     const real = liveData?.fuelPercent ?? null;
     if (real != null)          saveTankLevel(real, true, selectedVehicle?.id);
     else if (estimatedFuel != null) saveTankLevel(estimatedFuel, false, selectedVehicle?.id);
   }, [liveData?.fuelPercent, estimatedFuel, selectedVehicle?.id]);
 
-  // ── Auto-scan DTCs from hardware ─────────────────────────────────────────
+  // ── סריקת תקלות מהמתאם ───────────────────────────────────────────────────
   const handleScanDtcs = async () => {
     setScanError(null);
     setDtcResults([]);
@@ -365,7 +363,7 @@ export default function HomeScreen() {
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── התצוגה ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
@@ -379,7 +377,7 @@ export default function HomeScreen() {
   const vehiclePlate = selectedVehicle?.licensePlate ?? '—';
   const fuelAvg      = selectedVehicle?.averageFuelConsumption ?? null;
 
-  // Overall health derived from the most recent alerts
+  // מצב הבריאות הכללי, נגזר מההתראות האחרונות
   const worstRecent: SeverityLevel | null = recentEvents.reduce<SeverityLevel | null>(
     (worst, ev) => {
       const s = ev.translation?.severity;
@@ -391,7 +389,7 @@ export default function HomeScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
 
-      {/* ── Header: avatar + greeting ── */}
+      {/* ── כותרת: אווטאר וברכה ── */}
       <View style={styles.header}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{firstName[0]?.toUpperCase() ?? '?'}</Text>
@@ -402,7 +400,7 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* ── Vehicle card (name + health chip + Israeli plate) ── */}
+      {/* ── כרטיס הרכב: שם, תג מצב ולוחית רישוי ── */}
       <View style={styles.vehicleCard}>
         <View style={styles.vehicleCardTop}>
           <View style={{ flex: 1 }}>
@@ -430,7 +428,7 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {/* ── Vehicle chips ── */}
+      {/* ── בורר הרכבים ── */}
       {vehicles.length > 1 && (
         <ScrollView
           horizontal
@@ -455,7 +453,7 @@ export default function HomeScreen() {
         </ScrollView>
       )}
 
-      {/* ── OBD vehicle detection banner ── */}
+      {/* ── שורת הזיהוי לפי מספר שלדה ── */}
       {detectedVehicle && (
         <View style={styles.detectionBanner}>
           <View style={{ flex: 1 }}>
@@ -481,12 +479,12 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* ── Add vehicle button ── */}
+      {/* ── כפתור הוספת רכב ── */}
       <Pressable style={styles.addVehicleBtn} onPress={() => setAddVehicleVisible(true)}>
         <Text style={styles.addVehicleBtnText}>＋  Add vehicle</Text>
       </Pressable>
 
-      {/* ── Vehicle health status card ── */}
+      {/* ── כרטיס מצב הרכב ── */}
       <View style={[styles.healthCard, !healthGood && styles.healthCardWarn]}>
         <View style={[styles.healthCircle, !healthGood && styles.healthCircleWarn]} />
         <Text style={styles.healthTitle}>
@@ -499,7 +497,7 @@ export default function HomeScreen() {
         </Text>
       </View>
 
-      {/* ── Stat cards ── */}
+      {/* ── כרטיסי הנתונים ── */}
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
           <Text style={styles.statValue}>
@@ -518,7 +516,7 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* ── Trip fuel planner shortcut (feature moved off the Mechanics tab) ── */}
+      {/* ── קיצור למתכנן הנסיעה ── */}
       <Pressable style={styles.plannerCard} onPress={() => router.push('/trip-planner')}>
         <Text style={styles.plannerIcon}>🗺</Text>
         <View style={{ flex: 1 }}>
@@ -528,7 +526,7 @@ export default function HomeScreen() {
         <Text style={styles.plannerChevron}>›</Text>
       </Pressable>
 
-      {/* ── OBD-II Adapter status banner ── */}
+      {/* ── שורת מצב המתאם ── */}
       <ScannerBanner
         online={scannerOnline}
         status={scannerStatus}
@@ -538,7 +536,7 @@ export default function HomeScreen() {
         onDisconnect={disconnect}
       />
 
-      {/* ── Live gauges ── */}
+      {/* ── השעונים החיים ── */}
       {scannerOnline && liveData && !liveError && (
         <LiveGauges
           data={liveData}
@@ -547,7 +545,7 @@ export default function HomeScreen() {
         />
       )}
 
-      {/* ── Scan button ── */}
+      {/* ── כפתור הסריקה ── */}
       <View style={styles.scanCard}>
         <Text style={styles.scanLabel}>OBD-II FAULT SCAN</Text>
         <Text style={styles.scanHint}>
@@ -569,7 +567,7 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {/* ── DTC results ── */}
+      {/* ── תוצאות הסריקה ── */}
       {dtcResults.length > 0 && (
         <View>
           <Text style={styles.sectionTitle}>SCAN RESULTS</Text>
@@ -579,7 +577,7 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* ── Recent alerts ── */}
+      {/* ── ההתראות האחרונות ── */}
       {recentEvents.length > 0 && (
         <View style={{ marginTop: dtcResults.length > 0 ? 8 : 0 }}>
           <Text style={styles.sectionTitle}>RECENT ALERTS</Text>
@@ -600,12 +598,11 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* ── Add vehicle modal ── */}
-      {/* Rendered only with a signed-in user. This used to read authUser!.id,
-          and the `!` silenced the type error without preventing the runtime
-          one: on logout authUser becomes null, this screen threw mid-render
-          before the router could navigate away, and the app hung on a blank
-          screen instead of returning to login. */}
+      {/* ── חלון הוספת הרכב ── */}
+      {/* מוצג רק כשיש משתמש מחובר. בעבר סימן הקריאה השתיק כאן את שגיאת
+          הטיפוס בלי למנוע את שגיאת הריצה: בהתנתקות המשתמש הופך ל-null,
+          המסך קרס באמצע הרינדור לפני שהניווט הספיק לצאת, והאפליקציה
+          נתקעה על מסך ריק במקום לחזור להתחברות. */}
       {authUser && (
         <AddVehicleModal
           visible={addVehicleVisible}
@@ -616,7 +613,7 @@ export default function HomeScreen() {
         />
       )}
 
-      {/* ── Live scan overlay (Stitch live_scan design) ── */}
+      {/* ── מסך הסריקה המלא ── */}
       <ScanOverlay
         visible={scanOverlayVisible}
         scanning={scanning}
@@ -628,13 +625,13 @@ export default function HomeScreen() {
         onClose={() => setScanOverlayVisible(false)}
       />
 
-      {/* ── Fuel set modal ── */}
+      {/* ── חלון הגדרת מפלס הדלק ── */}
       <FuelSetModal
         visible={fuelModalVisible}
         currentEstimate={estimatedFuel ?? fuelBaseline?.pct ?? null}
         onSave={(pct, tankL) => {
           saveFuelBaseline({ pct, tankL, tripKm }, selectedVehicle?.id);
-          // Shared key too, so other screens get the capacity.
+          // נשמר גם במפתח המשותף, כדי שהמסכים האחרים יקבלו את גודל המיכל
           saveTankSize(tankL, selectedVehicle?.id);
           setFuelModalVisible(false);
         }}
@@ -649,7 +646,7 @@ export default function HomeScreen() {
 
 
 
-// ─── Styles ────────────────────────────────────────────────────────────────────
+// ─── סגנונות ─────────────────────────────────────────────────────────────────
 
 const useStyles = createThemedStyles((c) => StyleSheet.create({
   container:             { flex: 1, backgroundColor: c.Dashboard.bg },
@@ -680,7 +677,7 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   greetingSmall:         { fontSize: 13, color: c.Dashboard.textSecondary },
   greeting:              { fontSize: 22, fontWeight: '800', color: c.Dashboard.textPrimary, letterSpacing: -0.3 },
 
-  // Vehicle card with Israeli plate
+  // כרטיס הרכב עם לוחית הרישוי
   vehicleCard: {
     backgroundColor: c.Dashboard.card,
     borderRadius: 16,
@@ -736,7 +733,7 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
     lineHeight: 34,
   },
 
-  // Health status card
+  // כרטיס מצב הרכב
   healthCard: {
     backgroundColor: c.SeveritySoft.green,
     borderRadius: 16,

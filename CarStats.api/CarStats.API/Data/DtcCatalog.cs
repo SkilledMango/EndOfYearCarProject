@@ -1,25 +1,22 @@
-using CarStats.API.Models;
+﻿using CarStats.API.Models;
 
 namespace CarStats.API.Data
 {
     /// <summary>
-    /// Additional generic OBD-II codes, kept separate from DbSeeder so the
-    /// original hand-written set stays readable.
+    /// המשך מילון התקלות: קודי P0xxx גנריים לפי תקן SAE J2012, אלה שרכב
+    /// בישראל באמת נוטה להוציא. מופרד מ-DbSeeder כדי שהרשימה הידנית תישאר קריאה.
     ///
-    /// These are the SAE J2012 generic P0xxx codes a car in Israel is most
-    /// likely to actually throw. Manufacturer-specific codes (P1xxx and up)
-    /// differ per make and are deliberately not guessed at here — those fall
-    /// through to the AI explanation instead.
+    /// קודים ייחודיים ליצרן אינם מנוחשים כאן במכוון — הם נופלים להסבר ה-AI
+    /// באפליקציה.
     ///
-    /// Cost ranges are typical Israeli garage prices in shekels, parts and
-    /// labour, and are wide on purpose: the same code can mean a ₪50 sensor or
-    /// a ₪2000 job depending on the car.
+    /// טווחי המחיר הם מחירי מוסך אופייניים בישראל, חלקים ועבודה, ורחבים
+    /// בכוונה: אותו קוד יכול להיות חיישן בחמישים שקל או עבודה באלפיים.
     /// </summary>
     public static class DtcCatalog
     {
         public static List<DiagnosticCode> Codes => new()
         {
-            // ── Air / fuel metering ──────────────────────────────────────────
+            // ── מדידת אוויר ודלק ─────────────────────────────────────────────
             new() {
                 ErrorCode        = "P0102",
                 HumanTitle       = "Air Flow Sensor Reading Too Low",
@@ -133,7 +130,7 @@ namespace CarStats.API.Data
                 EstimatedCostMin = 300, EstimatedCostMax = 2500,
             },
 
-            // ── Ignition and misfires ────────────────────────────────────────
+            // ── הצתה ומיסים (Misfire) ────────────────────────────────────────
             new() {
                 ErrorCode        = "P0303",
                 HumanTitle       = "Cylinder 3 Misfiring",
@@ -183,7 +180,7 @@ namespace CarStats.API.Data
                 EstimatedCostMin = 200, EstimatedCostMax = 900,
             },
 
-            // ── Emissions ────────────────────────────────────────────────────
+            // ── מערכות פליטה ─────────────────────────────────────────────────
             new() {
                 ErrorCode        = "P0401",
                 HumanTitle       = "Exhaust Gas Recirculation Flow Too Low",
@@ -225,7 +222,7 @@ namespace CarStats.API.Data
                 EstimatedCostMin = 10,  EstimatedCostMax = 500,
             },
 
-            // ── Speed, idle and electrical ───────────────────────────────────
+            // ── מהירות, סרק וחשמל ────────────────────────────────────────────
             new() {
                 ErrorCode        = "P0501",
                 HumanTitle       = "Speed Sensor Reading Implausible",
@@ -267,7 +264,7 @@ namespace CarStats.API.Data
                 EstimatedCostMin = 250, EstimatedCostMax = 1800,
             },
 
-            // ── Transmission ─────────────────────────────────────────────────
+            // ── תיבת הילוכים ─────────────────────────────────────────────────
             new() {
                 ErrorCode        = "P0715",
                 HumanTitle       = "Gearbox Input Speed Sensor Fault",

@@ -1,15 +1,17 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CarStats.API.Models
 {
+    // דירוג חומרת התקלה, כפי שהוא מוצג לנהג
     public enum SeverityLevel
     {
-        Green = 1,  // Good/Info
-        Yellow = 2, // Warning - Check soon
-        Red = 3     // Critical - Stop safely
+        Green = 1,  // תקין או לידיעה בלבד
+        Yellow = 2, // אזהרה, כדאי לבדוק בקרוב
+        Red = 3     // קריטי, לעצור בבטחה
     }
 
+    // מילון התקלות: קוד אחד ומה שהנהג צריך לדעת עליו
     public class DiagnosticCode
     {
         [Key]
@@ -31,12 +33,14 @@ namespace CarStats.API.Models
 
         public string ActionRequired { get; set; } = string.Empty;
 
+        // טווח מחיר התיקון בשקלים. נשמר כ-decimal ולא כמספר עשרוני רגיל, כי זה כסף.
         [Column(TypeName = "decimal(18,2)")]
         public decimal EstimatedCostMin { get; set; }
 
         [Column(TypeName = "decimal(18,2)")]
         public decimal EstimatedCostMax { get; set; }
 
+        // ריק עבור קודי המילון הכללי; מאוכלס רק בקוד ששמור למשתמש מסוים
         public int? AppUserId { get; set; }
 
         [ForeignKey("AppUserId")]

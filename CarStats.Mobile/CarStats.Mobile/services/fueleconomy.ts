@@ -1,26 +1,23 @@
 /**
- * fueleconomy.ts
- * Wrapper for the free US DOE / EPA FuelEconomy.gov API.
- * No API key required.
+ * שרשרת איתור נתוני צריכת הדלק של רכב.
  *
- * Docs: https://www.fueleconomy.gov/feg/ws/index.shtml
+ * הקובץ עובד מול שלושה מקורות, לפי הסדר: EPA האמריקאי, מאגר NRCan הקנדי,
+ * ואם שניהם לא מכירים את הדגם — שאלה ל-Gemini. אם גם זה נכשל, יש הערכה
+ * לפי סוג הדלק בלבד.
  *
- * All endpoints accept JSON via:  Accept: application/json
- *
- * NOTE: The API is US-market data (MPG). We convert to L/100km.
- * Real-world consumption may differ slightly by region/fuel quality,
- * but it is accurate enough as a default for the vehicle profile.
+ * שני המקורות הראשונים חינמיים ואינם דורשים מפתח. נתוני EPA הם בגלונים
+ * למייל ולכן מומרים לליטר ל-100 ק"מ.
  */
 
 import { fetchWithTimeout } from './http';
 
 const FE_BASE = 'https://www.fueleconomy.gov/ws/rest';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── טיפוסים ─────────────────────────────────────────────────────────────────
 
 export interface FEMenuItem {
-  text: string;   // human label  (e.g. "Kia", "Sportage")
-  value: string;  // machine value (same for makes/models; vehicle ID for options)
+  text: string;   // התווית שהמשתמש רואה
+  value: string;  // הערך הפנימי; עבור גימור זהו מזהה הרכב
 }
 
 export interface FEVehicleDetails {
@@ -28,17 +25,17 @@ export interface FEVehicleDetails {
   make: string;
   model: string;
   year: number;
-  trany: string;       // transmission description
+  trany: string;       // תיאור תיבת ההילוכים
   fuelType: string;
-  /** Combined city/highway MPG (US gallons) */
+  /** צריכה משולבת עיר ובין-עירוני, במיילים לגלון */
   comb08: number;
   city08: number;
   hwy08: number;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── עזרים ───────────────────────────────────────────────────────────────────
 
-/** The API returns a single object instead of an array when there is only one result. */
+/** כשיש תוצאה אחת בלבד השירות מחזיר אובייקט במקום מערך. */
 function normalizeItems(raw: unknown): FEMenuItem[] {
   if (!raw || typeof raw !== 'object') return [];
   const wrapper = raw as Record<string, unknown>;
@@ -54,11 +51,10 @@ async function feGet(path: string): Promise<unknown> {
   return res.json();
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
+// ─── הפונקציות הציבוריות ─────────────────────────────────────────────────────
 
 /**
- * All car makes sold in the US for a given model year.
- * Example: getMakes(2018) → [{ text: "Acura", value: "Acura" }, ...]
+ * כל היצרנים שנמכרו בארה"ב בשנת דגם נתונה.
  */
 export async function getMakes(year: number): Promise<FEMenuItem[]> {
   const data = await feGet(`/vehicle/menu/make?year=${year}`);
@@ -66,8 +62,7 @@ export async function getMakes(year: number): Promise<FEMenuItem[]> {
 }
 
 /**
- * All models for a given year + make.
- * Example: getModels(2018, "Kia") → [{ text: "Sportage", value: "Sportage" }, ...]
+ * כל הדגמים של יצרן מסוים באותה שנה.
  */
 export async function getModels(year: number, make: string): Promise<FEMenuItem[]> {
   const data = await feGet(
@@ -77,9 +72,8 @@ export async function getModels(year: number, make: string): Promise<FEMenuItem[
 }
 
 /**
- * Specific trims/engines for a year + make + model.
- * The `value` field is the numeric vehicle ID used to fetch full details.
- * Example: { text: "2018 Kia Sportage FWD 4-cyl, 2.4 L, Auto", value: "39978" }
+ * רמות הגימור והמנועים של דגם מסוים.
+ * שדה value הוא מזהה הרכב שדרכו שולפים את הפרטים המלאים.
  */
 export async function getTrims(year: number, make: string, model: string): Promise<FEMenuItem[]> {
   const data = await feGet(
@@ -89,31 +83,29 @@ export async function getTrims(year: number, make: string, model: string): Promi
 }
 
 /**
- * Full EPA details for a specific vehicle ID (from getTrims value).
+ * הפרטים המלאים של רכב מסוים לפי המזהה שהתקבל מרשימת הגימורים.
  */
 export async function getVehicleDetails(vehicleId: string): Promise<FEVehicleDetails> {
   return feGet(`/vehicle/${vehicleId}`) as Promise<FEVehicleDetails>;
 }
 
 /**
- * Convert US MPG (miles per US gallon) to L/100km.
- * Formula: 235.214 / MPG
+ * המרה ממיילים לגלון לליטר ל-100 ק"מ.
  */
 export function mpgToL100km(mpg: number): number {
   if (!mpg || mpg <= 0) return 0;
   return Math.round((235.214 / mpg) * 10) / 10;
 }
 
-// ─── NRCan (Natural Resources Canada) — global coverage via CKAN ─────────────
+// ─── המקור השני: מאגר NRCan הקנדי ────────────────────────────────────────────
 //
-// Same CKAN API as the Israeli vehicle registry. Covers all cars sold in Canada,
-// including European brands (petrol variants) and all Asian/US brands.
-// Returns L/100km directly — no MPG conversion needed.
+// אותו סוג ממשק כמו מרשם הרכב הישראלי. מכסה את כל הרכבים שנמכרו בקנדה,
+// כולל מותגים אירופיים בגרסאות בנזין, ומחזיר ליטר ל-100 ק"מ ישירות.
 //
-// Note: European diesel models (E220d, 320d, Golf TDI…) are not sold in Canada
-// so they won't appear here — use suggestL100kmByFuelType() as the final fallback.
+// דגמי דיזל אירופיים לא נמכרים בקנדה ולכן לא יופיעו כאן; עבורם נופלים
+// להערכה לפי סוג הדלק.
 //
-// Dataset resource IDs:
+// מזהי מקורות הנתונים לפי שנה:
 //   2015–2024: c98b9dc8-b23f-4cd8-8b19-e892da1e4688
 //   2025:      d589f2bc-9a85-4f65-be2f-20f17debfcb1
 //   2026:      9df1b18d-d036-4783-a61c-99f1f75b3ac5
@@ -129,20 +121,18 @@ function nrcanResourceId(year: number): string {
   return NRCAN_2015_24;
 }
 
-/** Normalise a model/trim string for fuzzy matching: lowercase, strip spaces/dashes */
+/** מנרמל מחרוזת דגם להשוואה גמישה: אותיות קטנות, בלי רווחים ומקפים. */
 function norm(s: string) {
   return s.toLowerCase().replace(/[\s\-_\.]/g, '');
 }
 
 /**
- * Look up combined fuel consumption (L/100km) from the NRCan open dataset.
- * Covers cars sold in Canada — good for European petrol variants and all
- * Asian / American models.
+ * שולפת צריכה משולבת מהמאגר הקנדי.
  *
- * @param make  English make name, e.g. "Mercedes-Benz"
- * @param model Commercial model string from the Israeli registry, e.g. "C200"
- * @param year  Model year
- * @returns L/100km combined, or null if not found
+ * @param make  שם היצרן באנגלית
+ * @param model שם הדגם המסחרי כפי שהוא במרשם הישראלי
+ * @param year  שנת הדגם
+ * @returns ליטר ל-100 ק"מ, או null אם לא נמצא
  */
 export async function getNRCanL100km(
   make: string,
@@ -172,16 +162,16 @@ export async function getNRCanL100km(
     const getLkm   = (r: Record<string, unknown>) =>
       parseFloat(String(r['Combined (L/100 km)'] ?? ''));
 
-    // 1. Exact model match
+    // 1. התאמה מדויקת של שם הדגם
     let match = records.find(r => getModel(r) === targetNorm);
 
-    // 2. Model contains target or vice-versa
+    // 2. אחד מהשמות מכיל את השני
     if (!match) match = records.find(r => {
       const rn = getModel(r);
       return rn.includes(targetNorm) || targetNorm.includes(rn);
     });
 
-    // 3. First record with valid fuel data (best-effort for this make/year)
+    // 3. הרשומה הראשונה עם נתון תקין לאותו יצרן ושנה
     if (!match) match = records.find(r => getLkm(r) > 0);
 
     if (!match) return null;
@@ -189,31 +179,27 @@ export async function getNRCanL100km(
     const lkm = getLkm(match);
     return lkm > 0 ? Math.round(lkm * 10) / 10 : null;
   } catch {
-    return null;   // network error or unexpected format — fail silently
+    return null;   // שגיאת רשת או פורמט לא צפוי — נכשל בשקט
   }
 }
 
-// ─── Gemini AI fuel lookup ────────────────────────────────────────────────────
+// ─── המקור השלישי: שאלה ל-Gemini ─────────────────────────────────────────────
 //
-// Uses Google Gemini 2.5 Flash-Lite (free tier) to look up WLTP combined fuel
-// consumption for any car model worldwide. Works for European diesels,
-// obscure trims, and cars not in EPA/NRCan.
-// (gemini-1.5-flash and gemini-2.0-flash no longer have free-tier quota —
-// do not use. Avoid non-lite 2.5+ models: "thinking" tokens eat the small
-// maxOutputTokens budget unless thinkingConfig.thinkingBudget is set to 0.)
+// שאלה על צריכת דלק משולבת של כל דגם בעולם. עובד גם על דיזלים אירופיים,
+// גימורים נדירים ורכבים שלא מופיעים בשני המאגרים הקודמים.
 //
-// Get a free key at: https://aistudio.google.com  (takes ~30 seconds)
+// מפתח חינמי אפשר להוציא באתר Google AI Studio.
 
-// Loaded from .env (gitignored). Set EXPO_PUBLIC_GEMINI_API_KEY in your .env file.
-// See .env.example for the format. If blank, Gemini lookup is silently skipped.
+// נטען מקובץ env. שנמצא ב-gitignore. השם: EXPO_PUBLIC_GEMINI_API_KEY
+// הפורמט מופיע ב-env.example. בלי מפתח, השלב הזה פשוט מדולג.
 const GEMINI_API_KEY: string = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
 
 const GEMINI_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
 
 /**
- * Asks Gemini for the WLTP combined fuel consumption (L/100km) of a specific car.
- * Returns null if no key is configured, or if the model is unknown / electric.
+ * שואלת את Gemini מהי הצריכה המשולבת של רכב מסוים.
+ * מחזירה null אם אין מפתח, או אם הדגם לא מוכר או חשמלי.
  */
 export async function getGeminiL100km(
   make:            string,
@@ -223,7 +209,7 @@ export async function getGeminiL100km(
 ): Promise<number | null> {
   if (!GEMINI_API_KEY) return null;
 
-  // Build a hint if we know the fuel type from the Israeli registry
+  // רמז על סוג הדלק, אם הוא ידוע מהמרשם הישראלי
   const fuelHint =
     hebrewFuelType.includes('דיזל')     ? ' (diesel engine)'
     : hebrewFuelType.includes('היברידי') ? ' (hybrid)'
@@ -253,47 +239,44 @@ export async function getGeminiL100km(
 
     if (!text || text.toLowerCase().includes('unknown')) return null;
 
-    // Extract the first number from the response (handles "5.2 L/100km" etc.)
+    // חילוץ המספר הראשון מהתשובה
     const match = text.match(/[\d]+\.?[\d]*/);
     if (!match) return null;
     const num = parseFloat(match[0]);
-    // Sanity check: real cars are 2–35 L/100km
+    // בדיקת היגיון: רכב אמיתי נע בין 2 ל-35 ליטר ל-100 ק"מ
     return isFinite(num) && num >= 2 && num <= 35 ? Math.round(num * 10) / 10 : null;
   } catch {
     return null;
   }
 }
 
-// ─── Smart fuel-type defaults ─────────────────────────────────────────────────
+// ─── גיבוי אחרון: הערכה לפי סוג דלק ──────────────────────────────────────────
 //
-// Last-resort fallback when no API has data (e.g. European diesel models not
-// sold in North America). Uses the Israeli registry's sug_delek_nm field.
-// Returns null for full-electric vehicles (L/100km is meaningless for them).
+// משמש כשאף מקור לא הכיר את הדגם. מתבסס על שדה סוג הדלק מהמרשם הישראלי.
+// מחזיר null לרכב חשמלי מלא, שעבורו ליטר ל-100 ק"מ חסר משמעות.
 
 /**
- * Returns a reasonable L/100km estimate based on the Hebrew fuel-type string
- * from the Israeli vehicle registry (sug_delek_nm).
- *
- * Returns null for full-electric vehicles (use kWh/100km instead).
+ * מחזירה הערכה סבירה לפי סוג הדלק שרשום במרשם.
+ * מחזירה null לרכב חשמלי מלא.
  */
 export function suggestL100kmByFuelType(hebrewFuelType: string): number | null {
   if (!hebrewFuelType) return 8.5;
 
-  // Full electric (חשמל without בנזין = pure BEV)
+  // חשמלי מלא
   if (hebrewFuelType.includes('חשמל') && !hebrewFuelType.includes('בנזין')) return null;
 
-  // Plug-in hybrid (חשמל/בנזין)
+  // היברידי נטען
   if (hebrewFuelType.includes('חשמל') && hebrewFuelType.includes('בנזין')) return 2.5;
 
-  // Conventional hybrid (היברידי / כלאיים)
+  // היברידי רגיל
   if (hebrewFuelType.includes('היברידי') || hebrewFuelType.includes('כלאיים')) return 5.5;
 
-  // Diesel (דיזל) — European average for common Israeli models
+  // דיזל — ממוצע אירופי לדגמים הנפוצים בישראל
   if (hebrewFuelType.includes('דיזל')) return 6.0;
 
-  // LPG / natural gas (גז)
+  // גז
   if (hebrewFuelType.includes('גז')) return 9.5;
 
-  // Default: petrol (בנזין)
+  // ברירת מחדל: בנזין
   return 8.5;
 }

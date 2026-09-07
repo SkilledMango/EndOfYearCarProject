@@ -1,7 +1,6 @@
 /**
- * ThemeContext — resolves the active color palette from the user's
- * Appearance setting (light / dark / follow-system), persists the choice,
- * and hands palettes to screens via useTheme() and createThemedStyles().
+ * מנהל את ערכת הצבעים הפעילה לפי הבחירה של המשתמש
+ * (בהיר / כהה / לפי המערכת), שומר את הבחירה, ומספק את הערכה למסכים.
  */
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
@@ -31,7 +30,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemScheme = useColorScheme();
   const [mode, setModeState] = useState<ThemeMode>('system');
 
-  // Restore the saved preference once on launch
+  // טעינת ההעדפה השמורה בהפעלה
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
       .then(stored => {
@@ -39,7 +38,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           setModeState(stored);
         }
       })
-      .catch(() => { /* corrupted storage — stay on system */ });
+      .catch(() => { /* אחסון פגום — נשארים על מצב המערכת */ });
   }, []);
 
   const setMode = (next: ThemeMode) => {
@@ -62,11 +61,11 @@ export function useTheme() {
 }
 
 /**
- * Wraps a style factory so each component gets styles built from the active
- * palette (and rebuilt only when the theme flips):
+ * עוטף יצירת סגנונות כך שכל רכיב מקבל סגנונות לפי הערכה הפעילה,
+ * ובונה אותם מחדש רק כשהערכה מתחלפת:
  *
  *   const useStyles = createThemedStyles((c) => StyleSheet.create({ ... }));
- *   // inside the component:
+ *   // בתוך הרכיב:
  *   const styles = useStyles();
  */
 export function createThemedStyles<T>(factory: (c: ThemeColors) => T) {

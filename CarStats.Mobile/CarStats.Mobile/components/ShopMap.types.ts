@@ -1,7 +1,7 @@
-/** Shared props for the platform-split ShopMap (native map / web placeholder). */
+/** מאפיינים משותפים לשתי גרסאות המפה: הנייטיב והווב. */
 
 export interface ShopPin {
-  id: number | string; // Google place_id for live shops
+  id: number | string; // המזהה של Google עבור מוסך אמיתי
   name: string;
   specialty: string;
   latitude: number;
@@ -9,7 +9,7 @@ export interface ShopPin {
 }
 
 export interface ShopMapProps {
-  /** Shops with usable coordinates (0,0 entries already filtered out) */
+  /** מוסכים עם קואורדינטות תקינות בלבד */
   shops: ShopPin[];
   userPos: { lat: number; lng: number } | null;
 }

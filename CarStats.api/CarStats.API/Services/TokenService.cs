@@ -1,4 +1,4 @@
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using CarStats.API.Models;
@@ -8,23 +8,21 @@ namespace CarStats.API.Services
 {
     public interface ITokenService
     {
-        /// <summary>Creates a signed JWT for a verified user session.</summary>
+        /// <summary>מייצר טוקן חתום לסשן של משתמש מאומת.</summary>
         string CreateToken(AppUser user);
     }
 
     /// <summary>
-    /// Issues HS256-signed JWTs carrying the user's id, email and role.
-    /// The signing key comes from configuration ("Jwt:Key") — a strong random
-    /// value in the gitignored appsettings.Production.json for prod, and a
-    /// fixed dev-only value for local development.
+    /// מנפיק טוקני JWT חתומים בשיטת HS256, הנושאים את מזהה המשתמש,
+    /// המייל והתפקיד. מפתח החתימה מגיע מהקונפיגורציה בלבד.
     /// </summary>
     public class TokenService : ITokenService
     {
         public const string Issuer   = "CarStats.API";
         public const string Audience = "CarStats.Clients";
 
-        // Long-lived sessions: this is a phone app, forcing frequent re-login
-        // (with an emailed code round-trip) would hurt more than it protects.
+        // סשן ארוך במכוון: זו אפליקציית טלפון, והתחברות תכופה מחדש
+        // דרך קוד במייל הייתה מזיקה יותר ממה שהיא מגינה
         private const int LifetimeDays = 30;
 
         private readonly SymmetricSecurityKey _key;
@@ -35,8 +33,8 @@ namespace CarStats.API.Services
         }
 
         /// <summary>
-        /// Shared by token creation (here) and token validation (Program.cs)
-        /// so both sides always use the same key.
+        /// משותפת ליצירת הטוקן כאן ולאימות שלו ב-Program.cs,
+        /// כדי ששני הצדדים ישתמשו תמיד באותו מפתח.
         /// </summary>
         public static string GetKeyMaterial(IConfiguration config, IWebHostEnvironment env)
         {
@@ -48,8 +46,8 @@ namespace CarStats.API.Services
                 return configured;
             }
 
-            // Never fall back to a known key in production — fail loudly instead
-            // of silently issuing forgeable tokens.
+            // בסביבת Production זורקים שגיאה במקום ליפול למפתח ידוע:
+            // עדיף ששרת לא יעלה מאשר שינפיק בשקט טוקנים שאפשר לזייף
             if (!env.IsDevelopment())
                 throw new InvalidOperationException(
                     "Jwt:Key is not configured. Set it in appsettings.Production.json.");
@@ -57,6 +55,7 @@ namespace CarStats.API.Services
             return "carstats-local-development-signing-key-not-for-production";
         }
 
+        // הרכבת הטוקן: מזהה, מייל ותפקיד, עם חתימה ותאריך תפוגה
         public string CreateToken(AppUser user)
         {
             var claims = new List<Claim>

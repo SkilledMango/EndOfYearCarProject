@@ -1,14 +1,14 @@
 import axios from 'axios';
 
 /**
- * NOTES FOR THE TEAM:
- *  - Production API is hosted on Somee (HTTPS works on the *.somee.com domain).
- *  - For local development against your own machine, temporarily switch HOST to:
- *      Android emulator:  http://10.0.2.2:5279   (10.0.2.2 reaches the host)
- *      iOS sim / web:     http://localhost:5279
- *      Real device:       http://<your-LAN-IP>:5279
+ * הלקוח של השרת: כתובת בסיס אחת, טוקן אחד וכל הטיפוסים המשותפים.
+ *
+ * לפיתוח מול מחשב מקומי יש להחליף זמנית את HOST:
+ *   אמולטור אנדרואיד:  http://10.0.2.2:5279
+ *   סימולטור iOS / ווב: http://localhost:5279
+ *   מכשיר אמיתי:        http://<כתובת ה-LAN שלך>:5279
  */
-// Production Somee API — used on real devices
+// שרת הייצור, זה שמכשירים אמיתיים פונים אליו
 const HOST = 'https://CarProject.somee.com';
 
 export const API_BASE_URL = `${HOST}/api`;
@@ -27,9 +27,8 @@ export const api = axios.create({
 });
 
 /**
- * Attaches (or clears) the JWT session token on every API request.
- * Called by AuthContext when a session starts, restores, or ends —
- * nothing else should touch auth headers.
+ * מצרף או מנקה את טוקן הסשן בכל בקשה לשרת.
+ * נקרא רק מ-AuthContext בתחילת סשן, בשחזורו ובסיומו.
  */
 export const setAuthToken = (token: string | null) => {
   if (token) {
@@ -39,7 +38,7 @@ export const setAuthToken = (token: string | null) => {
   }
 };
 
-// ----- Enums & Types (mirror the C# models) -----
+// ----- טיפוסים, מקבילים למודלים ב-C# בשרת -----
 
 export enum SeverityLevel {
   Green = 1,
@@ -73,18 +72,18 @@ export interface AppUser {
   vehicles: Vehicle[];
 }
 
-/** What /auth/login and /auth/verify-code return: a bearer token + its user. */
+/** מה שמוחזר מהתחברות ומאימות קוד: טוקן והמשתמש שלו. */
 export interface AuthSession {
   token: string;
   user: AppUser;
 }
 
-/** A live car-repair shop from Google Places (via the API's /navigation proxy). */
+/** מוסך חי מ-Google Places, דרך הפרוקסי בשרת. */
 export interface NearbyShop {
   placeId: string;
   name: string;
   address: string;
-  rating: number;      // 0 = not rated on Google (chip hidden)
+  rating: number;      // אפס = אין דירוג ב-Google, והתג מוסתר
   reviewCount: number;
   latitude: number;
   longitude: number;
@@ -96,7 +95,7 @@ export interface DiagnosticCode {
   humanTitle: string;
   description: string;
   severity: SeverityLevel;
-  /** What the driver should actually do about it. */
+  /** מה שהנהג אמור לעשות בפועל. */
   actionRequired?: string;
   estimatedCostMin: number;
   estimatedCostMax: number;
@@ -125,7 +124,7 @@ export interface ReportDtcResponse {
   severity?: SeverityLevel;
 }
 
-// ----- API Functions -----
+// ----- הפונקציות שפונות לשרת -----
 
 export const getUser = async (userId: number): Promise<AppUser> => {
   const { data } = await api.get<AppUser>(`/users/${userId}`);
@@ -165,10 +164,8 @@ export const createVehicle = async (dto: CreateVehicleDto): Promise<Vehicle> => 
 };
 
 /**
- * Removes a vehicle from the signed-in user's garage.
- *
- * The API refuses the call unless the car belongs to the caller, so a guessed
- * id cannot delete someone else's vehicle.
+ * מוחקת רכב מהמוסך של המשתמש המחובר.
+ * השרת דוחה את הקריאה אם הרכב אינו שלו, ולכן ניחוש מזהה לא ימחק רכב של אחר.
  */
 export const deleteVehicle = async (id: number): Promise<void> => {
   await api.delete(`/vehicles/${id}`);
@@ -191,20 +188,16 @@ export const getShopPhone = async (placeId: string): Promise<string | null> => {
 export interface GeocodedAddress {
   latitude:  number;
   longitude: number;
-  /** Google's tidied-up version of what the user typed. */
+  /** הגרסה המסודרת של Google לכתובת שהוקלדה. */
   formattedAddress: string;
 }
 
 /**
- * Turns a typed address into coordinates.
+ * ממירה כתובת שהוקלדה לקואורדינטות.
  *
- * Returns null when the address genuinely has no match — a typo is a normal
- * outcome, not an error worth throwing over. Everything else throws, including
- * the case where the endpoint itself is missing.
- *
- * That distinction matters: a server without this endpoint also answers 404,
- * and treating that as "no such address" sends the user off rewriting a
- * perfectly good address while the real problem is an undeployed API.
+ * מחזירה null רק כשאין באמת התאמה, כי שגיאת הקלדה היא תוצאה רגילה.
+ * כל שאר המקרים נזרקים כשגיאה — כולל המצב שבו נקודת הקצה עצמה חסרה בשרת,
+ * שגם הוא מחזיר 404 ואסור לבלבל בינו לבין "כתובת לא נמצאה".
  */
 export const geocodeAddress = async (address: string): Promise<GeocodedAddress | null> => {
   try {
@@ -213,7 +206,7 @@ export const geocodeAddress = async (address: string): Promise<GeocodedAddress |
     });
     return data;
   } catch (err: any) {
-    // Our own "no match" 404 carries a status field; a routing 404 does not.
+    // ה-404 שלנו מגיע עם שדה status; 404 של נתיב חסר לא.
     const body = err?.response?.data;
     if (err?.response?.status === 404 && body && typeof body.status === 'string') {
       return null;
@@ -223,8 +216,8 @@ export const geocodeAddress = async (address: string): Promise<GeocodedAddress |
 };
 
 /**
- * The whole fault-code dictionary. Small enough (tens of rows) to fetch and
- * filter client-side, which avoids adding a by-code endpoint and a redeploy.
+ * כל מילון קודי התקלה. קטן מספיק כדי למשוך אותו במלואו ולסנן במכשיר,
+ * וכך אין צורך בנקודת קצה נפרדת לכל קוד.
  */
 export const getDiagnosticCodes = async (): Promise<DiagnosticCode[]> => {
   const { data } = await api.get<DiagnosticCode[]>('/dtc');
@@ -234,29 +227,27 @@ export const getDiagnosticCodes = async (): Promise<DiagnosticCode[]> => {
 export interface FuelPriceEntry {
   fuelType: string;
   pricePerLitreILS: number;
-  /** True only for 95, the one type Israel regulates. */
+  /** אמת רק עבור 95, סוג הדלק היחיד המפוקח בישראל. */
   isOfficial: boolean;
 }
 
 export interface FuelPrice {
-  /** The regulated 95 price, for callers that don't care about type. */
+  /** מחיר ה-95 המפוקח, לקוראים שלא מבדילים בין סוגי דלק. */
   pricePerLitreILS: number;
-  /** ISO date the regulated price took effect. */
+  /** התאריך שממנו המחיר המפוקח בתוקף. */
   effectiveFrom: string;
   fuelType: string;
   prices: FuelPriceEntry[];
 }
 
 /**
- * The current national price of 95-octane petrol.
+ * מחיר הבנזין הארצי הנוכחי.
  *
- * Comes from the server rather than a constant in this bundle because the
- * Ministry of Energy changes it on the first of every month, and a price
- * compiled into the app can only be corrected by shipping a new build.
+ * מגיע מהשרת ולא מקבוע בקוד, כי משרד האנרגיה מעדכן אותו בכל תחילת חודש
+ * ומחיר שמהודר לתוך האפליקציה ניתן לתיקון רק בגרסה חדשה.
  *
- * Never throws: a trip estimate based on a slightly old price is far better
- * than a screen that fails because a price lookup did. Callers fall back to
- * FALLBACK_FUEL_PRICE_ILS.
+ * לעולם לא זורקת שגיאה: הערכת נסיעה לפי מחיר מעט ישן עדיפה בהרבה על מסך
+ * שנשבר בגלל שליפת מחיר. הקוראים נופלים לערך הגיבוי.
  */
 export const getFuelPrice = async (): Promise<FuelPrice | null> => {
   try {

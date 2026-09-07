@@ -1,16 +1,14 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CarStats.API.Controllers
 {
     /// <summary>
-    /// Server-side proxy for Google Maps Platform calls (Directions + Places
-    /// autocomplete). Exists for two reasons:
-    ///  1. Google's web-service APIs don't send CORS headers, so the mobile
-    ///     app's web build can't call them directly from the browser.
-    ///  2. Keeps the Google API key out of the client bundle entirely — it
-    ///     lives in gitignored server config ("GoogleMaps:ApiKey").
+    /// פרוקסי בצד השרת לשירותי Google Maps. קיים משתי סיבות:
+    /// Google לא שולחת כותרות CORS ולכן גרסת הווב לא יכולה לקרוא לה ישירות,
+    /// ומפתח שנמצא בקוד הלקוח ניתן לחילוץ ולשימוש על חשבוננו.
+    /// המפתח יושב בקונפיגורציה של השרת בלבד.
     /// </summary>
     [Route("api/[controller]")]
     [ApiController]
@@ -28,9 +26,8 @@ namespace CarStats.API.Controllers
 
         private string? ApiKey => _config["GoogleMaps:ApiKey"];
 
-        // GET: api/navigation/route?origin=32.08,34.78&destination=Dizengoff Center
-        // Passes Google's Directions response through untouched — the client
-        // already knows how to parse it.
+        // GET: api/navigation/route — מסלול, מרחק וזמן נסיעה עם תנועה חיה.
+        // התשובה של Google מועברת כמו שהיא, כי הלקוח כבר יודע לפרסר אותה.
         [HttpGet("route")]
         public async Task<IActionResult> GetRoute([FromQuery] string origin, [FromQuery] string destination)
         {
@@ -39,9 +36,8 @@ namespace CarStats.API.Controllers
             if (string.IsNullOrWhiteSpace(ApiKey))
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, "Route service is not configured.");
 
-            // region biases an ambiguous place name toward Israel, and language
-            // keeps the returned street names in Hebrew so they match the signs
-            // the driver will actually see.
+            // region מטה שם מקום דו-משמעי לישראל, ו-language מחזיר שמות רחובות
+            // בעברית כדי שיתאימו לשלטים שהנהג רואה בפועל
             var url =
                 "https://maps.googleapis.com/maps/api/directions/json" +
                 $"?origin={Uri.EscapeDataString(origin)}" +
@@ -56,9 +52,8 @@ namespace CarStats.API.Controllers
             return Content(json, "application/json");
         }
 
-        // GET: api/navigation/nearby-shops?lat=32.08&lng=34.78
-        // Live car-repair shops around the user from Google Places, trimmed to
-        // the fields the mechanic finder renders (the raw response is huge).
+        // GET: api/navigation/nearby-shops — מוסכים חיים סביב המשתמש.
+        // התשובה מקוצצת לשדות שהמסך באמת מציג, כי המקורית ענקית.
         [HttpGet("nearby-shops")]
         public async Task<IActionResult> NearbyShops([FromQuery] double lat, [FromQuery] double lng)
         {
@@ -70,7 +65,7 @@ namespace CarStats.API.Controllers
                 $"?location={lat},{lng}" +
                 "&rankby=distance" +
                 "&type=car_repair" +
-                // Hebrew names, so the list matches the signage on the street.
+                // שמות בעברית, כדי שהרשימה תתאים לשילוט ברחוב
                 "&language=he" +
                 $"&key={ApiKey}";
 
@@ -82,6 +77,7 @@ namespace CarStats.API.Controllers
             if (status != "OK" && status != "ZERO_RESULTS")
                 return StatusCode(StatusCodes.Status502BadGateway, $"Places search failed ({status}).");
 
+            // בניית רשימה מצומצמת: שם, כתובת, דירוג ומיקום
             var shops = new List<object>();
             if (doc.RootElement.TryGetProperty("results", out var results))
             {
@@ -103,9 +99,8 @@ namespace CarStats.API.Controllers
             return Ok(shops);
         }
 
-        // GET: api/navigation/shop-phone?placeId=ChIJ...
-        // Phone numbers aren't in the nearby-search payload — fetched lazily
-        // when the user taps Call.
+        // GET: api/navigation/shop-phone — מספר הטלפון של מוסך.
+        // נשלף רק בלחיצה על "חייג", כי הוא לא חלק מתוצאות החיפוש והקריאה מחויבת בנפרד.
         [HttpGet("shop-phone")]
         public async Task<IActionResult> ShopPhone([FromQuery] string placeId)
         {
@@ -133,7 +128,7 @@ namespace CarStats.API.Controllers
             return Ok(new { phone });
         }
 
-        // GET: api/navigation/autocomplete?input=diz
+        // GET: api/navigation/autocomplete — השלמה אוטומטית של כתובות
         [HttpGet("autocomplete")]
         public async Task<IActionResult> Autocomplete([FromQuery] string input)
         {
@@ -142,12 +137,8 @@ namespace CarStats.API.Controllers
             if (string.IsNullOrWhiteSpace(ApiKey))
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, "Route service is not configured.");
 
-            // Restricted to Israel and biased toward the centre of the country.
-            //
-            // Unbiased, a partial street name matches thousands of places
-            // worldwide and the handful Google returns are rarely the ones a
-            // user here meant — which reads as "autocomplete doesn't work".
-            // The country filter alone makes short queries usable.
+            // מוגבל לישראל ומוטה למרכז הארץ. בלי ההגבלה, תחילת שם רחוב
+            // מתאימה לאלפי מקומות בעולם והתוצאות כמעט אף פעם לא רלוונטיות.
             var url =
                 "https://maps.googleapis.com/maps/api/place/autocomplete/json" +
                 $"?input={Uri.EscapeDataString(input)}" +
@@ -162,11 +153,9 @@ namespace CarStats.API.Controllers
             return Content(json, "application/json");
         }
 
-        // GET: api/navigation/geocode?address=Agmon 13, Hadera
-        // Turns a typed address into coordinates, so features that need a
-        // point on the map do not all depend on the device's GPS. Unlike the
-        // other endpoints this one trims the response: callers want a single
-        // lat/lng, not Google's full geocoding payload.
+        // GET: api/navigation/geocode — כתובת שהוקלדה אל קואורדינטות,
+        // כדי שלא כל תכונה תהיה תלויה ב-GPS של המכשיר.
+        // כאן התשובה כן מקוצצת: הקורא רוצה נקודה אחת ולא את כל הפלט של Google.
         [HttpGet("geocode")]
         public async Task<IActionResult> Geocode([FromQuery] string address)
         {
@@ -175,9 +164,8 @@ namespace CarStats.API.Controllers
             if (string.IsNullOrWhiteSpace(ApiKey))
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, "Geocoding is not configured.");
 
-            // Same Israeli bias as autocomplete, and Hebrew output so a Hebrew
-            // query does not come back transliterated into English. The address
-            // itself is URL-encoded, so Hebrew input works either way.
+            // אותה הטיה לישראל כמו בהשלמה, ופלט בעברית כדי ששאילתה בעברית
+            // לא תחזור מתועתקת לאנגלית
             var url =
                 "https://maps.googleapis.com/maps/api/geocode/json" +
                 $"?address={Uri.EscapeDataString(address)}" +
@@ -193,9 +181,8 @@ namespace CarStats.API.Controllers
             var root      = doc.RootElement;
             var status    = root.TryGetProperty("status", out var s) ? s.GetString() : "UNKNOWN_ERROR";
 
-            // ZERO_RESULTS is a normal outcome for a typo, not a server fault —
-            // 404 lets the client say "we couldn't find that address" without
-            // treating it as an outage.
+            // כתובת שלא נמצאה היא תוצאה רגילה של שגיאת הקלדה ולא תקלת שרת,
+            // ולכן מוחזר 404 ולא שגיאה
             if (status != "OK" ||
                 !root.TryGetProperty("results", out var results) ||
                 results.GetArrayLength() == 0)

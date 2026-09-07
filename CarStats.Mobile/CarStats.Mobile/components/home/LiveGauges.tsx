@@ -1,7 +1,6 @@
 /**
- * Live engine gauges — RPM, speed, coolant and fuel — refreshed from the
- * adapter once a second. The fuel tile doubles as the entry point for setting
- * a baseline on cars that do not report PID 0x2F.
+ * שעוני המנוע החיים: סל"ד, מהירות, טמפרטורה ודלק, מתרעננים פעם בשנייה.
+ * אריח הדלק משמש גם ככניסה להגדרת מפלס ידני ברכבים שלא מדווחים אותו.
  */
 
 import React from 'react';
@@ -22,7 +21,7 @@ export default function LiveGauges({
   const gaugeStyles = useGaugeStyles();
   const rpmPct  = Math.min(data.rpm / 7000, 1);
 
-  // Determine which fuel value to display
+  // איזה ערך דלק להציג
   const fuelValue    = data.fuelPercent ?? estimatedFuel;
   const fuelIsReal   = data.fuelPercent != null;
   const fuelIsEst    = data.fuelPercent == null && estimatedFuel != null;
@@ -52,7 +51,7 @@ export default function LiveGauges({
           barPct={Math.min((data.coolantCelsius + 40) / 160, 1)}
           barColor={data.coolantCelsius > 110 ? c.Severity.red : data.coolantCelsius > 95 ? c.Severity.yellow : c.Severity.green}
         />
-        {/* ── Fuel tile — tap to set level when OBD doesn't report it ── */}
+        {/* ── אריח הדלק: לחיצה מגדירה מפלס כשהרכב לא מדווח ── */}
         <Pressable
           style={[gaugeStyles.tile, !fuelIsReal && gaugeStyles.tileTappable]}
           onPress={!fuelIsReal ? onSetFuel : undefined}
@@ -69,7 +68,7 @@ export default function LiveGauges({
           <Text style={gaugeStyles.tileSub}>
             {fuelIsReal ? 'in tank' : fuelIsEst ? 'estimated' : 'tap to set'}
           </Text>
-          {/* Note shown when car doesn't report fuel via OBD-II */}
+          {/* הערה שמוצגת כשהרכב לא מדווח מפלס דלק */}
           {!fuelIsReal && (
             <Text style={gaugeStyles.tileNote}>
               {fuelIsEst
@@ -85,7 +84,7 @@ export default function LiveGauges({
                 backgroundColor: fuelValue == null  ? c.Dashboard.cardBorder
                   : fuelValue < 15 ? c.Severity.red
                   : fuelValue < 30 ? c.Severity.yellow
-                  : fuelIsEst      ? c.Dashboard.accent + 'AA'  // dimmed for estimates
+                  : fuelIsEst      ? c.Dashboard.accent + 'AA'  // עמום כשמדובר בהערכה
                   : c.Severity.green,
               },
             ]} />

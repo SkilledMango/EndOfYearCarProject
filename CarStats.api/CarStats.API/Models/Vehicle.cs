@@ -1,8 +1,9 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CarStats.API.Models
 {
+    // טבלת הרכבים של המשתמשים
     public class Vehicle
     {
         [Key]
@@ -10,26 +11,28 @@ namespace CarStats.API.Models
 
         [Required]
         [MaxLength(50)]
-        public string Make { get; set; } = string.Empty;        // e.g. "Toyota"
+        public string Make { get; set; } = string.Empty;        // יצרן, למשל "Toyota"
 
         [Required]
         [MaxLength(50)]
-        public string Model { get; set; } = string.Empty;       // e.g. "Corolla"
+        public string Model { get; set; } = string.Empty;       // דגם, למשל "Corolla"
 
         public int Year { get; set; }
 
         [MaxLength(20)]
         public string LicensePlate { get; set; } = string.Empty;
 
-        public double AverageFuelConsumption { get; set; } = 0.0; // L/100km
+        // צריכת דלק ממוצעת בליטר ל-100 ק"מ.
+        // זה המספר שכל חישובי הדלק והנסיעה באפליקציה נשענים עליו.
+        public double AverageFuelConsumption { get; set; } = 0.0;
 
-        // --- FK to the owner ---
+        // --- הבעלים של הרכב ---
         public int AppUserId { get; set; }
 
         [ForeignKey("AppUserId")]
         public AppUser? User { get; set; }
 
-        // --- Events logged against this vehicle ---
+        // --- התקלות שנרשמו על הרכב הזה ---
         public List<VehicleEvent> Events { get; set; } = new();
     }
 }

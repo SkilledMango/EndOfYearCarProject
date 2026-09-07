@@ -1,8 +1,6 @@
 /**
- * AuthContext
- * Manages the logged-in user across the whole app.
- * Persists the session to AsyncStorage so the user stays logged in
- * after closing and reopening the app.
+ * מנהל את המשתמש המחובר בכל האפליקציה.
+ * שומר את הסשן במכשיר, כך שהמשתמש נשאר מחובר גם אחרי סגירת האפליקציה.
  */
 
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
@@ -10,42 +8,40 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppUser, AuthSession, api, getUser, setAuthToken } from '@/services/api';
 import { clearPrefs, disableChildReminder } from '@/services/notifications';
 
-// Bumped from '@carstats_user' when sessions gained a JWT — old entries
-// (a bare AppUser with no token) can't call the API anymore, so a stored
-// session without a token is discarded and the user logs in again once.
+// שם המפתח הוחלף כשהסשן קיבל טוקן: רשומה ישנה בלי טוקן כבר לא יכולה
+// לפנות לשרת, ולכן היא נזרקת והמשתמש מתחבר פעם אחת מחדש.
 const STORAGE_KEY = '@carstats_session';
 const LEGACY_STORAGE_KEY = '@carstats_user';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── טיפוסים ─────────────────────────────────────────────────────────────────
 
 interface AuthContextValue {
-  /** The currently logged-in user, or null if not logged in */
+  /** המשתמש המחובר, או null אם אין חיבור */
   user: AppUser | null;
-  /** True while the app is checking AsyncStorage on first launch */
+  /** אמת בזמן שהאפליקציה בודקת אם קיים סשן שמור */
   isLoading: boolean;
   /**
-   * Call with email + password. Throws a string error message on failure.
-   * If the account exists but isn't verified, throws an error with
-   * `code === 'EMAIL_NOT_VERIFIED'` and an `email` field (a fresh code is sent).
+   * התחברות עם מייל וסיסמה. זורקת הודעת שגיאה בכישלון.
+   * אם החשבון קיים אך לא מאומת, נזרקת שגיאה עם הקוד EMAIL_NOT_VERIFIED
+   * ונשלח קוד אימות חדש.
    */
   login: (email: string, password: string) => Promise<void>;
   /**
-   * Creates a new account (unverified) and triggers a verification email.
-   * Resolves with the new user but does NOT start a session — the user must
-   * verify the emailed code via verifyCode() first.
+   * יוצרת חשבון חדש לא מאומת ושולחת מייל עם קוד.
+   * לא פותחת סשן: קודם צריך לאמת את הקוד.
    */
   register: (fullName: string, email: string, password: string) => Promise<AppUser>;
-  /** Confirms the emailed 6-digit code; on success starts the session. */
+  /** מאמתת את הקוד בן שש הספרות, ובהצלחה פותחת סשן. */
   verifyCode: (email: string, code: string) => Promise<AppUser>;
-  /** Sends a fresh verification code to the given email. */
+  /** שולחת קוד אימות חדש לכתובת שנמסרה. */
   resendCode: (email: string) => Promise<void>;
-  /** Re-fetches the current user from the API and updates the session */
+  /** מושכת מחדש את המשתמש מהשרת ומעדכנת את הסשן */
   refreshUser: () => Promise<void>;
-  /** Clears the session and returns to the login screen */
+  /** מנקה את הסשן ומחזירה למסך ההתחברות */
   logout: () => Promise<void>;
 }
 
-// ─── Context ──────────────────────────────────────────────────────────────────
+// ─── ההקשר ───────────────────────────────────────────────────────────────────
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
@@ -58,12 +54,12 @@ const AuthContext = createContext<AuthContextValue>({
   logout: async () => {},
 });
 
-// ─── Provider ─────────────────────────────────────────────────────────────────
+// ─── הספק ────────────────────────────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser]         = useState<AppUser | null>(null);
   const [isLoading, setLoading] = useState(true);
-  // Mirrors whether a token is active, readable inside the 401 interceptor
+  // משקף אם יש טוקן פעיל, כדי שאפשר יהיה לקרוא אותו בתוך מיירט השגיאות
   const hasSession = useRef(false);
 
   const startSession = async (session: AuthSession) => {
@@ -80,11 +76,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
-  // On first mount — restore session from storage
+  // בטעינה הראשונה: שחזור הסשן מהאחסון
   useEffect(() => {
     (async () => {
       try {
-        await AsyncStorage.removeItem(LEGACY_STORAGE_KEY); // pre-JWT sessions
+        await AsyncStorage.removeItem(LEGACY_STORAGE_KEY); // סשנים ישנים מלפני הטוקנים
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
         if (stored) {
           const session: AuthSession = JSON.parse(stored);
@@ -97,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } catch {
-        // Corrupted storage — start fresh
+        // אחסון פגום — מתחילים מחדש
         await AsyncStorage.removeItem(STORAGE_KEY);
       } finally {
         setLoading(false);
@@ -105,9 +101,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  // Expired/revoked token → any API call comes back 401 → drop to the login
-  // screen. Auth endpoints themselves are exempt (no session is active yet,
-  // and a wrong password must surface as a form error, not a logout).
+  // טוקן שפג או בוטל גורם לכל קריאה לחזור עם 401, ואז חוזרים למסך
+  // ההתחברות. נקודות ההתחברות עצמן פטורות: סיסמה שגויה צריכה להופיע
+  // כשגיאה בטופס ולא כהתנתקות.
   useEffect(() => {
     const id = api.interceptors.response.use(
       (res) => res,
@@ -121,7 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => api.interceptors.response.eject(id);
   }, []);
 
-  // ── login ────────────────────────────────────────────────────────────────
+  // ── התחברות ──────────────────────────────────────────────────────────────
   const login = async (email: string, password: string) => {
     try {
       const { data } = await api.post<AuthSession>('/auth/login', { email, password });
@@ -129,8 +125,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err: any) {
       const status = err?.response?.status;
 
-      // Account exists but isn't verified — the API just emailed a fresh code.
-      // Signal the login screen to route into the verification step.
+      // החשבון קיים אך לא מאומת, והשרת בדיוק שלח קוד חדש.
+      // מסמנים למסך ההתחברות לעבור לשלב האימות.
       if (status === 403 && err?.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
         const notVerified: any = new Error('EMAIL_NOT_VERIFIED');
         notVerified.code  = 'EMAIL_NOT_VERIFIED';
@@ -146,11 +142,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // ── register ─────────────────────────────────────────────────────────────
+  // ── הרשמה ────────────────────────────────────────────────────────────────
   const register = async (fullName: string, email: string, password: string) => {
     try {
-      // Creates the account as unverified and triggers the verification email.
-      // We deliberately do NOT start a session here — verifyCode() does that.
+      // יוצר חשבון לא מאומת ושולח את מייל האימות.
+      // במכוון לא נפתח כאן סשן; זה קורה רק אחרי אימות הקוד.
       const { data } = await api.post<AppUser>('/auth/register', { fullName, email, password });
       return data;
     } catch (err: any) {
@@ -163,11 +159,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // ── verifyCode ───────────────────────────────────────────────────────────
+  // ── אימות הקוד ───────────────────────────────────────────────────────────
   const verifyCode = async (email: string, code: string): Promise<AppUser> => {
     try {
       const { data } = await api.post<AuthSession>('/auth/verify-code', { email, code });
-      await startSession(data);   // verified → start the session
+      await startSession(data);   // אומת — פותחים סשן
       return data.user;
     } catch (err: any) {
       const status = err?.response?.status;
@@ -179,7 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // ── resendCode ───────────────────────────────────────────────────────────
+  // ── שליחת קוד חוזרת ──────────────────────────────────────────────────────
   const resendCode = async (email: string): Promise<void> => {
     try {
       await api.post('/auth/resend-code', { email });
@@ -192,14 +188,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // ── refreshUser ──────────────────────────────────────────────────────────
-  // Re-fetches the logged-in user (e.g. after adding a vehicle) so the
-  // in-memory session reflects the latest data from the server.
+  // ── רענון המשתמש ─────────────────────────────────────────────────────────
+  // מושך מחדש את המשתמש, למשל אחרי הוספת רכב, כדי שהסשן בזיכרון
+  // ישקף את המצב העדכני בשרת.
   const refreshUser = async () => {
     if (!user) return;
     try {
       const fresh = await getUser(user.id);
-      // Keep the existing token — only the user snapshot changes
+      // הטוקן נשאר; רק תמונת המשתמש מתעדכנת
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       const token  = stored ? (JSON.parse(stored) as AuthSession).token : null;
       if (token) {
@@ -207,19 +203,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setUser(fresh);
     } catch {
-      // Network hiccup — keep the existing session as-is
+      // תקלת רשת — משאירים את הסשן כמו שהוא
     }
   };
 
-  // ── logout ───────────────────────────────────────────────────────────────
+  // ── התנתקות ──────────────────────────────────────────────────────────────
   const logout = async () => {
-    // The geofence lives with the OS, not in storage, so it stays armed across
-    // a logout and would fire at the next user about someone else's home.
-    // Best effort — a cleanup failure must never block signing out.
+    // הגדר הגיאוגרפית רשומה אצל מערכת ההפעלה ולא באחסון, ולכן היא שורדת
+    // התנתקות והייתה מתריעה למשתמש הבא על הבית של מישהו אחר.
+    // ניסיון בלבד: כישלון ניקוי לא יעצור את ההתנתקות.
     try {
       await disableChildReminder();
       await clearPrefs();
-    } catch { /* best effort */ }
+    } catch { /* ניסיון בלבד */ }
 
     await endSession();
   };
@@ -231,7 +227,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ─── Hook ─────────────────────────────────────────────────────────────────────
+// ─── הוק ─────────────────────────────────────────────────────────────────────
 
 export function useAuth() {
   return useContext(AuthContext);

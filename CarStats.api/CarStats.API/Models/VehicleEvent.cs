@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CarStats.API.Models
 {
+    // תקלה בודדת שנרשמה בסריקה. הטבלה הזו היא המקור לספירת התקלות ולמסך ההיסטוריה.
     public class VehicleEvent
     {
         [Key]
@@ -12,13 +13,14 @@ namespace CarStats.API.Models
         public DateTime Timestamp { get; set; }
         public bool IsAcknowledged { get; set; }
 
-        // FK → the specific vehicle that triggered this event (nullable)
+        // הרכב שבו התגלתה התקלה. יכול להיות ריק — וזה בדיוק מה שמאפשר
+        // להיסטוריה לשרוד אחרי שהמשתמש מוחק את הרכב.
         public int? VehicleId { get; set; }
 
         [ForeignKey("VehicleId")]
         public Vehicle? Vehicle { get; set; }
 
-        // FK → the owning user (for direct user-level queries)
+        // הבעלים. שמור גם ישירות כאן, כדי ש"כל התקלות שלי" תהיה שאילתה אחת.
         public int? AppUserId { get; set; }
 
         [ForeignKey("AppUserId")]

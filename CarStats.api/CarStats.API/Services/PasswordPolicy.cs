@@ -1,35 +1,31 @@
-namespace CarStats.API.Services
+﻿namespace CarStats.API.Services
 {
     /// <summary>
-    /// The single definition of what counts as an acceptable password.
-    ///
-    /// Every path that sets a password goes through here — registration, admin
-    /// user creation, and admin password changes — so the rule cannot drift
-    /// between them. The mobile app mirrors these rules in utils/password.ts
-    /// for immediate feedback, but this is the gate that actually enforces
-    /// them: a client can always be bypassed.
+    /// ההגדרה היחידה של סיסמה תקינה.
+    /// כל מסלול שמגדיר סיסמה — הרשמה, יצירת משתמש בפאנל ושינוי סיסמה —
+    /// עובר דרך כאן, ולכן הכלל לא יכול להשתנות בין מסלול למסלול.
+    /// האפליקציה משכפלת את הכללים ב-utils/password.ts רק לצורך משוב מיידי;
+    /// האכיפה האמיתית היא כאן, כי כל לקוח ניתן לעקיפה.
     /// </summary>
     public static class PasswordPolicy
     {
         public const int MinLength = 8;
 
-        /// <summary>Message shown to the user when a password is rejected.</summary>
+        /// <summary>ההודעה שמוצגת למשתמש כשסיסמה נדחית.</summary>
         public const string Requirements =
             "Password must be at least 8 characters and include at least one letter and one number.";
 
         /// <summary>
-        /// True when the password satisfies every rule.
-        ///
-        /// Deliberately no maximum length and no required symbols: length is
-        /// what makes a password hard to guess, and forcing symbols mostly
-        /// produces predictable substitutions rather than stronger secrets.
-        /// BCrypt handles whatever is passed in.
+        /// אמת כשהסיסמה עומדת בכל הכללים.
+        /// במכוון אין אורך מקסימלי ואין דרישה לתווים מיוחדים: האורך הוא מה
+        /// שמקשה על ניחוש, ודרישת סימנים מייצרת בעיקר החלפות צפויות.
         /// </summary>
         public static bool IsAcceptable(string? password)
         {
             if (string.IsNullOrWhiteSpace(password)) return false;
             if (password.Length < MinLength) return false;
 
+            // חייבת להכיל לפחות אות אחת ולפחות ספרה אחת
             var hasLetter = false;
             var hasDigit  = false;
 

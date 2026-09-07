@@ -26,11 +26,11 @@ import {
   View,
 } from 'react-native';
 
-// Google calls go through our API's /navigation proxy: no CORS on Google's web
-// services, and it keeps the API key off the client. The pump price is served
-// too, because the regulated 95 price changes monthly.
+// הקריאות ל-Google עוברות דרך הפרוקסי בשרת: אין CORS בשירותים שלה,
+// והמפתח נשאר מחוץ ללקוח. גם מחיר הדלק מגיע מהשרת, כי המחיר המפוקח
+// מתעדכן מדי חודש.
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── טיפוסים ─────────────────────────────────────────────────────────────────
 interface RouteResult {
   distanceKm:         number;
   durationMin:        number;
@@ -42,17 +42,17 @@ interface RouteResult {
   fuelCostILS:        number;
   trafficLabel:       string;
   trafficColor:       string;
-  /** "lat,lng" of the start of the route as Google resolved it. */
+  /** נקודת המוצא של המסלול, כפי ש-Google פענחה אותה. */
   originLatLng:       string;
-  /** "lat,lng" of the destination as Google resolved it. */
+  /** נקודת היעד, כפי ש-Google פענחה אותה. */
   destinationLatLng:  string;
-  /** What Google matched the destination to, e.g. "AM:PM, Hadera". */
+  /** למה Google התאימה את היעד, למשל "AM:PM, חדרה". */
   destinationAddress: string;
-  /** Exactly what the user typed. Shown in the UI, never sent to Maps. */
+  /** מה שהמשתמש הקליד בדיוק. מוצג בממשק, אף פעם לא נשלח למפות. */
   destinationText:    string;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── עזרים ───────────────────────────────────────────────────────────────────
 function trafficMeta(c: ThemeColors, ratio: number): { label: string; color: string } {
   if (ratio < 1.1) return { label: 'CLEAR',    color: c.Severity.green  };
   if (ratio < 1.3) return { label: 'MODERATE', color: c.Severity.yellow };
@@ -74,10 +74,9 @@ function calcFuelWithTraffic(
 }
 
 /**
- * Position for the route origin, or null if the device can offer none.
- * Falls back to the last known fix: getCurrentPositionAsync rejects outright
- * indoors or on a cold GPS, and a position from minutes ago barely moves the
- * estimate.
+ * המיקום לנקודת המוצא, או null אם המכשיר לא יכול לספק אף אחד.
+ * נופל למיקום האחרון שנקלט: בקשת מיקום נכשלת מיד בתוך מבנה או כש-ה-GPS
+ * עדיין קר, ומיקום מלפני כמה דקות כמעט לא משנה את ההערכה.
  */
 async function getOriginCoords(): Promise<{ latitude: number; longitude: number } | null> {
   try {
@@ -98,7 +97,7 @@ async function getOriginCoords(): Promise<{ latitude: number; longitude: number 
   return null;
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+// ─── המסך הראשי ──────────────────────────────────────────────────────────────
 export default function TripPlannerScreen() {
   const { user: authUser }            = useAuth();
   const { colors: c } = useTheme();
@@ -166,7 +165,7 @@ export default function TripPlannerScreen() {
     inputRef.current?.blur();
   };
 
-  // ── Route calculation ─────────────────────────────────────────────────────
+  // ── חישוב המסלול ─────────────────────────────────────────────────────────
   const handleCalculate = async () => {
     clear();
     if (!destination.trim()) { setError('Please enter a destination.'); return; }
@@ -204,6 +203,9 @@ export default function TripPlannerScreen() {
       });
 
       if (data.status !== 'OK') {
+        // גוגל מסבירה את הסירוב בשדה נפרד. בלי השורה הזאת נשארים עם
+        // הסטטוס בלבד, שלא מבדיל בין מפתח שגוי, חיוב שכבוי, והגבלה על המפתח.
+        console.warn('[trip-planner] Google rejected:', data.status, data.error_message);
         setError(routeErrorMessage(data.status));
         setLoading(false);
         return;
@@ -227,18 +229,18 @@ export default function TripPlannerScreen() {
         fuelCostILS:        fuel.estimatedFuelL * pricePerLitre,
         trafficLabel:       tm.label,
         trafficColor:       tm.color,
-        // Coordinates from the route itself rather than the typed text: a
-        // name like "AM-PM" matches hundreds of places, and our own bias
-        // toward Israel does not travel with a deep link. Handing Maps the
-        // exact points guarantees it opens the route we just calculated.
+        // הקואורדינטות נלקחות מהמסלול עצמו ולא מהטקסט שהוקלד: שם כמו
+        // "AM-PM" מתאים למאות מקומות, וההטיה שלנו לישראל לא עוברת
+        // בקישור החוצה. מסירת הנקודות המדויקות מבטיחה שייפתח בדיוק
+        // המסלול שחושב.
         originLatLng:       `${leg.start_location.lat},${leg.start_location.lng}`,
         destinationLatLng:  `${leg.end_location.lat},${leg.end_location.lng}`,
         destinationAddress: leg.end_address ?? destination.trim(),
         destinationText:    destination.trim(),
       });
     } catch (err: any) {
-      // Log the real cause — this used to be a bare catch reporting "network
-      // error" for everything, which sent debugging in the wrong direction.
+      // מדפיס את הסיבה האמיתית. בעבר כל שגיאה דווחה כ"תקלת רשת",
+      // וזה שלח את האיתור לכיוון הלא נכון.
       console.warn('[trip-planner] route request failed', err);
       const serverStatus = err?.response?.status;
       setError(
@@ -253,7 +255,7 @@ export default function TripPlannerScreen() {
     }
   };
 
-  // ── Open in Google Maps ───────────────────────────────────────────────────
+  // ── פתיחה ב-Google Maps ──────────────────────────────────────────────────
   const openInGoogleMaps = async () => {
     if (!result) return;
     const url =
@@ -265,8 +267,8 @@ export default function TripPlannerScreen() {
     if (supported) {
       await Linking.openURL(url);
     } else {
-      // Fallback drops the route and just shows the destination pin — still
-      // by coordinates, so it lands in the right place.
+      // הגיבוי מוותר על המסלול ומציג רק את סיכת היעד, עדיין לפי
+      // קואורדינטות כדי שינחת במקום הנכון.
       await Linking.openURL(
         `https://maps.google.com/?q=${encodeURIComponent(result.destinationLatLng)}`
       );
@@ -285,7 +287,7 @@ export default function TripPlannerScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        {/* ── Vehicle + L/100km ── */}
+        {/* ── הרכב והצריכה שלו ── */}
         <View style={styles.vehicleRow}>
           <View style={styles.vehicleDot} />
           <Text style={styles.vehicleName}>{vehicleName}</Text>
@@ -301,7 +303,7 @@ export default function TripPlannerScreen() {
           </View>
         </View>
 
-        {/* ── Route input ── */}
+        {/* ── שדות המסלול ── */}
         <View style={styles.card}>
           <Text style={styles.cardLabel}>STARTING POINT</Text>
           <TextInput
@@ -327,7 +329,7 @@ export default function TripPlannerScreen() {
               returnKeyType="search"
             />
 
-            {/* Autocomplete dropdown */}
+            {/* רשימת ההשלמה האוטומטית */}
             {showSuggestions && suggestions.length > 0 && (
               <View style={styles.dropdown}>
                 {suggestions.map((s, i) => (
@@ -355,15 +357,14 @@ export default function TripPlannerScreen() {
           {error && <Text style={styles.errorText}>{error}</Text>}
         </View>
 
-        {/* ── Results ── */}
+        {/* ── התוצאות ── */}
         {result && (
           <>
-            {/* Route summary */}
+            {/* סיכום המסלול */}
             <View style={styles.card}>
               <Text style={styles.cardLabel}>ROUTE SUMMARY</Text>
-              {/* What Google actually matched. A short name like "AM-PM" can
-                  resolve to any of dozens, and without this there is no way to
-                  tell whether it picked the one you meant. */}
+              {/* למה Google באמת התאימה את היעד. שם קצר יכול להתאים
+                  לעשרות מקומות, ובלי זה אין דרך לדעת אם נבחר הנכון. */}
               <Text style={styles.resolvedTo} numberOfLines={2}>
                 → {result.destinationAddress}
               </Text>
@@ -384,7 +385,7 @@ export default function TripPlannerScreen() {
                 </View>
               </View>
 
-              {/* Traffic badge */}
+              {/* תג העומס */}
               <View style={[styles.trafficBadge, {
                 backgroundColor: result.trafficColor + '18',
                 borderColor: result.trafficColor + '55',
@@ -400,13 +401,13 @@ export default function TripPlannerScreen() {
                 )}
               </View>
 
-              {/* Open in Google Maps button */}
+              {/* כפתור הפתיחה במפות */}
               <Pressable style={styles.mapsButton} onPress={openInGoogleMaps}>
                 <Text style={styles.mapsButtonText}>🗺  Open in Google Maps</Text>
               </Pressable>
             </View>
 
-            {/* Fuel estimate */}
+            {/* הערכת הדלק */}
             <View style={[styles.card, styles.fuelCard]}>
               <Text style={styles.cardLabel}>FUEL ESTIMATE</Text>
               <View style={styles.fuelMain}>
@@ -414,9 +415,8 @@ export default function TripPlannerScreen() {
                 <Text style={styles.fuelUnit}>litres</Text>
               </View>
               <Text style={styles.fuelCost}>≈ ₪{result.fuelCostILS.toFixed(2)}</Text>
-              {/* The rate is stated rather than left implicit: a cost figure
-                  with no price behind it is impossible for the driver to
-                  sanity-check against what they actually pay. */}
+              {/* מחיר הליטר מוצג במפורש: מספר עלות בלי המחיר שמאחוריו
+                  לא מאפשר לנהג להשוות למה שהוא באמת משלם. */}
               <Text style={styles.fuelPriceNote}>
                 at ₪{pricePerLitre.toFixed(2)}/L for {FUEL_TYPE_LABELS[fuelType]}
               </Text>
@@ -439,11 +439,10 @@ export default function TripPlannerScreen() {
               </View>
             </View>
 
-            {/* ── Will you make it? ──
-                Only shown when the car reported its own fuel level. Telling a
-                driver they have enough to get there is a claim worth making
-                from a measurement and not from an estimate built on a baseline
-                they typed days ago. */}
+            {/* ── האם אגיע? ──
+                מוצג רק כשהרכב דיווח בעצמו על מפלס הדלק. אמירה שיש מספיק
+                דלק להגיע ראויה להישען על מדידה, לא על הערכה שנבנתה
+                מנקודת ייחוס שהוקלדה לפני ימים. */}
             {outlook && (
               <View style={[styles.outlookCard, !outlook.enough && styles.outlookCardShort]}>
                 {outlook.enough ? (
@@ -488,10 +487,10 @@ export default function TripPlannerScreen() {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── סגנונות ─────────────────────────────────────────────────────────────────
 const useStyles = createThemedStyles((c) => StyleSheet.create({
   container:   { flex: 1 },
-  content:     { padding: 24, paddingBottom: 48 }, // native header supplies the top spacing
+  content:     { padding: 24, paddingBottom: 48 }, // הכותרת של המערכת מספקת את המרווח העליון
 
   vehicleRow:  {
     flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -519,7 +518,7 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   fuelCard:    { borderColor: c.Dashboard.accent + '44' },
   cardLabel:   { fontSize: 11, color: c.Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 14 },
   resolvedTo:  { fontSize: 14, fontWeight: '600', color: c.Dashboard.textPrimary, marginTop: -6, marginBottom: 14 },
-  // Separates the second field group from the one above it.
+  // מפריד בין קבוצת השדות השנייה לזו שמעליה
   cardLabelSpaced: { marginTop: 4 },
 
   input:       {
@@ -570,8 +569,8 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   fuelValue:   { fontSize: 52, fontWeight: '800', color: c.Dashboard.textPrimary, lineHeight: 56 },
   fuelUnit:    { fontSize: 18, color: c.Dashboard.textSecondary, marginBottom: 8 },
   fuelCost:    { fontSize: 20, fontWeight: '600', color: c.Dashboard.accent, marginBottom: 2 },
-  // Carries the bottom margin that used to sit on fuelCost, so the block below
-  // keeps its spacing whichever of the two is last.
+  // נושא את המרווח התחתון, כדי שהבלוק שמתחת ישמור על המרווח שלו
+  // בלי קשר לאיזה משני האלמנטים מופיע אחרון.
   fuelPriceNote: { fontSize: 12, color: c.Dashboard.textSecondary, marginBottom: 16 },
   fuelDivider: { height: 1, backgroundColor: c.Dashboard.cardBorder, marginBottom: 14 },
   outlookCard: {

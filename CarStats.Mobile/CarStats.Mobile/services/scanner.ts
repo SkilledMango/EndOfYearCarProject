@@ -1,38 +1,34 @@
 /**
- * scanner.ts
- * Communicates with the CarStats ESP32 OBD-II adapter.
+ * התקשורת מול מתאם ה-OBD-II מבוסס ESP32.
  *
- * The adapter broadcasts itself on the local WiFi network as:
- *   http://carstats-scanner.local
- *
- * Endpoints:
- *   GET /status     → ScannerStatus
- *   GET /live-data  → LiveData
- *   GET /dtcs       → { codes: string[] }
+ * נקודות הקצה של המתאם:
+ *   GET /status     → מצב החיבור
+ *   GET /live-data  → נתוני מנוע חיים
+ *   GET /dtcs       → מערך קודי התקלה
  */
 
 import { fetchWithTimeout } from './http';
 import { demoDtcs, demoLiveData, demoStatus, demoVin } from './demoScanner';
 
-// Fixed IP of the ESP32 scanner — static IP assigned in firmware.
-// The ESP32 connects to the phone's hotspot, so no WiFi switching needed.
+// כתובת קבועה שנקבעת בקושחה. המתאם מתחבר לנקודת הגישה של הטלפון,
+// ולכן אין צורך להחליף רשתות ואין צורך בשום מנגנון גילוי.
 const SCANNER_BASE_URL = 'http://192.168.148.100';
 
-/** כמה מילישניות לחכות לפני שבקשה נחשבת כשלונה */
+/** כמה מילישניות לחכות לפני שבקשה נחשבת ככישלון */
 const FETCH_TIMEOUT_MS = 3000;
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── טיפוסים ─────────────────────────────────────────────────────────────────
 
 export interface LiveData {
   rpm: number;
   speedKmh: number;
   coolantCelsius: number;
-  /** null when the car doesn't support PID 0x2F (fuel level not reported) */
+  /** null כשהרכב לא תומך ב-PID 0x2F ולא מדווח מפלס דלק */
   fuelPercent: number | null;
   engineLoadPct: number;
-  /** true when the adapter is receiving real CAN frames */
+  /** אמת כשהמתאם מקבל הודעות CAN אמיתיות */
   valid: boolean;
-  /** how old the reading is in milliseconds */
+  /** גיל הקריאה במילישניות */
   ageMs: number;
 }
 
@@ -41,7 +37,7 @@ export interface ScannerStatus {
   ssid: string;
   ip: string;
   uptimeSeconds: number;
-  /** true when no real car CAN bus is detected — using simulated data */
+  /** אמת כשלא זוהה רכב אמיתי והנתונים מדומים */
   simMode: boolean;
   connectedClients: number;
 }
@@ -51,35 +47,34 @@ export interface DtcScanResult {
 }
 
 export interface VinResult {
-  /** 17-char VIN, or null if not supported / car not connected */
+  /** מספר שלדה בן 17 תווים, או null אם אינו נתמך או שהרכב לא מחובר */
   vin: string | null;
   simMode: boolean;
 }
 
-// ─── Demo connection ──────────────────────────────────────────────────────────
+// ─── מצב הדגמה ───────────────────────────────────────────────────────────────
 //
-// When on, every function below returns simulated readings instead of calling
-// the adapter. Deliberately module state rather than a React context: these
-// are plain async functions called from several screens, and threading a
-// provider through all of them to flip one boolean would be worse.
+// כשהוא דלוק, כל הפונקציות כאן מחזירות נתונים מדומים במקום לפנות למתאם.
+// נשמר כמשתנה במודול ולא בהקשר של React, כי אלה פונקציות רגילות שנקראות
+// מכמה מסכים, והעברת ספק דרך כולן בשביל בוליאני אחד הייתה גרועה יותר.
 
 let demoMode = false;
 
-/** Turns the demo connection on or off. */
+/** מדליק או מכבה את מצב ההדגמה. */
 export function setDemoMode(on: boolean): void {
   demoMode = on;
 }
 
-/** True while the demo connection is standing in for the adapter. */
+/** אמת כל עוד ההדגמה מחליפה את המתאם. */
 export function isDemoMode(): boolean {
   return demoMode;
 }
 
-// ─── API functions ────────────────────────────────────────────────────────────
+// ─── הפונקציות שפונות למתאם ──────────────────────────────────────────────────
 
 /**
- * Ping the adapter and return basic health info.
- * Throws if the adapter is unreachable.
+ * בדיקת חיים של המתאם.
+ * זורקת שגיאה אם אי אפשר להגיע אליו.
  */
 export async function getScannerStatus(): Promise<ScannerStatus> {
   if (demoMode) return demoStatus();
@@ -89,9 +84,9 @@ export async function getScannerStatus(): Promise<ScannerStatus> {
 }
 
 /**
- * Returns the most recently read live sensor values from the car.
- * The ESP32 refreshes these every ~1 second on its own polling loop.
- * Throws if the adapter is unreachable.
+ * מחזירה את קריאות החיישנים האחרונות מהרכב.
+ * המתאם מרענן אותן בערך פעם בשנייה בלולאה שלו.
+ * זורקת שגיאה אם אי אפשר להגיע אליו.
  */
 export async function getLiveData(): Promise<LiveData> {
   if (demoMode) return demoLiveData();
@@ -101,9 +96,9 @@ export async function getLiveData(): Promise<LiveData> {
 }
 
 /**
- * Triggers a fresh Mode 03 OBD-II scan and returns the raw DTC codes.
- * Example result: { codes: ["P0300", "P0420"] }
- * Throws if the adapter is unreachable.
+ * מפעילה סריקת תקלות חדשה ומחזירה את הקודים הגולמיים.
+ * לדוגמה: { codes: ["P0300", "P0420"] }
+ * זורקת שגיאה אם אי אפשר להגיע למתאם.
  */
 export async function scanDtcs(): Promise<DtcScanResult> {
   if (demoMode) return demoDtcs();
@@ -113,9 +108,9 @@ export async function scanDtcs(): Promise<DtcScanResult> {
 }
 
 /**
- * Fetches the VIN from the OBD adapter (cached — read once per car connection).
- * Returns null vin when the car doesn't support Service 09 PID 02, or in sim mode.
- * Never throws — VIN detection is best-effort.
+ * שולפת את מספר השלדה מהמתאם, פעם אחת לכל חיבור.
+ * מחזירה null אם הרכב לא תומך בכך או במצב הדגמה.
+ * לעולם לא זורקת שגיאה: זיהוי השלדה הוא בונוס ולא תנאי.
  */
 export async function getVehicleVin(): Promise<VinResult> {
   if (demoMode) return demoVin();
@@ -125,8 +120,8 @@ export async function getVehicleVin(): Promise<VinResult> {
 }
 
 /**
- * Quick reachability check — returns true if the adapter responds within
- * FETCH_TIMEOUT_MS, false otherwise. Never throws.
+ * בדיקה מהירה אם המתאם נגיש. מחזירה אמת אם הוא ענה בזמן הקצוב.
+ * לעולם לא זורקת שגיאה.
  */
 export async function isScannerReachable(): Promise<boolean> {
   if (demoMode) return true;

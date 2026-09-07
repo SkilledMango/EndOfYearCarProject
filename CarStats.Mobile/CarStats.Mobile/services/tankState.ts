@@ -1,15 +1,11 @@
 /**
- * Tank level and capacity, shared between screens.
+ * מפלס הדלק וגודל המיכל, משותפים בין המסכים.
  *
- * The fuel reading lives on the home screen — that is where the adapter is
- * polled — but the fuel tab and the trip planner both need it, and neither can
- * poll the car itself. Rather than lifting scanner state into a context that
- * only three screens use, the home screen writes what it knows here and the
- * others read it.
+ * רק מסך הבית דוגם את המתאם, אבל מסך הדלק ומתכנן הנסיעה צריכים את הנתון
+ * ואינם יכולים לדגום בעצמם. לכן מסך הבית כותב לכאן והאחרים קוראים.
  *
- * Capacity is stored separately from the level because they come from different
- * places: the level is measured (or estimated), the capacity is typed once by
- * the driver on the fuel screen. No API can tell us a car's tank size.
+ * הקיבולת נשמרת בנפרד מהמפלס כי מקורותיהם שונים: המפלס נמדד או מוערך,
+ * והקיבולת מוקלדת פעם אחת ע"י הנהג — אין ממשק שיודע לתת גודל מיכל.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -20,11 +16,10 @@ const tankKey  = (vehicleId?: number) => `tank_size_${vehicleId ?? 'default'}`;
 const typeKey  = (vehicleId?: number) => `fuel_type_${vehicleId}`;
 
 /**
- * Which fuel this car takes. Defaults to 95 — the regulated type, and much the
- * most common here.
+ * סוג הדלק של הרכב. ברירת המחדל היא 95, הסוג המפוקח והנפוץ ביותר.
  *
- * Shared rather than owned by the fuel screen because the trip planner prices
- * a journey too: a diesel car costed at the petrol price is wrong by about 40%.
+ * משותף ולא שייך למסך הדלק, כי גם מתכנן הנסיעה מתמחר נסיעה:
+ * רכב דיזל שמתומחר במחיר בנזין שגוי בכ-40 אחוז.
  */
 export async function loadFuelType(vehicleId?: number): Promise<FuelType> {
   try {
@@ -38,23 +33,23 @@ export async function loadFuelType(vehicleId?: number): Promise<FuelType> {
 export async function saveFuelType(fuelType: FuelType, vehicleId?: number): Promise<void> {
   try {
     await AsyncStorage.setItem(typeKey(vehicleId), fuelType);
-  } catch { /* the choice just isn't remembered next time */ }
+  } catch { /* הבחירה פשוט לא תיזכר בפעם הבאה */ }
 }
 
 export interface TankLevel {
-  /** 0–100. */
+  /** אחוז, בין 0 ל-100. */
   pct: number;
   /**
-   * True when the car reported it over OBD, false when it is our own estimate.
-   * Features that must not act on a guess — the trip planner's "will I make
-   * it" — check this rather than trusting the number alone.
+   * אמת כשהרכב עצמו דיווח את המפלס, שקר כשזו ההערכה שלנו.
+   * תכונות שאסור להן להסתמך על ניחוש, כמו "האם אגיע", בודקות את הדגל הזה
+   * ולא מסתפקות במספר.
    */
   isReal: boolean;
-  /** ISO timestamp of the reading, so a stale one can be recognised. */
+  /** חותמת הזמן של הקריאה, כדי לזהות קריאה ישנה מדי. */
   at: string;
 }
 
-/** How long a stored reading is worth showing. Past this the car has likely moved on. */
+/** כמה זמן קריאה שמורה עדיין שווה הצגה. אחרי זה הרכב כנראה כבר נסע. */
 const MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 export async function saveTankLevel(
@@ -70,10 +65,10 @@ export async function saveTankLevel(
       at: new Date().toISOString(),
     };
     await AsyncStorage.setItem(levelKey(vehicleId), JSON.stringify(value));
-  } catch { /* the other screens just fall back to showing nothing */ }
+  } catch { /* המסכים האחרים פשוט לא יציגו כלום */ }
 }
 
-/** Returns null when nothing is stored or the reading is too old to trust. */
+/** מחזירה null כשאין נתון שמור או שהוא ישן מכדי לסמוך עליו. */
 export async function loadTankLevel(vehicleId?: number): Promise<TankLevel | null> {
   try {
     const raw = await AsyncStorage.getItem(levelKey(vehicleId));
@@ -82,7 +77,7 @@ export async function loadTankLevel(vehicleId?: number): Promise<TankLevel | nul
     if (!Number.isFinite(value?.pct)) return null;
 
     const age = Date.now() - new Date(value.at).getTime();
-    // NaN age means an unparseable timestamp — treat that as unusable too.
+    // גיל שאינו מספר מעיד על חותמת זמן פגומה, וגם היא נחשבת בלתי שמישה
     if (!Number.isFinite(age) || age > MAX_AGE_MS) return null;
 
     return value;

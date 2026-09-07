@@ -1,4 +1,4 @@
-// Fallback for using MaterialIcons on Android and web.
+// גיבוי: אייקוני Material באנדרואיד ובווב
 
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { SymbolWeight, SymbolViewProps } from 'expo-symbols';
@@ -9,9 +9,8 @@ type IconMapping = Record<SymbolViewProps['name'], ComponentProps<typeof Materia
 type IconSymbolName = keyof typeof MAPPING;
 
 /**
- * Add your SF Symbols to Material Icons mappings here.
- * - see Material Icons in the [Icons Directory](https://icons.expo.fyi).
- * - see SF Symbols in the [SF Symbols](https://developer.apple.com/sf-symbols/) app.
+ * מיפוי בין שמות האייקונים של iOS לשמות המקבילים ב-Material.
+ * כל אייקון חדש שמשתמשים בו צריך להתווסף כאן.
  */
 const MAPPING = {
   'house.fill': 'home',
@@ -20,13 +19,13 @@ const MAPPING = {
   'paperplane.fill': 'send',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
-  'location.fill': 'place',        // was missing — Navigate tab icon broke on Android
-  'person.fill': 'person',         // Profile tab
-  'plus': 'add',                   // Fuel screen FAB
-  'arrow.down': 'arrow-downward',  // Fuel trend (improving)
-  'arrow.up': 'arrow-upward',      // Fuel trend (worsening)
-  'car.fill': 'directions-car',    // Fuel screen vehicle switcher
-  'qrcode.viewfinder': 'qr-code-scanner',            // Scan overlay center icon
+  'location.fill': 'place',        // היה חסר, ולכן האייקון של טאב הניווט נשבר באנדרואיד
+  'person.fill': 'person',         // טאב הפרופיל
+  'plus': 'add',                   // כפתור ההוספה במסך הדלק
+  'arrow.down': 'arrow-downward',  // מגמת דלק משתפרת
+  'arrow.up': 'arrow-upward',      // מגמת דלק מתדרדרת
+  'car.fill': 'directions-car',    // מחליף הרכבים במסך הדלק
+  'qrcode.viewfinder': 'qr-code-scanner',            // האייקון במרכז מסך הסריקה
   'wrench.fill': 'build',                            // Mechanic finder map pins
   'star.fill': 'star',                               // Mechanic rating chip
   'phone.fill': 'call',                              // Mechanic call button

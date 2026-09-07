@@ -1,20 +1,17 @@
 /**
- * AddVehicleModal.tsx
+ * הוספת רכב למוסך של המשתמש, בתהליך רב-שלבי.
  *
- * Multi-step flow to add a vehicle to the user's garage.
+ * מסלול א' — לפי מספר רישוי (המומלץ):
+ *   1. הקלדת מספר רישוי ישראלי
+ *   2. שנה, יצרן ודגם מתמלאים אוטומטית מהמרשם הממשלתי
+ *   3. בחירת גימור מנוע, שממלאת את צריכת הדלק
+ *   4. אישור ושמירה
  *
- * Flow A — Plate lookup (recommended):
- *   1. Enter Israeli license plate
- *   2. Auto-fills year / make / model from the government registry
- *   3. Pick engine trim (EPA API) → auto-fills fuel consumption
- *   4. Confirm → save
+ * מסלול ב' — הזנה ידנית:
+ *   שנה → יצרן → דגם → גימור, וכל שלב נשלף ממאגר EPA.
  *
- * Flow B — Manual entry:
- *   1. Enter year
- *   2. Pick make  (EPA API)
- *   3. Pick model (EPA API)
- *   4. Pick trim  (EPA API) → auto-fills fuel consumption
- *   5. Confirm → save
+ * צריכת הדלק היא המספר שכל חישובי הדלק והנסיעה נשענים עליו, ולכן התהליך
+ * עובד קשה כדי למצוא אותה בלי לשאול את הנהג.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -34,11 +31,11 @@ import { CreateVehicleDto, Vehicle, createVehicle } from '@/services/api';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { Plate } from '@/constants/theme';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── טיפוסים ─────────────────────────────────────────────────────────────────
 
 type Step = 'plate' | 'year' | 'make' | 'model' | 'trim' | 'details';
 
-/** Pre-filled data from OBD VIN detection — skips plate entry */
+/** נתונים שהגיעו מזיהוי מספר שלדה, ומדלגים על שלב מספר הרישוי */
 export interface VehiclePrefill {
   make:  string;
   model: string;
@@ -48,24 +45,24 @@ export interface VehiclePrefill {
 interface Props {
   visible:  boolean;
   userId:   number;
-  prefill?: VehiclePrefill;   // when set, skips straight to fuel lookup + details
+  prefill?: VehiclePrefill;   // כשקיים, קופצים ישר לאיתור הצריכה ולפרטים
   onAdded:  (vehicle: Vehicle) => void;
   onClose:  () => void;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── הרכיב ───────────────────────────────────────────────────────────────────
 
 export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: Props) {
   const { colors: c } = useTheme();
   const s = useStyles();
-  // ── Navigation ──
+  // ── ניווט בין השלבים ──
   const [step, setStep] = useState<Step>('plate');
 
-  // ── Plate-lookup state ──
+  // ── מצב מסלול מספר הרישוי ──
   const [plateText, setPlateText]   = useState('');
   const [lookupError, setLookupError] = useState<string | null>(null);
 
-  // ── Vehicle identity (filled by lookup or manual steps) ──
+  // ── זהות הרכב, מתמלאת מהאיתור או מההזנה הידנית ──
   const [yearText, setYearText]           = useState('');
   const [makes, setMakes]                 = useState<FEMenuItem[]>([]);
   const [selectedMake, setSelectedMake]   = useState('');
@@ -73,41 +70,40 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
   const [selectedModel, setSelectedModel] = useState('');
   const [trims, setTrims]                 = useState<FEMenuItem[]>([]);
 
-  // ── Result state ──
+  // ── התוצאה ──
   const [fuelL100km, setFuelL100km]         = useState('');
   const [fuelSource, setFuelSource]         = useState<'epa' | 'nrcan' | 'ai' | 'suggested' | 'manual' | null>(null);
-  const [fuelType, setFuelType]             = useState('');  // Hebrew fuel type from Israeli registry
+  const [fuelType, setFuelType]             = useState('');  // סוג הדלק בעברית, מתוך המרשם
   const [plate, setPlate]                   = useState('');
 
-  // ── Search filter (for make / model / trim lists) ──
+  // ── שדה החיפוש ברשימות היצרן, הדגם והגימור ──
   const [search, setSearch] = useState('');
 
-  // ── UI state ──
+  // ── מצב הממשק ──
   const [loading, setLoading]   = useState(false);
   const [saving, setSaving]     = useState(false);
   const [error, setError]       = useState<string | null>(null);
 
   // ─────────────────────────────────────────────────────────────────────────
-  // SHARED: Fuel-lookup chain (EPA → NRCan → Gemini AI → smart default)
-  // Called by both the plate lookup flow and the VIN prefill flow.
+  // שרשרת איתור צריכת הדלק: EPA ← NRCan ← Gemini ← הערכה לפי סוג דלק.
+  // משותפת למסלול מספר הרישוי ולמסלול זיהוי השלדה.
   // ─────────────────────────────────────────────────────────────────────────
   /**
-   * Fallback stages shared by the plate flow and the trim flow:
-   *   NRCan (Canadian dataset) → Gemini AI → smart default by fuel type.
-   * Always lands on the details step.
+   * שלבי הגיבוי המשותפים: המאגר הקנדי, ואז Gemini, ואז הערכה לפי סוג הדלק.
+   * תמיד מסתיים במסך הפרטים.
    */
   const applyFallbackFuel = async (
     make: string, model: string, year: number, hFuelType: string,
   ) => {
     try {
-      // Stage 3: NRCan (European petrol + all Asian/US)
+      // שלב 3: המאגר הקנדי
       const nrcanL100km = await getNRCanL100km(make, model, year);
       if (nrcanL100km) {
         console.log(`[fuel] Stage 3 NRCan: ${nrcanL100km} L/100km`);
         setFuelL100km(String(nrcanL100km));
         setFuelSource('nrcan');
       } else {
-        // Stage 3.5: Gemini AI (global knowledge — covers any model)
+        // שלב 3.5: שאלה ל-Gemini
         console.log('[fuel] Stage 3 NRCan: no match — trying Gemini');
         const aiL100km = await getGeminiL100km(make, model, year, hFuelType);
         if (aiL100km) {
@@ -115,25 +111,24 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
           setFuelL100km(String(aiL100km));
           setFuelSource('ai');
         } else {
-          // Stage 4: Smart default from fuel type
+          // שלב 4: הערכה לפי סוג הדלק
           const suggested = suggestL100kmByFuelType(hFuelType);
           console.log(`[fuel] Stage 3.5 Gemini: no result — fallback suggested=${suggested}`);
           if (suggested !== null) {
             setFuelL100km(String(suggested));
             setFuelSource('suggested');
           } else {
-            setFuelSource('manual');  // electric — L/100km not applicable
+            setFuelSource('manual');  // חשמלי: ליטר ל-100 ק"מ לא רלוונטי
           }
         }
       }
     } catch {
-      // Every lookup stage failed. The driver can still type the figure in —
-      // far better than leaving them on a screen that never stops loading.
+      // כל השלבים נכשלו. הנהג עדיין יכול להקליד את המספר בעצמו,
+      // וזה עדיף בהרבה על מסך שנטען לנצח.
       setFuelSource('manual');
     } finally {
-      // In a finally so a throw from any stage above cannot strand the modal
-      // with loading stuck true, which leaves every step showing a spinner
-      // instead of its content.
+      // ב-finally כדי ששגיאה באחד השלבים לא תשאיר את החלון תקוע במצב טעינה,
+      // מצב שבו כל שלב מציג גלגל טעינה במקום תוכן.
       setLoading(false);
       setStep('details');
     }
@@ -144,7 +139,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
   ) => {
     console.log(`[fuel] looking up ${year} ${make} ${model} (fuelType="${hFuelType}")`);
 
-    // Stage 2: EPA (US-market cars)
+    // שלב 2: מאגר EPA האמריקאי
     try {
       const trimItems = await getTrims(year, make, model);
       if (trimItems.length > 0) {
@@ -154,19 +149,19 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
         setStep('trim');
         return;
       }
-    } catch { /* not in EPA — continue */ }
+    } catch { /* לא נמצא ב-EPA, ממשיכים הלאה */ }
     console.log('[fuel] Stage 2 EPA: no match');
 
     await applyFallbackFuel(make, model, year, hFuelType);
   };
 
-  // ── Reset + optional prefill whenever the modal opens ────────────────────
+  // ── איפוס, ומילוי מוקדם אם יש, בכל פתיחה של החלון ────────────────────────
   useEffect(() => {
     if (!visible) return;
     reset();
 
     if (prefill) {
-      // VIN-detected car: skip plate entry, go straight to fuel lookup
+      // רכב שזוהה לפי שלדה: מדלגים על מספר הרישוי
       setYearText(String(prefill.year));
       setSelectedMake(prefill.make);
       setSelectedModel(prefill.model);
@@ -176,11 +171,10 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
     }
   }, [visible]); // eslint-disable-line
 
-  // ── Reset ─────────────────────────────────────────────────────────────────
+  // ── איפוס ────────────────────────────────────────────────────────────────
   const reset = () => {
-    // Clearing these first matters: going back to the start is the driver's
-    // last way out of a screen that is stuck loading, and leaving either flag
-    // set would carry the stuck spinner into the fresh flow.
+    // חשוב לנקות קודם: חזרה להתחלה היא המוצא האחרון ממסך תקוע,
+    // ודגל שנשאר דלוק היה גורר את התקיעה גם לתהליך החדש.
     setLoading(false);
     setSaving(false);
     setStep('plate');
@@ -200,24 +194,24 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
     setError(null);
   };
 
-  // Clear search whenever the step changes so the new list isn't pre-filtered
+  // ניקוי החיפוש בכל מעבר שלב, כדי שהרשימה החדשה לא תגיע מסוננת
   useEffect(() => { setSearch(''); }, [step]);
 
   const handleClose = () => { reset(); onClose(); };
 
-  // ── Back navigation ───────────────────────────────────────────────────────
+  // ── ניווט אחורה ──────────────────────────────────────────────────────────
   const handleBack = () => {
     setError(null);
     switch (step) {
-      case 'year':    reset(); break;                            // back to plate screen
+      case 'year':    reset(); break;                            // חזרה למסך מספר הרישוי
       case 'make':    setStep('year');   setMakes([]);   break;
       case 'model':   setStep('make');   setModels([]);  setSelectedMake(''); break;
-      // From trim: if models is empty we came via plate lookup — go back to plate
+      // מהגימור: רשימת דגמים ריקה מעידה שהגענו ממסלול מספר הרישוי
       case 'trim':
         if (models.length === 0) { const pt = plateText; reset(); setPlateText(pt); }
         else { setStep('model'); setTrims([]); setSelectedModel(''); }
         break;
-      // From details: if trims is empty we skipped trim (plate flow w/ no EPA data) — go back to plate
+      // מהפרטים: רשימת גימורים ריקה מעידה שדילגנו על שלב הגימור
       case 'details':
         if (trims.length === 0) { const pt = plateText; reset(); setPlateText(pt); }
         else { setStep('trim'); setFuelL100km(''); setFuelSource(null); }
@@ -226,7 +220,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  // FLOW A: License plate lookup
+  // מסלול א': איתור לפי מספר רישוי
   // ─────────────────────────────────────────────────────────────────────────
 
   const handlePlateLookup = async () => {
@@ -237,7 +231,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
     setLoading(true);
     setLookupError(null);
 
-    // ── Stage 1: Israeli government plate lookup ──────────────────────────
+    // ── שלב 1: איתור במרשם הרכב הישראלי ──────────────────────────────────
     let result;
     try {
       result = await lookupByPlate(plateText);
@@ -253,19 +247,19 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
       return;
     }
 
-    // Pre-fill identity from registry
+    // מילוי זהות הרכב מהמרשם
     setYearText(String(result.year));
     setSelectedMake(result.make);
     setSelectedModel(result.model);
     setPlate(plateText.trim());
-    setFuelType(result.fuelType);   // keep Hebrew fuel type for smart defaults
+    setFuelType(result.fuelType);   // שומרים את סוג הדלק בעברית לצורך הערכת ברירת המחדל
 
-    // Run shared fuel-lookup chain (stages 2 → 3 → 3.5 → 4)
+    // הפעלת שרשרת איתור הצריכה המשותפת
     await runFuelLookupChain(result.make, result.model, result.year, result.fuelType);
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  // FLOW B: Manual — Step 1 Year
+  // מסלול ב': הזנה ידנית — שלב 1, שנה
   // ─────────────────────────────────────────────────────────────────────────
 
   const handleFindMakes = async () => {
@@ -288,7 +282,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
     }
   };
 
-  // ── Step 2: make ──
+  // ── שלב 2: יצרן ──
   const handleSelectMake = async (make: string) => {
     setSelectedMake(make);
     setLoading(true);
@@ -304,7 +298,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
     }
   };
 
-  // ── Step 3: model ──
+  // ── שלב 3: דגם ──
   const handleSelectModel = async (model: string) => {
     setSelectedModel(model);
     setLoading(true);
@@ -321,16 +315,14 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  // SHARED: Select trim → fetch EPA fuel economy
+  // משותף: בחירת גימור ושליפת נתוני הצריכה מ-EPA
   // ─────────────────────────────────────────────────────────────────────────
 
   const handleSelectTrim = async (trimId: string) => {
     setLoading(true);
     setError(null);
-    // Wrapped so every exit clears loading. The success path below returns
-    // early, and without this it left the modal loading forever — the details
-    // step and every step behind it then render a spinner instead of their
-    // content, so Back appears to do nothing.
+    // עטוף כדי שכל יציאה תכבה את מצב הטעינה. מסלול ההצלחה יוצא מוקדם,
+    // ובלי זה החלון היה נשאר בטעינה לנצח וכפתור החזרה היה נראה מקולקל.
     try {
       try {
         const details = await getVehicleDetails(trimId);
@@ -340,9 +332,9 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
           setStep('details');
           return;
         }
-      } catch { /* fall through */ }
+      } catch { /* ממשיכים לשלב הבא */ }
 
-      // EPA trim had no fuel data — run the shared NRCan → Gemini → default chain
+      // לגימור אין נתון צריכה ב-EPA, ולכן מפעילים את שרשרת הגיבוי
       const year = parseInt(yearText, 10);
       if (selectedMake && selectedModel && year) {
         await applyFallbackFuel(selectedMake, selectedModel, year, fuelType);
@@ -357,7 +349,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  // SHARED: Submit
+  // משותף: שמירת הרכב
   // ─────────────────────────────────────────────────────────────────────────
 
   const handleSubmit = async () => {
@@ -383,18 +375,18 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
     }
   };
 
-  // ── Breadcrumb ────────────────────────────────────────────────────────────
+  // ── שורת ההתמצאות בראש החלון ─────────────────────────────────────────────
   const crumb = [yearText, selectedMake, selectedModel].filter(Boolean).join(' · ');
 
   // ─────────────────────────────────────────────────────────────────────────
-  // RENDER
+  // התצוגה
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
       <View style={s.screen}>
 
-        {/* ── Header ── */}
+        {/* ── כותרת ── */}
         <View style={s.header}>
           {step !== 'plate' ? (
             <Pressable onPress={handleBack} style={s.backBtn}>
@@ -416,11 +408,11 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
 
           {!!error && <Text style={s.errorBox}>{error}</Text>}
 
-          {/* ──────────── STEP: Plate lookup ──────────── */}
+          {/* ──────────── שלב: מספר רישוי ──────────── */}
           {step === 'plate' && (
             <View style={s.section}>
 
-              {/* Hero */}
+              {/* הכותרת הגדולה */}
               <View style={s.plateHero}>
                 <View style={s.plateHeroCircle}>
                   <Text style={s.plateHeroIcon}>🚗</Text>
@@ -431,7 +423,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                 </Text>
               </View>
 
-              {/* Israeli license-plate input: blue IL tab + yellow field */}
+              {/* שדה לוחית רישוי ישראלית: לשונית כחולה ושדה צהוב */}
               <View style={s.plateWrap}>
                 <View style={s.plateTab}>
                   <Text style={s.plateTabStar}>✡</Text>
@@ -465,14 +457,14 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                   : <Text style={s.primaryBtnText}>🔍  Look Up My Car</Text>}
               </Pressable>
 
-              {/* Fallback: manual entry */}
+              {/* מוצא חלופי: הזנה ידנית */}
               <Pressable style={s.secondaryBtn} onPress={() => setStep('year')}>
                 <Text style={s.secondaryBtnText}>Enter manually instead</Text>
               </Pressable>
             </View>
           )}
 
-          {/* ──────────── STEP: Year (manual flow) ──────────── */}
+          {/* ──────────── שלב: שנה ──────────── */}
           {step === 'year' && (
             <View style={s.section}>
               <Text style={s.sectionLabel}>WHAT YEAR IS YOUR CAR?</Text>
@@ -500,7 +492,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
             </View>
           )}
 
-          {/* ──────────── STEP: Make ──────────── */}
+          {/* ──────────── שלב: יצרן ──────────── */}
           {step === 'make' && (
             <View style={s.section}>
               <Text style={s.sectionLabel}>SELECT MAKE</Text>
@@ -528,7 +520,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
             </View>
           )}
 
-          {/* ──────────── STEP: Model ──────────── */}
+          {/* ──────────── שלב: דגם ──────────── */}
           {step === 'model' && (
             <View style={s.section}>
               <Text style={s.sectionLabel}>SELECT MODEL</Text>
@@ -556,7 +548,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
             </View>
           )}
 
-          {/* ──────────── STEP: Trim (shared by both flows) ──────────── */}
+          {/* ──────────── שלב: גימור, משותף לשני המסלולים ──────────── */}
           {step === 'trim' && (
             <View style={s.section}>
               <Text style={s.sectionLabel}>SELECT ENGINE / TRIM</Text>
@@ -585,12 +577,12 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
             </View>
           )}
 
-          {/* ──────────── STEP: Confirm details (shared) ──────────── */}
+          {/* ──────────── שלב: אישור הפרטים ──────────── */}
           {step === 'details' && (
             <View style={s.section}>
               <Text style={s.sectionLabel}>CONFIRM DETAILS</Text>
 
-              {/* Detected vehicle summary */}
+              {/* סיכום הרכב שזוהה */}
               {!!(yearText && selectedMake && selectedModel) && (
                 <View style={s.vehicleSummaryCard}>
                   <View style={{ flex: 1 }}>
@@ -605,7 +597,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                 </View>
               )}
 
-              {/* Fuel consumption */}
+              {/* צריכת הדלק */}
               <View style={[s.infoCard,
                 (fuelSource === 'epa' || fuelSource === 'nrcan' || fuelSource === 'ai') && s.infoCardSuccess,
                 fuelSource === 'suggested' && s.infoCardWarning,
@@ -661,7 +653,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                 </View>
               </View>
 
-              {/* License plate */}
+              {/* מספר הרישוי */}
               <Text style={s.fieldLabel}>LICENSE PLATE</Text>
               <TextInput
                 style={s.input}
@@ -690,7 +682,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
   );
 }
 
-// ─── Styles (Soft Tech design system, theme-aware) ────────────────────────────
+// ─── סגנונות, לפי הערכה הפעילה ───────────────────────────────────────────────
 
 const useStyles = createThemedStyles((c) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: c.Dashboard.bg },
@@ -737,7 +729,7 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   sectionLabel: { fontSize: 12, color: c.Dashboard.textSecondary, fontWeight: '700', letterSpacing: 1.2, marginBottom: 2 },
   sectionHint:  { fontSize: 13, color: c.Dashboard.textSecondary, lineHeight: 19, marginTop: -8 },
 
-  // Plate-step hero
+  // הכותרת בשלב מספר הרישוי
   plateHero:       { alignItems: 'center', paddingTop: 16, gap: 4 },
   plateHeroCircle: {
     width: 88,
@@ -764,7 +756,7 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
     marginBottom: 8,
   },
 
-  // Israeli license-plate input
+  // שדה לוחית הרישוי
   plateWrap: {
     flexDirection: 'row',
     borderWidth: 2.5,

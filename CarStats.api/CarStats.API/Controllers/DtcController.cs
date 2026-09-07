@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using CarStats.API.Data;
@@ -6,29 +6,28 @@ using CarStats.API.Models;
 
 namespace CarStats.API.Controllers
 {
+    // מילון קודי התקלה: קריאה למשתמש מחובר, עריכה למנהלים בלבד
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize] // dictionary reads need a signed-in user; edits are admin-only below
+    [Authorize]
     public class DtcController : ControllerBase
     {
         private readonly AppDbContext _context;
 
-        // This injects our database connection into the controller
+        // הזרקת החיבור לבסיס הנתונים
         public DtcController(AppDbContext context)
         {
             _context = context;
         }
 
-        // GET: api/dtc
-        // This will be used by both the Admin Panel and the Mobile App to load the dictionary
+        // GET: api/dtc — מחזיר את כל המילון. משמש גם את האפליקציה וגם את פאנל הניהול
         [HttpGet]
         public async Task<ActionResult<IEnumerable<DiagnosticCode>>> GetDiagnosticCodes()
         {
             return await _context.DiagnosticCodes.ToListAsync();
         }
 
-        // POST: api/dtc
-        // This will be used by the Super Admin Panel to add new codes to the database
+        // POST: api/dtc — הוספת קוד חדש למילון מפאנל הניהול
         [HttpPost]
         [Authorize(Policy = "AdminOnly")]
         public async Task<ActionResult<DiagnosticCode>> PostDiagnosticCode(DiagnosticCode diagnosticCode)
@@ -36,10 +35,10 @@ namespace CarStats.API.Controllers
             _context.DiagnosticCodes.Add(diagnosticCode);
             await _context.SaveChangesAsync();
 
-            // Returns a 201 Created success status
             return CreatedAtAction(nameof(GetDiagnosticCodes), new { id = diagnosticCode.Id }, diagnosticCode);
         }
-        // DELETE: Remove a diagnostic code
+
+        // DELETE: api/dtc/{id} — מחיקת קוד מהמילון
         [HttpDelete("{id}")]
         [Authorize(Policy = "AdminOnly")]
         public async Task<IActionResult> DeleteDtc(int id)

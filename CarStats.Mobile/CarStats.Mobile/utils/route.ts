@@ -1,19 +1,15 @@
 /**
- * Google Directions status handling for the trip planner.
+ * טיפול בסטטוסים של Google Directions עבור מתכנן הנסיעה.
  *
- * Lives here rather than in the screen so it can be tested without pulling in
- * navigation, auth and native storage.
+ * יושב כאן ולא במסך, כדי שאפשר יהיה לבדוק אותו בלי ניווט, אימות ואחסון.
  */
 
 /**
- * Turns a Google Directions status into something a driver can act on.
+ * מתרגמת סטטוס של Google Directions להודעה שהנהג יכול לפעול לפיה.
  *
- * NOT_FOUND and ZERO_RESULTS are different failures and used to share a
- * message: NOT_FOUND means Google could not geocode the address, while
- * ZERO_RESULTS means both ends were understood but no drivable route joins
- * them. Blaming the address for the second one sends the user off rewriting a
- * destination that was never the problem — which is exactly what happens when
- * the phone reports a position on another continent.
+ * NOT_FOUND ו-ZERO_RESULTS הן תקלות שונות: הראשונה אומרת שהכתובת לא זוהתה,
+ * והשנייה שאין מסלול נסיע בין שתי נקודות שכן זוהו. הודעה משותפת הייתה
+ * שולחת את המשתמש לתקן כתובת תקינה לגמרי.
  */
 export function routeErrorMessage(status: string): string {
   switch (status) {

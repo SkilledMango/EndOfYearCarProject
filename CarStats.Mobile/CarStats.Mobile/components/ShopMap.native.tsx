@@ -1,7 +1,7 @@
 /**
- * ShopMap (iOS/Android) — the real map for the mechanic finder.
- * Circular wrench pins per the Stitch mechanic_finder export: filled primary
- * and outlined variants alternate. Frames itself around the pins + user.
+ * המפה האמיתית של מוצא המוסכים, לאנדרואיד ול-iOS.
+ * הסיכות עגולות ומתחלפות בין מלאות למתוארות, והמפה ממסגרת את עצמה
+ * סביב הסיכות והמשתמש.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -11,7 +11,7 @@ import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import type { ShopMapProps } from './ShopMap.types';
 
-// Tel Aviv — sensible default region before pins are known
+// תל אביב, אזור ברירת מחדל סביר עד שהסיכות ידועות
 const DEFAULT_REGION = {
   latitude: 32.08,
   longitude: 34.78,
@@ -23,10 +23,9 @@ export default function ShopMap({ shops, userPos }: ShopMapProps) {
   const { colors: c } = useTheme();
   const styles = useStyles();
   const mapRef = useRef<MapView>(null);
-  // On Android fitToCoordinates is a no-op until the map has laid itself out,
-  // and it fails silently — the map simply stayed on the Tel Aviv default while
-  // the list underneath showed results in Hadera. Waiting for onMapReady is
-  // what makes the fit actually take.
+  // באנדרואיד המסגור לא עובד עד שהמפה סיימה להיפרס, והוא נכשל בשקט:
+  // המפה נשארה על תל אביב בזמן שהרשימה מתחתיה הציגה מוסכים בחדרה.
+  // ההמתנה לאירוע המוכנות היא מה שגורם למסגור להיתפס.
   const [mapReady, setMapReady] = useState(false);
 
   // A pin drawn from child views is rasterised to a bitmap, and while this is
@@ -73,7 +72,7 @@ export default function ShopMap({ shops, userPos }: ShopMapProps) {
           anchor={{ x: 0.5, y: 0.5 }}
           tracksViewChanges={trackPins}
         >
-          {/* Design alternates filled / outlined circular wrench pins */}
+          {/* העיצוב מחליף בין סיכות מלאות למתוארות */}
           <View style={[styles.pin, i % 2 === 1 && styles.pinOutlined]}>
             <IconSymbol
               name="wrench.fill"
@@ -90,7 +89,7 @@ export default function ShopMap({ shops, userPos }: ShopMapProps) {
 const useStyles = createThemedStyles((c) => StyleSheet.create({
   map: { flex: 1 },
 
-  // 40px circles — filled primary / outlined white variants
+  // עיגולים בקוטר 40, בגרסה מלאה ובגרסה מתוארת
   pin: {
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: c.Dashboard.accentDeep,

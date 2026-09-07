@@ -1,15 +1,12 @@
 /**
- * Fault code detail.
+ * מסך פירוט התקלה.
  *
- * Reached by tapping a fault anywhere it appears — a fresh scan result or a
- * row in the history. Shows the plain-language explanation, what to do about
- * it, and the repair estimate, which is the whole point of the app: an OBD
- * code on its own tells a driver nothing.
+ * נפתח בלחיצה על תקלה בכל מקום שהיא מופיעה — תוצאת סריקה או שורה
+ * בהיסטוריה. מציג את ההסבר בשפה פשוטה, מה לעשות, והערכת המחיר.
+ * זו כל מטרת האפליקציה: קוד תקלה בפני עצמו לא אומר לנהג דבר.
  *
- * Takes only the code in the route. The dictionary is small, so it is fetched
- * and filtered here rather than passed through navigation params — that keeps
- * the screen deep-linkable and means history rows (whose payload omits the
- * action text) show the same detail as a fresh scan.
+ * המסך מקבל רק את הקוד בכתובת, ומושך את שאר המידע בעצמו. כך הוא נשאר
+ * ניתן לקישור ישיר, ושורה מההיסטוריה מציגה בדיוק אותו פירוט כמו סריקה טרייה.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -29,8 +26,8 @@ export default function FaultDetailScreen() {
 
   const [dtc, setDtc]         = useState<DiagnosticCode | null>(null);
   const [ai, setAi]           = useState<AiFaultExplanation | null>(null);
-  // Why the AI had nothing, so the screen can say something true rather than
-  // implying the code simply is not covered.
+  // למה ה-AI לא החזיר הסבר, כדי שהמסך יאמר משהו מדויק ולא ירמוז
+  // שהקוד פשוט לא מכוסה.
   const [aiFailure, setAiFailure] = useState<AiFailureReason | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed]   = useState(false);
@@ -46,8 +43,8 @@ export default function FaultDetailScreen() {
         if (match) {
           setDtc(match);
         } else {
-          // Not in the dictionary — manufacturer-specific codes run into the
-          // thousands, so ask the model rather than showing a bare code.
+          // לא נמצא במילון. קודים ייחודיים ליצרן מגיעים לאלפים, ולכן שואלים
+          // את המודל במקום להציג קוד עירום.
           const explained = await explainFaultWithAi(code ?? '');
           if (!cancelled) {
             if (explained.ok) setAi(explained.explanation);
@@ -71,8 +68,8 @@ export default function FaultDetailScreen() {
     );
   }
 
-  // Whichever source produced the explanation also sets the badge, so the
-  // header never contradicts the text underneath it.
+  // המקור שסיפק את ההסבר הוא גם זה שקובע את התג, כדי שהכותרת
+  // לא תסתור את הטקסט שמתחתיה.
   const meta = severityMeta(c, dtc?.severity ?? ai?.severity);
 
   return (

@@ -1,7 +1,7 @@
 /**
- * ShopMap (web fallback) — react-native-maps is native-only, so on web the
- * map area renders as a styled placeholder instead of crashing the bundler.
- * The real map lives in ShopMap.native.tsx (Metro picks it on iOS/Android).
+ * גרסת הווב של המפה. ספריית המפות היא native בלבד, ולכן בדפדפן מוצג
+ * מלבן מעוצב במקומה — אחרת בניית הווב נשברת.
+ * המפה האמיתית נמצאת ב-ShopMap.native.tsx.
  */
 
 import React from 'react';

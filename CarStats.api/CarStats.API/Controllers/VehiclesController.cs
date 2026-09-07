@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using CarStats.API.Data;
@@ -7,9 +7,10 @@ using CarStats.API.Services;
 
 namespace CarStats.API.Controllers
 {
+    // המוסך של המשתמש. כל פעולה בודקת מחדש שהרכב באמת שלו.
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize] // signed-in users only — and each action checks the garage is theirs
+    [Authorize]
     public class VehiclesController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -19,8 +20,7 @@ namespace CarStats.API.Controllers
             _context = context;
         }
 
-        // GET: api/vehicles/user/{userId}
-        // Returns all vehicles belonging to a specific user
+        // GET: api/vehicles/user/{userId} — כל הרכבים של משתמש מסוים
         [HttpGet("user/{userId}")]
         public async Task<ActionResult<IEnumerable<Vehicle>>> GetVehiclesForUser(int userId)
         {
@@ -34,8 +34,7 @@ namespace CarStats.API.Controllers
                 .ToListAsync();
         }
 
-        // POST: api/vehicles
-        // Add a new vehicle to a user's garage
+        // POST: api/vehicles — הוספת רכב למוסך
         [HttpPost]
         public async Task<ActionResult<Vehicle>> AddVehicle(Vehicle newVehicle)
         {
@@ -50,8 +49,7 @@ namespace CarStats.API.Controllers
             return CreatedAtAction(nameof(GetVehiclesForUser), new { userId = newVehicle.AppUserId }, newVehicle);
         }
 
-        // PUT: api/vehicles/{id}
-        // Update a vehicle's details (model year, plate, fuel average, etc.)
+        // PUT: api/vehicles/{id} — עדכון פרטי רכב: דגם, שנה, מספר רישוי וצריכה
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateVehicle(int id, Vehicle updatedVehicle)
         {
@@ -71,8 +69,7 @@ namespace CarStats.API.Controllers
             return NoContent();
         }
 
-        // DELETE: api/vehicles/{id}
-        // Remove a vehicle from a user's garage
+        // DELETE: api/vehicles/{id} — הסרת רכב מהמוסך
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteVehicle(int id)
         {
@@ -80,16 +77,10 @@ namespace CarStats.API.Controllers
             if (vehicle == null) return NotFound();
             if (!User.CanActFor(vehicle.AppUserId)) return Forbid();
 
-            // Release the fault history first.
-            //
-            // The relationship is configured ClientSetNull, which only rewrites
-            // events EF is already tracking — and none are loaded here. Without
-            // this the database receives a bare DELETE against rows that still
-            // reference the vehicle and rejects it on the foreign key, so any
-            // car that has ever logged a fault could not be removed at all.
-            //
-            // Nulling rather than deleting is deliberate: the events belong to
-            // the user's history and stay in it after the car is gone.
+            // קודם מנתקים את היסטוריית התקלות מהרכב.
+            // בלי זה בסיס הנתונים היה דוחה את המחיקה בגלל המפתח הזר,
+            // ורכב שדיווח אי פעם על תקלה לא היה ניתן למחיקה בכלל.
+            // מנתקים ולא מוחקים, כדי שההיסטוריה של הנהג תישאר גם אחרי מכירת הרכב.
             await _context.VehicleEvents
                 .Where(e => e.VehicleId == id)
                 .ExecuteUpdateAsync(s => s.SetProperty(e => e.VehicleId, (int?)null));

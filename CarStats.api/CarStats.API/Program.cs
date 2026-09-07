@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json.Serialization;
 using CarStats.API.Data;
 using CarStats.API.Services;
@@ -8,22 +8,23 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Register the database connection.
-// Uses the hosted SQL Server (Somee) in production, LocalDB in development.
+// ── בסיס הנתונים ──────────────────────────────────────────────────────────────
+// LocalDB בפיתוח, ה-SQL Server המתארח ב-Somee בייצור.
 var connectionString = builder.Environment.IsDevelopment()
     ? builder.Configuration.GetConnectionString("DefaultConnection")
     : builder.Configuration.GetConnectionString("ProductionConnection");
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(connectionString, sql =>
-        // Retry transient failures — e.g. a free shared-hosting SQL Server that is
-        // briefly unavailable while its app pool / database spins back up from idle.
+        // ניסיונות חוזרים על תקלות זמניות: בסיס נתונים באחסון חינמי משותף
+        // יכול להיות לא זמין לרגע בזמן שהוא מתעורר ממצב חוסר פעילות
         sql.EnableRetryOnFailure(
             maxRetryCount: 5,
             maxRetryDelay: TimeSpan.FromSeconds(10),
             errorNumbersToAdd: null)));
 
-// CORS — allow all origins in development, lock down in production
+// ── CORS ──────────────────────────────────────────────────────────────────────
+// בפיתוח מותר רק localhost, בייצור פתוח לאפליקציה ולפאנל הניהול
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp",
@@ -38,7 +39,6 @@ builder.Services.AddCors(options =>
             }
             else
             {
-                // Allow the mobile app and admin web from any origin in production
                 policy.AllowAnyOrigin()
                       .AllowAnyHeader()
                       .AllowAnyMethod();
@@ -46,14 +46,14 @@ builder.Services.AddCors(options =>
         });
 });
 
-// Email provider (Brevo HTTP API) for sending verification codes
+// ספק המיילים לשליחת קודי אימות
 builder.Services.AddHttpClient<IEmailService, BrevoEmailService>();
 
-// Plain HttpClient factory (used by the NavigationController Google proxy)
+// לקוח HTTP כללי, משמש את הפרוקסי ל-Google
 builder.Services.AddHttpClient();
 
-// ── JWT authentication ────────────────────────────────────────────────────────
-// login / verify-code issue a bearer token; every other endpoint requires it.
+// ── אימות JWT ─────────────────────────────────────────────────────────────────
+// login ו-verify-code מנפיקים טוקן; כל שאר הנקודות דורשות אותו.
 builder.Services.AddSingleton<ITokenService, TokenService>();
 
 builder.Services
@@ -75,13 +75,13 @@ builder.Services
 
 builder.Services.AddAuthorization(options =>
 {
-    // Secure by default: any endpoint without [AllowAnonymous] needs a valid token,
-    // including controllers added in the future.
+    // מאובטח כברירת מחדל: כל נקודת קצה דורשת טוקן אלא אם סומנה AllowAnonymous,
+    // כולל בקרים שיתווספו בעתיד
     options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .Build();
 
-    // Admin panel operations (user management, dictionary/shop edits, analytics)
+    // פעולות פאנל הניהול: משתמשים, מילון התקלות וסטטיסטיקות
     options.AddPolicy("AdminOnly", policy =>
         policy.RequireRole(nameof(CarStats.API.Models.UserRole.Admin),
                            nameof(CarStats.API.Models.UserRole.SuperAdmin)));
@@ -95,10 +95,9 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Run migrations and seed data on startup.
-// A free shared-hosting database can be briefly unavailable on a cold start,
-// so retry for a while instead of letting it crash the whole app
-// (which surfaces as "HTTP Error 500.30 - ASP.NET Core app failed to start").
+// ── עלייה: מיגרציות וטעינת המילון ─────────────────────────────────────────────
+// בסיס נתונים באחסון חינמי לרוב ישן בבקשה הראשונה, ולכן מנסים שוב ושוב
+// במקום לתת לשרת כולו ליפול בהפעלה.
 using (var scope = app.Services.CreateScope())
 {
     var db     = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -112,12 +111,10 @@ using (var scope = app.Services.CreateScope())
             db.Database.Migrate();
             await DbSeeder.SeedDiagnosticCodesAsync(db);
 
-            // ── Bootstrap admin ────────────────────────────────────────────
-            // The prod DB can't be reached from outside Somee, so promoting
-            // the project owner by hand isn't possible. Instead, config
-            // (gitignored appsettings.Production.json) may name one account
-            // that is guaranteed SuperAdmin after every startup — the
-            // standard "first admin" bootstrap pattern.
+            // ── מנהל ראשוני ────────────────────────────────────────────────
+            // אי אפשר להתחבר לבסיס הנתונים בייצור מבחוץ, ולכן אי אפשר לקדם
+            // משתמש למנהל ידנית. במקום זה, הקונפיגורציה יכולה לציין חשבון
+            // אחד שיהיה מנהל-על אחרי כל עלייה של השרת.
             var bootstrapEmail = app.Configuration["Bootstrap:AdminEmail"]?.ToLower().Trim();
             if (!string.IsNullOrWhiteSpace(bootstrapEmail))
             {
@@ -142,6 +139,7 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// Swagger רק בפיתוח
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -150,9 +148,9 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors("AllowReactApp");
 
-// NOTE: No forced HTTPS redirect. Somee terminates SSL at a shared front-end and
-// forwards HTTP internally, so UseHttpsRedirection() can cause redirect loops.
-// The public endpoint (https://<your-site>.somee.com) still serves over HTTPS.
+// אין הפניה כפויה ל-HTTPS: ב-Somee ה-SSL מסתיים בשרת חזית משותף
+// שמעביר פנימה HTTP רגיל, ולכן הפניה כפויה הייתה יוצרת לולאה.
+// הכתובת הציבורית עדיין מוגשת מעל HTTPS.
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
