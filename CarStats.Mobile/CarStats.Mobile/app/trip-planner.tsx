@@ -11,6 +11,7 @@ import {
   tripFuelOutlook,
 } from '@/utils/fuel';
 import { routeErrorMessage } from '@/utils/route';
+import { FALLBACK_ELECTRICITY_PER_KWH, consumptionUnit, energyUnit } from '@/utils/powertrain';
 import * as Location from 'expo-location';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -65,10 +66,13 @@ function calcFuelWithTraffic(
   durationSec: number,
   durationTrafficSec: number,
   avgL100: number,
+  isElectric: boolean,
 ) {
   const baseFuelL      = (distanceKm / 100) * avgL100; // בודק את כמות הדלק שהרכב צורך לפי המרחק והצריכה הממוצעת
   const trafficRatio   = durationSec > 0 ? durationTrafficSec / durationSec : 1; //מחשב ביחס כמה יותר זמן לקח בפקקים לעומת הנסיעה הרגילה
-  const trafficMult    = 1 + Math.max(0, (trafficRatio - 1) * 0.5); // כמה דלק נוסף יידרש בגלל הפקקים
+  // כמה דלק נוסף יידרש בגלל הפקקים. ברכב חשמלי אין קנס: מנוע חשמלי כמעט
+  // לא צורך בעמידה, ובלימה חוזרת מחזירה חלק מהאנרגיה לסוללה.
+  const trafficMult    = isElectric ? 1 : 1 + Math.max(0, (trafficRatio - 1) * 0.5);
   const estimatedFuelL = baseFuelL * trafficMult; //התוצאה הסופית — בסיס כפול המכפיל 
   return { baseFuelL, estimatedFuelL, extraFuelL: estimatedFuelL - baseFuelL, trafficRatio };
 }
@@ -116,9 +120,13 @@ export default function TripPlannerScreen() {
   const [fuelPrice, setFuelPrice] = useState<FuelPrice | null>(null);
   // מתמחר לפי הדלק שהרכב צורך — הפרש של כ-40 אחוז בין סולר לבנזין.
   const [fuelType, setFuelType]   = useState<FuelType>('95');
-  const pricePerLitre =
-    fuelPrice?.prices?.find(p => p.fuelType === fuelType)?.pricePerLitreILS ??
-    FALLBACK_FUEL_PRICES[fuelType];
+  const isElectric = vehicle?.isElectric ?? false;
+  const unit = energyUnit(isElectric);   // "L" או "kWh"
+  // ברכב חשמלי: תעריף החשמל הביתי במקום מחיר המשאבה
+  const pricePerLitre = isElectric
+    ? (fuelPrice?.electricityPerKwhILS ?? FALLBACK_ELECTRICITY_PER_KWH)
+    : (fuelPrice?.prices?.find(p => p.fuelType === fuelType)?.pricePerLitreILS ??
+       FALLBACK_FUEL_PRICES[fuelType]);
 
   useEffect(() => {
     if (!authUser) return;
@@ -127,6 +135,8 @@ export default function TripPlannerScreen() {
       setVehicle(v);
       if (v?.averageFuelConsumption && v.averageFuelConsumption > 0)
         setFuelInput(v.averageFuelConsumption.toFixed(1));
+      else if (v?.isElectric)
+        setFuelInput('16.0');   // ממוצע טיפוסי לרכב חשמלי, עד שיש נתון אמיתי
     }).catch(() => {});
   }, [authUser]);
 
@@ -141,9 +151,9 @@ export default function TripPlannerScreen() {
 
   useEffect(() => {
     loadTankLevel(vehicle?.id).then(setTankLevel);
-    loadTankSize(vehicle?.id).then(setTankL);
+    loadTankSize(vehicle?.id).then(saved => setTankL(saved ?? (vehicle?.tankCapacity || null)));
     loadFuelType(vehicle?.id).then(setFuelType);
-  }, [vehicle?.id]);
+  }, [vehicle?.id, vehicle?.tankCapacity]);
 
   // מותנה בקריאה אמיתית מהרכב: אמירה שתגיע צריכה להסתמך על
   // מדידה, לא על אומדן מנקודת ייחוס שהוקלדה לפני ימים.
@@ -170,7 +180,10 @@ export default function TripPlannerScreen() {
     clear();
     if (!destination.trim()) { setError('Please enter a destination.'); return; }
     const avgL100 = parseFloat(fuelInput);
-    if (isNaN(avgL100) || avgL100 <= 0) { setError('Enter a valid fuel consumption (e.g. 8.0)'); return; }
+    if (isNaN(avgL100) || avgL100 <= 0) {
+      setError(isElectric ? 'Enter a valid energy consumption (e.g. 16.0)' : 'Enter a valid fuel consumption (e.g. 8.0)');
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -215,7 +228,7 @@ export default function TripPlannerScreen() {
       const distanceKm      = (leg.distance.value as number) / 1000;
       const durationSec     = leg.duration.value as number;
       const durationTraffic = (leg.duration_in_traffic?.value ?? durationSec) as number;
-      const fuel            = calcFuelWithTraffic(distanceKm, durationSec, durationTraffic, avgL100);
+      const fuel            = calcFuelWithTraffic(distanceKm, durationSec, durationTraffic, avgL100, isElectric);
       const tm              = trafficMeta(c, fuel.trafficRatio);
 
       setResult({
@@ -299,7 +312,7 @@ export default function TripPlannerScreen() {
               keyboardType="decimal-pad"
               selectTextOnFocus
             />
-            <Text style={styles.fuelInputLabel}>L/100km</Text>
+            <Text style={styles.fuelInputLabel}>{consumptionUnit(isElectric)}</Text>
           </View>
         </View>
 
@@ -409,32 +422,34 @@ export default function TripPlannerScreen() {
 
             {/* הערכת הדלק */}
             <View style={[styles.card, styles.fuelCard]}>
-              <Text style={styles.cardLabel}>FUEL ESTIMATE</Text>
+              <Text style={styles.cardLabel}>{isElectric ? 'ENERGY ESTIMATE' : 'FUEL ESTIMATE'}</Text>
               <View style={styles.fuelMain}>
                 <Text style={styles.fuelValue}>{result.estimatedFuelL.toFixed(2)}</Text>
-                <Text style={styles.fuelUnit}>litres</Text>
+                <Text style={styles.fuelUnit}>{isElectric ? 'kWh' : 'litres'}</Text>
               </View>
               <Text style={styles.fuelCost}>≈ ₪{result.fuelCostILS.toFixed(2)}</Text>
               {/* מחיר הליטר מוצג במפורש: מספר עלות בלי המחיר שמאחוריו
                   לא מאפשר לנהג להשוות למה שהוא באמת משלם. */}
               <Text style={styles.fuelPriceNote}>
-                at ₪{pricePerLitre.toFixed(2)}/L for {FUEL_TYPE_LABELS[fuelType]}
+                {isElectric
+                  ? `at ₪${pricePerLitre.toFixed(2)}/kWh, the home electricity rate`
+                  : `at ₪${pricePerLitre.toFixed(2)}/L for ${FUEL_TYPE_LABELS[fuelType]}`}
               </Text>
               <View style={styles.fuelDivider} />
               <View style={styles.fuelBreakdown}>
                 <View style={styles.fuelRow}>
                   <Text style={styles.fuelRowLabel}>Base (no traffic)</Text>
-                  <Text style={styles.fuelRowValue}>{result.baseFuelL.toFixed(2)} L</Text>
+                  <Text style={styles.fuelRowValue}>{result.baseFuelL.toFixed(2)} {unit}</Text>
                 </View>
                 {result.extraFuelL > 0.05 && (
                   <View style={styles.fuelRow}>
                     <Text style={[styles.fuelRowLabel, { color: result.trafficColor }]}>Traffic penalty</Text>
-                    <Text style={[styles.fuelRowValue, { color: result.trafficColor }]}>+{result.extraFuelL.toFixed(2)} L</Text>
+                    <Text style={[styles.fuelRowValue, { color: result.trafficColor }]}>+{result.extraFuelL.toFixed(2)} {unit}</Text>
                   </View>
                 )}
                 <View style={styles.fuelRow}>
                   <Text style={styles.fuelRowLabel}>Your avg consumption</Text>
-                  <Text style={styles.fuelRowValue}>{fuelInput} L/100km</Text>
+                  <Text style={styles.fuelRowValue}>{fuelInput} {consumptionUnit(isElectric)}</Text>
                 </View>
               </View>
             </View>
@@ -447,24 +462,26 @@ export default function TripPlannerScreen() {
               <View style={[styles.outlookCard, !outlook.enough && styles.outlookCardShort]}>
                 {outlook.enough ? (
                   <>
-                    <Text style={styles.outlookTitle}>You have enough fuel</Text>
+                    <Text style={styles.outlookTitle}>
+                      {isElectric ? 'You have enough charge' : 'You have enough fuel'}
+                    </Text>
                     <Text style={styles.outlookBody}>
                       You should arrive with about{' '}
-                      <Text style={styles.outlookStrong}>{outlook.litresLeft.toFixed(1)}L</Text>{' '}
-                      left — roughly {outlook.pctLeft}% of a tank.
+                      <Text style={styles.outlookStrong}>{outlook.litresLeft.toFixed(1)} {unit}</Text>{' '}
+                      left — roughly {outlook.pctLeft}% of a {isElectric ? 'battery' : 'tank'}.
                     </Text>
                   </>
                 ) : (
                   <>
                     <Text style={[styles.outlookTitle, { color: c.Severity.red }]}>
-                      Not enough fuel for this trip
+                      {isElectric ? 'Not enough charge for this trip' : 'Not enough fuel for this trip'}
                     </Text>
                     <Text style={styles.outlookBody}>
                       You need about{' '}
-                      <Text style={styles.outlookStrong}>{outlook.shortfallL.toFixed(1)}L</Text>{' '}
+                      <Text style={styles.outlookStrong}>{outlook.shortfallL.toFixed(1)} {unit}</Text>{' '}
                       more — roughly{' '}
                       <Text style={styles.outlookStrong}>₪{outlook.topUpCost.toFixed(0)}</Text>{' '}
-                      at ₪{pricePerLitre.toFixed(2)}/L. Fill up before you go.
+                      at ₪{pricePerLitre.toFixed(2)}/{unit}. {isElectric ? 'Charge' : 'Fill up'} before you go.
                     </Text>
                   </>
                 )}
@@ -475,10 +492,10 @@ export default function TripPlannerScreen() {
 
         {!result && !loading && !error && (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>⛽</Text>
+            <Text style={styles.emptyIcon}>{isElectric ? '⚡' : '⛽'}</Text>
             <Text style={styles.emptyText}>Enter a destination above</Text>
             <Text style={styles.emptySubtext}>
-              We&apos;ll calculate fuel usage based on your vehicle and live traffic data.
+              We&apos;ll calculate {isElectric ? 'energy' : 'fuel'} usage based on your vehicle and live traffic data.
             </Text>
           </View>
         )}

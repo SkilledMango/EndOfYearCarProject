@@ -17,6 +17,7 @@ import { useAuth } from '@/context/AuthContext';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { UserRole, Vehicle, deleteVehicle } from '@/services/api';
 import { clearVehicleData } from '@/services/tankState';
+import { consumptionUnit } from '@/utils/powertrain';
 import { confirmDestructive, notify } from '@/utils/confirm';
 
 export default function ProfileScreen() {
@@ -161,7 +162,7 @@ export default function ProfileScreen() {
               <Text style={s.vehiclePlate}>{v.licensePlate}</Text>
             </View>
             <Text style={s.vehicleFuel}>
-              {v.averageFuelConsumption > 0 ? `${v.averageFuelConsumption} L/100km` : '—'}
+              {v.averageFuelConsumption > 0 ? `${v.averageFuelConsumption} ${consumptionUnit(v.isElectric)}` : '—'}
             </Text>
             <Pressable
               onPress={() => confirmDeleteVehicle(v)}
@@ -183,7 +184,7 @@ export default function ProfileScreen() {
         <Text style={s.settingsIcon}>⚙️</Text>
         <View style={{ flex: 1 }}>
           <Text style={s.settingsTitle}>Settings</Text>
-          <Text style={s.settingsSub}>Dark mode, notifications, child safety reminder</Text>
+          <Text style={s.settingsSub}>Dark mode, reminders, OBD scanner</Text>
         </View>
         <Text style={s.settingsChevron}>›</Text>
       </Pressable>

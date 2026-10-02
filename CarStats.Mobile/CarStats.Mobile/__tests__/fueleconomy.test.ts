@@ -5,7 +5,7 @@
  * wrong number here propagates silently into the range and refuel warnings.
  */
 
-import { mpgToL100km, suggestL100kmByFuelType } from '@/services/fueleconomy';
+import { FEVehicleDetails, epaElectricInfo, mpgToL100km, suggestL100kmByFuelType } from '@/services/fueleconomy';
 
 describe('mpgToL100km', () => {
   it('converts using the standard 235.214 constant', () => {
@@ -64,5 +64,31 @@ describe('suggestL100kmByFuelType', () => {
 
   it('defaults to petrol for an empty string', () => {
     expect(suggestL100kmByFuelType('')).toBe(8.5);
+  });
+});
+
+describe('epaElectricInfo', () => {
+  const base: FEVehicleDetails = {
+    id: 1, make: 'Tesla', model: 'Model 3', year: 2022, trany: 'Automatic',
+    fuelType: 'Regular', comb08: 30, city08: 28, hwy08: 34,
+  };
+
+  it('converts an EV\'s kWh per 100 miles into kWh per 100 km', () => {
+    // EPA rates a Model 3 at about 25 kWh/100mi ≈ 15.5 kWh/100km
+    const info = epaElectricInfo({ ...base, atvType: 'EV', fuelType: 'Electricity', comb08: 131, combE: 25 });
+    expect(info.isElectric).toBe(true);
+    expect(info.kwhPer100km).toBeCloseTo(15.5, 1);
+  });
+
+  it('recognises an EV by fuel type alone', () => {
+    expect(epaElectricInfo({ ...base, fuelType: 'Electricity' }).isElectric).toBe(true);
+  });
+
+  it('leaves the kWh figure empty when EPA has none, rather than inventing one', () => {
+    expect(epaElectricInfo({ ...base, atvType: 'EV' }).kwhPer100km).toBeNull();
+  });
+
+  it('reports a petrol car as not electric', () => {
+    expect(epaElectricInfo(base)).toEqual({ isElectric: false, kwhPer100km: null });
   });
 });

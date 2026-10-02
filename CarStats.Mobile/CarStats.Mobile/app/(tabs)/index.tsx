@@ -20,7 +20,10 @@ import {
   getUser,
   getUserEvents,
   reportDtc,
+  updateVehicle,
 } from '@/services/api';
+import { ensureAllVehicleSpecs } from '@/services/vehicleSpecs';
+import { consumptionUnit } from '@/utils/powertrain';
 import { useAuth } from '@/context/AuthContext';
 import {
   LiveData,
@@ -124,11 +127,19 @@ export default function HomeScreen() {
       setUser(userData);
       // שומרים על הרכב שנבחר רק אם הוא עדיין קיים ברשימה שחזרה — אחרת
       // רכב שנמחק מהפרופיל היה נשאר על המסך הזה עד להפעלה מחדש.
-      setSelectedVehicle(prev => {
-        const list = userData.vehicles ?? [];
-        return (prev ? list.find(v => v.id === prev.id) : null) ?? list[0] ?? null;
-      });
+      const pickSelected = (list: Vehicle[]) => setSelectedVehicle(prev =>
+        (prev ? list.find(v => v.id === prev.id) : null) ?? list[0] ?? null);
+      pickSelected(userData.vehicles ?? []);
       setRecentEvents(events.slice(0, 3));
+
+      // רכבים ישנים בלי גודל מיכל מקבלים אותו מה-AI — ברקע, כדי שהמסך
+      // לא יחכה לזה. רק אם משהו השתנה מעדכנים את התצוגה.
+      ensureAllVehicleSpecs(userData.vehicles ?? []).then(updated => {
+        const changed = updated.some((v, i) => v !== userData.vehicles[i]);
+        if (!changed) return;
+        setUser({ ...userData, vehicles: updated });
+        pickSelected(updated);
+      });
     } catch {
       // השרת לא זמין — מוצג מצב ריק
     } finally {
@@ -376,6 +387,7 @@ export default function HomeScreen() {
   const vehicles     = user?.vehicles ?? [];
   const vehiclePlate = selectedVehicle?.licensePlate ?? '—';
   const fuelAvg      = selectedVehicle?.averageFuelConsumption ?? null;
+  const isElectric   = selectedVehicle?.isElectric ?? false;
 
   // מצב הבריאות הכללי, נגזר מההתראות האחרונות
   const worstRecent: SeverityLevel | null = recentEvents.reduce<SeverityLevel | null>(
@@ -503,7 +515,7 @@ export default function HomeScreen() {
           <Text style={styles.statValue}>
             {fuelAvg != null && fuelAvg > 0 ? fuelAvg.toFixed(1) : '—'}
           </Text>
-          <Text style={styles.statLabel}>L / 100km avg</Text>
+          <Text style={styles.statLabel}>{consumptionUnit(isElectric)} avg</Text>
         </View>
         <View style={styles.statCard}>
           <Text style={[
@@ -520,8 +532,12 @@ export default function HomeScreen() {
       <Pressable style={styles.plannerCard} onPress={() => router.push('/trip-planner')}>
         <Text style={styles.plannerIcon}>🗺</Text>
         <View style={{ flex: 1 }}>
-          <Text style={styles.plannerTitle}>Trip Fuel Planner</Text>
-          <Text style={styles.plannerSub}>Estimate fuel & cost for a route with live traffic</Text>
+          <Text style={styles.plannerTitle}>{isElectric ? 'Trip Energy Planner' : 'Trip Fuel Planner'}</Text>
+          <Text style={styles.plannerSub}>
+            {isElectric
+              ? 'Estimate charge & cost for a route with live traffic'
+              : 'Estimate fuel & cost for a route with live traffic'}
+          </Text>
         </View>
         <Text style={styles.plannerChevron}>›</Text>
       </Pressable>
@@ -541,6 +557,7 @@ export default function HomeScreen() {
         <LiveGauges
           data={liveData}
           estimatedFuel={estimatedFuel}
+          isElectric={isElectric}
           onSetFuel={() => setFuelModalVisible(true)}
         />
       )}
@@ -622,17 +639,26 @@ export default function HomeScreen() {
         finishedMessage={scanError}
         liveData={liveData}
         estimatedFuelPct={estimatedFuel ?? fuelBaseline?.pct ?? null}
+        isElectric={isElectric}
         onClose={() => setScanOverlayVisible(false)}
       />
 
-      {/* ── חלון הגדרת מפלס הדלק ── */}
+      {/* ── חלון הגדרת מפלס הדלק או הסוללה ── */}
       <FuelSetModal
         visible={fuelModalVisible}
         currentEstimate={estimatedFuel ?? fuelBaseline?.pct ?? null}
+        isElectric={isElectric}
+        tankSize={fuelBaseline?.tankL ?? (selectedVehicle?.tankCapacity || null)}
         onSave={(pct, tankL) => {
           saveFuelBaseline({ pct, tankL, tripKm }, selectedVehicle?.id);
           // נשמר גם במפתח המשותף, כדי שהמסכים האחרים יקבלו את גודל המיכל
           saveTankSize(tankL, selectedVehicle?.id);
+          // ובשרת, כדי שהגודל המתוקן ילווה את הרכב גם למכשיר אחר
+          if (selectedVehicle && tankL !== selectedVehicle.tankCapacity) {
+            const updated = { ...selectedVehicle, tankCapacity: tankL };
+            setSelectedVehicle(updated);
+            updateVehicle(updated.id, updated).catch(() => { /* נשמר במכשיר בכל מקרה */ });
+          }
           setFuelModalVisible(false);
         }}
         onCancel={() => setFuelModalVisible(false)}

@@ -1,9 +1,9 @@
 /**
  * שרשרת איתור נתוני צריכת הדלק של רכב.
  *
- * הקובץ עובד מול שלושה מקורות, לפי הסדר: EPA האמריקאי, מאגר NRCan הקנדי,
- * ואם שניהם לא מכירים את הדגם — שאלה ל-Gemini. אם גם זה נכשל, יש הערכה
- * לפי סוג הדלק בלבד.
+ * הקובץ עובד מול שני מקורות, לפי הסדר: EPA האמריקאי ומאגר NRCan הקנדי.
+ * אם שניהם לא מכירים את הדגם, חלון הוספת הרכב שואל את ה-AI דרך השרת
+ * (getVehicleSpecs), ואם גם זה נכשל — יש הערכה לפי סוג הדלק בלבד.
  *
  * שני המקורות הראשונים חינמיים ואינם דורשים מפתח. נתוני EPA הם בגלונים
  * למייל ולכן מומרים לליטר ל-100 ק"מ.
@@ -31,6 +31,25 @@ export interface FEVehicleDetails {
   comb08: number;
   city08: number;
   hwy08: number;
+  /** "EV" ברכב חשמלי מלא */
+  atvType?: string;
+  /** צריכת חשמל משולבת בקוט"ש ל-100 מייל, ברכבים חשמליים */
+  combE?: number;
+}
+
+/**
+ * מה רשומת EPA אומרת על חשמלי.
+ *
+ * ברכב חשמלי comb08 הוא MPGe — מספר שהמרה שלו לליטרים יוצאת חסרת משמעות
+ * (טסלה הייתה מקבלת 1.8 ליטר ל-100). לכן קוראים את combE ומחשבים קוט"ש.
+ */
+export function epaElectricInfo(details: FEVehicleDetails): { isElectric: boolean; kwhPer100km: number | null } {
+  const isElectric = details.atvType === 'EV' || details.fuelType === 'Electricity';
+  if (!isElectric) return { isElectric: false, kwhPer100km: null };
+  const kwh = details.combE && details.combE > 0
+    ? Math.round((details.combE / 1.609344) * 10) / 10
+    : null;
+  return { isElectric: true, kwhPer100km: kwh };
 }
 
 // ─── עזרים ───────────────────────────────────────────────────────────────────
@@ -180,73 +199,6 @@ export async function getNRCanL100km(
     return lkm > 0 ? Math.round(lkm * 10) / 10 : null;
   } catch {
     return null;   // שגיאת רשת או פורמט לא צפוי — נכשל בשקט
-  }
-}
-
-// ─── המקור השלישי: שאלה ל-Gemini ─────────────────────────────────────────────
-//
-// שאלה על צריכת דלק משולבת של כל דגם בעולם. עובד גם על דיזלים אירופיים,
-// גימורים נדירים ורכבים שלא מופיעים בשני המאגרים הקודמים.
-//
-// מפתח חינמי אפשר להוציא באתר Google AI Studio.
-
-// נטען מקובץ env. שנמצא ב-gitignore. השם: EXPO_PUBLIC_GEMINI_API_KEY
-// הפורמט מופיע ב-env.example. בלי מפתח, השלב הזה פשוט מדולג.
-const GEMINI_API_KEY: string = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
-
-const GEMINI_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
-
-/**
- * שואלת את Gemini מהי הצריכה המשולבת של רכב מסוים.
- * מחזירה null אם אין מפתח, או אם הדגם לא מוכר או חשמלי.
- */
-export async function getGeminiL100km(
-  make:            string,
-  model:           string,
-  year:            number,
-  hebrewFuelType:  string = '',
-): Promise<number | null> {
-  if (!GEMINI_API_KEY) return null;
-
-  // רמז על סוג הדלק, אם הוא ידוע מהמרשם הישראלי
-  const fuelHint =
-    hebrewFuelType.includes('דיזל')     ? ' (diesel engine)'
-    : hebrewFuelType.includes('היברידי') ? ' (hybrid)'
-    : hebrewFuelType.includes('חשמל') && !hebrewFuelType.includes('בנזין') ? ' (electric)'
-    : '';
-
-  const prompt =
-    `What is the official WLTP combined fuel consumption in L/100km for ` +
-    `a ${year} ${make} ${model}${fuelHint}? ` +
-    `Reply with ONLY the number, for example: 5.2. ` +
-    `If the car is electric or you don't know, reply: unknown`;
-
-  try {
-    const res = await fetchWithTimeout(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, 8000, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body:    JSON.stringify({
-        contents:         [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0, maxOutputTokens: 16 },
-      }),
-    });
-
-    if (!res.ok) return null;
-    const json = await res.json();
-    const text: string =
-      (json?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim();
-
-    if (!text || text.toLowerCase().includes('unknown')) return null;
-
-    // חילוץ המספר הראשון מהתשובה
-    const match = text.match(/[\d]+\.?[\d]*/);
-    if (!match) return null;
-    const num = parseFloat(match[0]);
-    // בדיקת היגיון: רכב אמיתי נע בין 2 ל-35 ליטר ל-100 ק"מ
-    return isFinite(num) && num >= 2 && num <= 35 ? Math.round(num * 10) / 10 : null;
-  } catch {
-    return null;
   }
 }
 

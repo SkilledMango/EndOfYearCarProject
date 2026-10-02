@@ -16,6 +16,7 @@ const MAPPING = {
   'house.fill': 'home',
   'clock.fill': 'history',
   'fuelpump.fill': 'local-gas-station',
+  'bolt.fill': 'bolt',               // טעינה ברכב חשמלי
   'paperplane.fill': 'send',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',

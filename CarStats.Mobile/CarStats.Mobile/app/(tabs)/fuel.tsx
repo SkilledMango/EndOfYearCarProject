@@ -38,6 +38,15 @@ import {
   saveFuelType,
   saveTankSize,
 } from '@/services/tankState';
+import {
+  FALLBACK_ELECTRICITY_PER_KWH,
+  consumptionUnit,
+  energyUnit,
+  isPlausibleCapacity,
+} from '@/utils/powertrain';
+
+// ברכב חשמלי אותו יומן משמש לטעינות: "ליטרים" של רשומה הם קוט"ש שנטענו,
+// ו-l100km הוא קוט"ש ל-100 ק"מ. המבנה זהה ורק השמות והטווחים משתנים.
 
 // ─── יומן התדלוקים, נשמר במכשיר לכל רכב בנפרד ────────────────────────────────
 
@@ -213,9 +222,14 @@ export default function FuelScreen() {
   const [tankInput, setTankInput] = useState('');
 
   const vehicle = vehicles[vehicleIdx] ?? null;
+  const isElectric = vehicle?.isElectric ?? false;
+  const unit = energyUnit(isElectric);   // "L" או "kWh"
 
   const priceEntry = fuelPrice?.prices?.find(p => p.fuelType === fuelType) ?? null;
-  const pricePerLitre = priceEntry?.pricePerLitreILS ?? FALLBACK_FUEL_PRICES[fuelType];
+  // ברכב חשמלי: תעריף החשמל הביתי במקום מחיר המשאבה
+  const pricePerLitre = isElectric
+    ? (fuelPrice?.electricityPerKwhILS ?? FALLBACK_ELECTRICITY_PER_KWH)
+    : (priceEntry?.pricePerLitreILS ?? FALLBACK_FUEL_PRICES[fuelType]);
   // רק 95 מפוקח; כל השאר הוא מחיר אופייני, והממשק חייב לומר זאת
   // ולא להציג הערכה באותה ודאות כמו עובדה.
   const priceIsOfficial = priceEntry?.isOfficial ?? fuelType === '95';
@@ -250,19 +264,29 @@ export default function FuelScreen() {
   useFocusEffect(
     useCallback(() => {
       loadTankLevel(vehicle?.id).then(setTankLevel);
-      loadTankSize(vehicle?.id).then(setTankL);
-    }, [vehicle?.id]),
+      // מה שהנהג הקליד גובר; אחרת הגודל שה-AI מילא לרכב
+      loadTankSize(vehicle?.id).then(saved => setTankL(saved ?? (vehicle?.tankCapacity || null)));
+    }, [vehicle?.id, vehicle?.tankCapacity]),
   );
 
   const onSaveTankSize = async () => {
-    const litres = parseFloat(tankInput);
-    if (!Number.isFinite(litres) || litres < 10 || litres > 200) {
-      Alert.alert('Check the tank size', 'Enter your tank capacity in litres — most cars are between 35 and 80.');
+    const size = parseFloat(tankInput);
+    if (!isPlausibleCapacity(size, isElectric)) {
+      Alert.alert(
+        isElectric ? 'Check the battery size' : 'Check the tank size',
+        isElectric
+          ? 'Enter your usable battery capacity in kWh — most EVs are between 40 and 100.'
+          : 'Enter your tank capacity in litres — most cars are between 35 and 80.',
+      );
       return;
     }
-    await saveTankSize(litres, vehicle?.id);
-    setTankL(litres);
+    await saveTankSize(size, vehicle?.id);
+    setTankL(size);
     setTankModalVisible(false);
+    // ובשרת, כדי שהגודל ילווה את הרכב גם למכשיר אחר
+    if (vehicle && size !== vehicle.tankCapacity) {
+      updateVehicle(vehicle.id, { ...vehicle, tankCapacity: size }).catch(() => { /* נשמר במכשיר */ });
+    }
   };
 
   useEffect(() => {
@@ -336,17 +360,24 @@ export default function FuelScreen() {
     const l = parseFloat(liters);
     const p = parseFloat(price);
     const k = km.trim() === '' ? null : parseFloat(km);
-    if (isNaN(l) || l <= 0)  { Alert.alert('Invalid amount', 'Enter the litres you filled (e.g. 45).'); return; }
+    if (isNaN(l) || l <= 0) {
+      Alert.alert('Invalid amount', isElectric
+        ? 'Enter the kWh you charged (e.g. 40).'
+        : 'Enter the litres you filled (e.g. 45).');
+      return;
+    }
     if (isNaN(p) || p <= 0)  { Alert.alert('Invalid price', 'Enter the total you paid in ₪ (e.g. 320).'); return; }
     if (k != null && (isNaN(k) || k <= 0)) {
       Alert.alert('Invalid distance', 'Km driven must be a positive number, or leave it empty.');
       return;
     }
     const l100km = k != null ? Math.round((l / k) * 100 * 10) / 10 : null;
-    if (l100km != null && (l100km < 2 || l100km > 35)) {
+    // טווח סביר שונה לכל סוג הנעה: 2–35 ליטר, או 8–40 קוט"ש
+    const [lowest, highest] = isElectric ? [8, 40] : [2, 35];
+    if (l100km != null && (l100km < lowest || l100km > highest)) {
       Alert.alert(
         'Check your numbers',
-        `${l100km} L/100km is outside the realistic range. Double-check litres and km.`,
+        `${l100km} ${consumptionUnit(isElectric)} is outside the realistic range. Double-check ${isElectric ? 'kWh' : 'litres'} and km.`,
       );
       return;
     }
@@ -358,7 +389,7 @@ export default function FuelScreen() {
   };
 
   const handleDelete = (entry: FillUp) => {
-    Alert.alert('Delete fill-up?', `${formatDay(entry.date)} · ${entry.liters}L · ₪${entry.price}`, [
+    Alert.alert(isElectric ? 'Delete charge?' : 'Delete fill-up?', `${formatDay(entry.date)} · ${entry.liters} ${unit} · ₪${entry.price}`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -387,7 +418,7 @@ export default function FuelScreen() {
         {/* ── כותרת ובורר רכב ── */}
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.screenTitle}>Fuel Tracking</Text>
+            <Text style={styles.screenTitle}>{isElectric ? 'Charging' : 'Fuel Tracking'}</Text>
             {vehicle && vehicles.length > 1 && (
               <Text style={styles.screenSubtitle}>
                 {vehicle.make} {vehicle.model}
@@ -418,7 +449,7 @@ export default function FuelScreen() {
               <Text style={styles.heroLabel}>Average Consumption</Text>
               <View style={styles.heroValueRow}>
                 <Text style={styles.heroValue}>{displayAvg != null ? displayAvg.toFixed(1) : '—'}</Text>
-                <Text style={styles.heroUnit}>L/100km</Text>
+                <Text style={styles.heroUnit}>{consumptionUnit(isElectric)}</Text>
               </View>
               {trend != null ? (
                 <View style={styles.trendRow}>
@@ -429,13 +460,14 @@ export default function FuelScreen() {
                   />
                   <Text style={[styles.trendText, { color: trend.pct <= 0 ? c.Fuel.trendGreen : c.Severity.red }]}>
                     {Math.abs(trend.pct).toFixed(0)}%{' '}
-                    {trend.basis === 'month' ? 'from last month' : 'vs your last fill-up'}
+                    {trend.basis === 'month' ? 'from last month' : isElectric ? 'vs your last charge' : 'vs your last fill-up'}
                   </Text>
                 </View>
               ) : (
                 <Text style={styles.trendHint}>
-                  {loggedAvg == null ? 'Estimated for your model — log fill-ups to track your real usage'
-                                     : 'Log more fill-ups to see your trend'}
+                  {loggedAvg == null
+                    ? `Estimated for your model — log ${isElectric ? 'charges' : 'fill-ups'} to track your real usage`
+                    : `Log more ${isElectric ? 'charges' : 'fill-ups'} to see your trend`}
                 </Text>
               )}
             </View>
@@ -470,25 +502,28 @@ export default function FuelScreen() {
                 {fillCost ? (
                   <>
                     <Text style={styles.fillText}>
-                      About <Text style={styles.fillAmount}>₪{fillCost.cost.toFixed(0)}</Text> to fill up
+                      About <Text style={styles.fillAmount}>₪{fillCost.cost.toFixed(0)}</Text>
+                      {isElectric ? ' to charge to 100%' : ' to fill up'}
                     </Text>
                     <Text style={styles.fillSub}>
-                      ~{fillCost.litres.toFixed(0)}L at ₪{pricePerLitre.toFixed(2)}/L
+                      ~{fillCost.litres.toFixed(0)} {unit} at ₪{pricePerLitre.toFixed(2)}/{unit}
                       {tankLevel && !tankLevel.isReal ? ' · from an estimated level' : ''}
                     </Text>
                   </>
                 ) : (
                   <Text style={styles.fillSub}>
                     {tankL == null
-                      ? 'Set your tank size to see what a full tank costs.'
-                      : 'Connect to your car to see what a full tank costs.'}
+                      ? `Set your ${isElectric ? 'battery' : 'tank'} size to see what a full ${isElectric ? 'charge' : 'tank'} costs.`
+                      : `Connect to your car to see what a full ${isElectric ? 'charge' : 'tank'} costs.`}
                   </Text>
                 )}
                 <Pressable
                   onPress={() => { setTankInput(tankL ? String(tankL) : ''); setTankModalVisible(true); }}
                 >
                   <Text style={styles.tankLink}>
-                    {tankL ? `Tank size: ${tankL}L — change` : 'Set tank size'}
+                    {tankL
+                      ? `${isElectric ? 'Battery' : 'Tank size'}: ${tankL} ${unit} — change`
+                      : `Set ${isElectric ? 'battery' : 'tank'} size`}
                   </Text>
                 </Pressable>
               </View>
@@ -512,7 +547,7 @@ export default function FuelScreen() {
               ) : (
                 <Text style={styles.trendHint}>
                   {costPer100 == null
-                    ? 'Log a fill-up with km driven to see your cost per 100km'
+                    ? `Log a ${isElectric ? 'charge' : 'fill-up'} with km driven to see your cost per 100km`
                     : 'Your first month of tracking — a comparison appears next month'}
                 </Text>
               )}
@@ -523,7 +558,7 @@ export default function FuelScreen() {
               <View style={styles.chartHeader}>
                 <Text style={styles.chartTitle}>Recent Trend</Text>
                 <Text style={styles.chartCaption}>
-                  Last {Math.max(chartValues.length, 1)} Fill-up{chartValues.length === 1 ? '' : 's'}
+                  Last {Math.max(chartValues.length, 1)} {isElectric ? 'Charge' : 'Fill-up'}{chartValues.length > 1 ? 's' : ''}
                 </Text>
               </View>
               {chartValues.length > 0 ? (
@@ -531,7 +566,7 @@ export default function FuelScreen() {
               ) : (
                 <View style={styles.chartEmpty}>
                   <Text style={styles.chartEmptyText}>
-                    Log a fill-up with km driven to see your consumption trend.
+                    Log a {isElectric ? 'charge' : 'fill-up'} with km driven to see your consumption trend.
                   </Text>
                 </View>
               )}
@@ -540,18 +575,24 @@ export default function FuelScreen() {
             {/* ── ההיסטוריה ── */}
             <Text style={styles.historyTitle}>History</Text>
             {history.length === 0 ? (
-              <Text style={styles.historyEmpty}>No fill-ups logged yet. Tap + to add your first.</Text>
+              <Text style={styles.historyEmpty}>
+                No {isElectric ? 'charging sessions' : 'fill-ups'} logged yet. Tap + to add your first.
+              </Text>
             ) : (
               <View style={styles.historyList}>
                 {history.map(entry => (
                   <Pressable key={entry.id} style={styles.entryCard} onLongPress={() => handleDelete(entry)}>
                     <View style={styles.entryLeft}>
                       <View style={styles.entryIconChip}>
-                        <IconSymbol name="fuelpump.fill" size={20} color={c.Dashboard.accentDeep} />
+                        <IconSymbol
+                          name={isElectric ? 'bolt.fill' : 'fuelpump.fill'}
+                          size={20}
+                          color={c.Dashboard.accentDeep}
+                        />
                       </View>
                       <View>
                         <Text style={styles.entryDate}>{formatDay(entry.date)}</Text>
-                        <Text style={styles.entryLiters}>{entry.liters}L</Text>
+                        <Text style={styles.entryLiters}>{entry.liters} {unit}</Text>
                       </View>
                     </View>
                     <Text style={styles.entryPrice}>₪{entry.price}</Text>
@@ -586,11 +627,11 @@ export default function FuelScreen() {
         >
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setTankModalVisible(false)} />
           <View style={styles.modalSheet}>
-            <Text style={styles.modalTitle}>Tank Size</Text>
-            <Text style={styles.modalLabel}>Capacity in litres</Text>
+            <Text style={styles.modalTitle}>{isElectric ? 'Battery Size' : 'Tank Size'}</Text>
+            <Text style={styles.modalLabel}>{isElectric ? 'Usable capacity in kWh' : 'Capacity in litres'}</Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="e.g. 55"
+              placeholder={isElectric ? 'e.g. 75' : 'e.g. 55'}
               placeholderTextColor={c.Dashboard.textSecondary}
               keyboardType="decimal-pad"
               value={tankInput}
@@ -598,8 +639,9 @@ export default function FuelScreen() {
               autoFocus
             />
             <Text style={styles.modalHint}>
-              You&apos;ll find this in your owner&apos;s manual — most cars are
-              between 35 and 80 litres.
+              {isElectric
+                ? 'You’ll find this in your owner’s manual — most EVs are between 40 and 100 kWh.'
+                : 'You’ll find this in your owner’s manual — most cars are between 35 and 80 litres.'}
             </Text>
             <Pressable style={styles.modalSaveBtn} onPress={onSaveTankSize}>
               <Text style={styles.modalSaveText}>Save</Text>
@@ -616,30 +658,35 @@ export default function FuelScreen() {
         >
           <Pressable style={StyleSheet.absoluteFill} onPress={closeModal} />
           <View style={styles.modalSheet}>
-            <Text style={styles.modalTitle}>Log Fill-up</Text>
+            <Text style={styles.modalTitle}>{isElectric ? 'Log Charge' : 'Log Fill-up'}</Text>
 
-            <Text style={styles.modalLabel}>Fuel type</Text>
-            <View style={styles.fuelTypeRow}>
-              {FUEL_TYPES.map(type => {
-                const selected = type === fuelType;
-                return (
-                  <Pressable
-                    key={type}
-                    style={[styles.fuelTypeChip, selected && styles.fuelTypeChipOn]}
-                    onPress={() => onPickFuelType(type)}
-                  >
-                    <Text style={[styles.fuelTypeText, selected && styles.fuelTypeTextOn]}>
-                      {FUEL_TYPE_LABELS[type]}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            {/* לרכב חשמלי אין סוג דלק לבחור */}
+            {!isElectric && (
+              <>
+                <Text style={styles.modalLabel}>Fuel type</Text>
+                <View style={styles.fuelTypeRow}>
+                  {FUEL_TYPES.map(type => {
+                    const selected = type === fuelType;
+                    return (
+                      <Pressable
+                        key={type}
+                        style={[styles.fuelTypeChip, selected && styles.fuelTypeChipOn]}
+                        onPress={() => onPickFuelType(type)}
+                      >
+                        <Text style={[styles.fuelTypeText, selected && styles.fuelTypeTextOn]}>
+                          {FUEL_TYPE_LABELS[type]}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            )}
 
-            <Text style={styles.modalLabel}>Litres filled</Text>
+            <Text style={styles.modalLabel}>{isElectric ? 'kWh charged' : 'Litres filled'}</Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="e.g. 45"
+              placeholder={isElectric ? 'e.g. 40' : 'e.g. 45'}
               placeholderTextColor={c.Dashboard.textSecondary}
               keyboardType="decimal-pad"
               value={liters}
@@ -656,14 +703,18 @@ export default function FuelScreen() {
               onChangeText={text => { setPriceEdited(true); setPrice(text); }}
             />
             <Text style={styles.modalHint}>
-              {priceIsOfficial
-                ? `Filled in at ₪${pricePerLitre.toFixed(2)}/L — the regulated price for 95. Change it if you paid something else.`
-                : `Filled in at ₪${pricePerLitre.toFixed(2)}/L, a typical price — ${FUEL_TYPE_LABELS[fuelType]} isn't regulated, so check your receipt.`}
+              {isElectric
+                ? `Filled in at ₪${pricePerLitre.toFixed(2)}/kWh — the home electricity rate. Public chargers cost more, so check your receipt.`
+                : priceIsOfficial
+                  ? `Filled in at ₪${pricePerLitre.toFixed(2)}/L — the regulated price for 95. Change it if you paid something else.`
+                  : `Filled in at ₪${pricePerLitre.toFixed(2)}/L, a typical price — ${FUEL_TYPE_LABELS[fuelType]} isn't regulated, so check your receipt.`}
             </Text>
-            <Text style={styles.modalLabel}>Km driven since last fill-up (optional)</Text>
+            <Text style={styles.modalLabel}>
+              Km driven since last {isElectric ? 'charge' : 'fill-up'} (optional)
+            </Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="e.g. 650 — used to compute L/100km"
+              placeholder={`e.g. 650 — used to compute ${consumptionUnit(isElectric)}`}
               placeholderTextColor={c.Dashboard.textSecondary}
               keyboardType="number-pad"
               value={km}
@@ -676,7 +727,7 @@ export default function FuelScreen() {
             >
               {saving
                 ? <ActivityIndicator color={c.Dashboard.onAccent} size="small" />
-                : <Text style={styles.modalSaveText}>Save Fill-up</Text>}
+                : <Text style={styles.modalSaveText}>{isElectric ? 'Save Charge' : 'Save Fill-up'}</Text>}
             </Pressable>
           </View>
         </KeyboardAvoidingView>

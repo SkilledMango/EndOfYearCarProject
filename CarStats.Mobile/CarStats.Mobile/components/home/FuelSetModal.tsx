@@ -1,11 +1,14 @@
 /**
- * הזנה ידנית של מפלס הדלק וגודל המיכל, שהופכת לנקודת ההתחלה שממנה
- * ההערכה יורדת. נגיש רק ברכבים שלא מדווחים מפלס דלק בעצמם.
+ * הזנה ידנית של מפלס הדלק (או הסוללה) וגודל המיכל, שהופכת לנקודת ההתחלה
+ * שממנה ההערכה יורדת. נגיש רק ברכבים שלא מדווחים מפלס בעצמם.
+ *
+ * גודל המיכל מגיע ממולא מראש — מה-AI או ממה שהנהג הקליד בפעם הקודמת.
  */
 
 import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
+import { capacityLabel, energyUnit } from '@/utils/powertrain';
 
 const QUICK_FILL = [
   { label: '¼',    pct: 25 },
@@ -17,26 +20,36 @@ const QUICK_FILL = [
 export default function FuelSetModal({
   visible,
   currentEstimate,
+  isElectric = false,
+  tankSize,
   onSave,
   onCancel,
 }: {
   visible: boolean;
   currentEstimate: number | null;
+  isElectric?: boolean;
+  /** הגודל הידוע של המיכל/הסוללה, אם יש — ממלא את השדה מראש. */
+  tankSize?: number | null;
+  /** tankL: ליטרים, או קוט"ש ברכב חשמלי. */
   onSave: (pct: number, tankL: number) => void;
   onCancel: () => void;
 }) {
   const { colors: c } = useTheme();
   const modalStyles = useModalStyles();
+  // ערך ברירת מחדל רק כשאין שום דבר ידוע על הרכב
+  const fallbackSize = isElectric ? 60 : 55;
   const [pctText,  setPctText]  = useState(String(currentEstimate ?? 100));
-  const [tankText, setTankText] = useState('55');
+  const [tankText, setTankText] = useState(String(tankSize || fallbackSize));
 
   useEffect(() => {
-    if (visible) setPctText(String(currentEstimate ?? 100));
-  }, [visible, currentEstimate]);
+    if (!visible) return;
+    setPctText(String(currentEstimate ?? 100));
+    setTankText(String(tankSize || fallbackSize));
+  }, [visible, currentEstimate, tankSize, fallbackSize]);
 
   const handleSave = () => {
     const pct   = Math.min(100, Math.max(0, Number(pctText)  || 0));
-    const tankL = Math.max(10,              Number(tankText) || 55);
+    const tankL = Math.max(10,              Number(tankText) || fallbackSize);
     onSave(pct, tankL);
   };
 
@@ -44,9 +57,11 @@ export default function FuelSetModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={modalStyles.overlay}>
         <View style={modalStyles.sheet}>
-          <Text style={modalStyles.title}>SET FUEL LEVEL</Text>
+          <Text style={modalStyles.title}>{isElectric ? 'SET BATTERY LEVEL' : 'SET FUEL LEVEL'}</Text>
           <Text style={modalStyles.sub}>
-            Your OBD adapter can&apos;t read the fuel sensor directly.{'\n'}
+            {isElectric
+              ? 'Your OBD adapter can’t read the battery level directly.'
+              : 'Your OBD adapter can’t read the fuel sensor directly.'}{'\n'}
             Set your current level and the app will track usage automatically.
           </Text>
 
@@ -85,9 +100,11 @@ export default function FuelSetModal({
             />
           </View>
 
-          {/* ── גודל המיכל ── */}
+          {/* ── גודל המיכל או הסוללה ── */}
           <View style={modalStyles.inputRow}>
-            <Text style={modalStyles.inputLabel}>Tank size (L)</Text>
+            <Text style={modalStyles.inputLabel}>
+              {capacityLabel(isElectric)} ({energyUnit(isElectric)})
+            </Text>
             <TextInput
               style={modalStyles.input}
               value={tankText}
@@ -95,10 +112,16 @@ export default function FuelSetModal({
               keyboardType="numeric"
               maxLength={4}
               placeholderTextColor={c.Dashboard.textSecondary}
-              placeholder="e.g. 55"
+              placeholder={`e.g. ${fallbackSize}`}
             />
           </View>
-          <Text style={modalStyles.hint}>Kia Sportage ≈ 55 L  ·  Most sedans 50–65 L</Text>
+          <Text style={modalStyles.hint}>
+            {tankSize
+              ? 'Filled in for your car — edit if it’s wrong.'
+              : isElectric
+                ? 'Most EVs 50–100 kWh'
+                : 'Kia Sportage ≈ 55 L  ·  Most sedans 50–65 L'}
+          </Text>
 
           {/* ── כפתורים ── */}
           <View style={modalStyles.btnRow}>

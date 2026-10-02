@@ -24,6 +24,8 @@ interface Props {
   finishedMessage: string | null;
   liveData: LiveData | null;
   estimatedFuelPct: number | null;
+  /** ברכב חשמלי אריח הדלק מציג סוללה */
+  isElectric?: boolean;
   onClose: () => void;
 }
 
@@ -35,6 +37,7 @@ export default function ScanOverlay({
   finishedMessage,
   liveData,
   estimatedFuelPct,
+  isElectric = false,
   onClose,
 }: Props) {
   const { colors: c } = useTheme();
@@ -120,7 +123,7 @@ export default function ScanOverlay({
               value={liveData ? `${liveData.coolantCelsius}°C` : '—'} />
             {/* מעדיף את הקריאה של הרכב ונופל להערכה רק בהיעדרה. ההערכה היא
                 null במכוון כשקיימת קריאה אמיתית. */}
-            <Tile icon="fuelpump.fill" label="FUEL"
+            <Tile icon="fuelpump.fill" label={isElectric ? 'BATTERY' : 'FUEL'}
               value={fuelPct != null ? `${Math.round(fuelPct)}%` : '—'} />
           </View>
 

@@ -7,14 +7,18 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LiveData } from '@/services/scanner';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
+import { levelLabel } from '@/utils/powertrain';
 
 export default function LiveGauges({
   data,
   estimatedFuel,
+  isElectric = false,
   onSetFuel,
 }: {
   data: LiveData;
   estimatedFuel: number | null;
+  /** ברכב חשמלי האריח מציג סוללה במקום דלק */
+  isElectric?: boolean;
   onSetFuel: () => void;
 }) {
   const { colors: c } = useTheme();
@@ -57,7 +61,7 @@ export default function LiveGauges({
           onPress={!fuelIsReal ? onSetFuel : undefined}
         >
           <View style={gaugeStyles.tileLabelRow}>
-            <Text style={gaugeStyles.tileLabel}>FUEL</Text>
+            <Text style={gaugeStyles.tileLabel}>{levelLabel(isElectric).toUpperCase()}</Text>
             {!fuelIsReal && (
               <Text style={gaugeStyles.tileSetBtn}>{fuelIsEst ? 'UPDATE' : 'SET'}</Text>
             )}
@@ -66,14 +70,18 @@ export default function LiveGauges({
             {fuelValue != null ? `${fuelValue}%` : '—'}
           </Text>
           <Text style={gaugeStyles.tileSub}>
-            {fuelIsReal ? 'in tank' : fuelIsEst ? 'estimated' : 'tap to set'}
+            {fuelIsReal ? (isElectric ? 'charged' : 'in tank') : fuelIsEst ? 'estimated' : 'tap to set'}
           </Text>
-          {/* הערה שמוצגת כשהרכב לא מדווח מפלס דלק */}
+          {/* הערה שמוצגת כשהרכב לא מדווח מפלס */}
           {!fuelIsReal && (
             <Text style={gaugeStyles.tileNote}>
-              {fuelIsEst
-                ? '⚠ OBD fuel not supported — using estimate'
-                : '⚠ Car does not report fuel level via OBD-II (PID 0x2F unsupported)'}
+              {isElectric
+                ? (fuelIsEst
+                    ? '⚠ Battery level not reported over OBD — using estimate'
+                    : '⚠ Car does not report battery level over OBD-II')
+                : (fuelIsEst
+                    ? '⚠ OBD fuel not supported — using estimate'
+                    : '⚠ Car does not report fuel level via OBD-II (PID 0x2F unsupported)')}
             </Text>
           )}
           <View style={gaugeStyles.barTrack}>

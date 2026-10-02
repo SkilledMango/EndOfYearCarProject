@@ -15,13 +15,6 @@ export const API_BASE_URL = `${HOST}/api`;
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  // Somee's free tier puts the site to sleep when nobody has used it, and the
-  // first request after that has to wait for it to start again. Eight seconds
-  // was not enough for that: the very first sign-in of the day failed with
-  // "could not reach the server" while a second attempt straight after
-  // answered in about a second. Everything here is a deliberate tap rather
-  // than a background poll, so waiting longer on the rare cold one is better
-  // than telling the driver the server is down when it is not.
   timeout: 20000,
   headers: { 'Content-Type': 'application/json' },
 });
@@ -58,7 +51,12 @@ export interface Vehicle {
   model: string;
   year: number;
   licensePlate: string;
+  /** ל-100 ק"מ: ליטרים ברכב דלק, קוט"ש ברכב חשמלי. */
   averageFuelConsumption: number;
+  /** רכב חשמלי מחליף את ממשק הדלק בממשק סוללה וטעינה. */
+  isElectric: boolean;
+  /** מיכל בליטרים או סוללה בקוט"ש. 0 = עוד לא ידוע. */
+  tankCapacity: number;
   appUserId: number;
 }
 
@@ -155,6 +153,8 @@ export interface CreateVehicleDto {
   year: number;
   licensePlate: string;
   averageFuelConsumption: number;
+  isElectric: boolean;
+  tankCapacity: number;
   appUserId: number;
 }
 
@@ -238,6 +238,8 @@ export interface FuelPrice {
   effectiveFrom: string;
   fuelType: string;
   prices: FuelPriceEntry[];
+  /** תעריף החשמל הביתי לקוט"ש, לרכב חשמלי. */
+  electricityPerKwhILS?: number;
 }
 
 /**
@@ -256,4 +258,63 @@ export const getFuelPrice = async (): Promise<FuelPrice | null> => {
   } catch {
     return null;
   }
+};
+
+// ----- שאלות AI, דרך השרת -----
+//
+// השרת שואל קודם את Groq ואם המכסה שלו נגמרה — את Gemini, ושומר כל תשובה
+// במטמון. המפתחות יושבים רק בשרת ולא בתוך האפליקציה.
+
+/** מה ה-AI יודע על דגם מסוים. כל שדה יכול להיות null כשהמודל לא בטוח. */
+export interface VehicleSpecs {
+  isElectric: boolean | null;
+  /** electric | plugin_hybrid | hybrid | diesel | petrol | unknown */
+  powertrain: string;
+  /** מיכל בליטרים, או סוללה בקוט"ש ברכב חשמלי. */
+  tankCapacity: number | null;
+  /** ליטר ל-100 ק"מ, או קוט"ש ל-100 ק"מ ברכב חשמלי. */
+  consumption: number | null;
+  /** איזה ספק ענה: groq, gemini-flash-lite, gemini-flash או none. */
+  source: string;
+}
+
+/**
+ * חשמלי או דלק, גודל מיכל/סוללה וצריכה, בבקשה אחת.
+ * לעולם לא זורקת שגיאה: הזיהוי הוא עזר, והנהג תמיד יכול להקליד בעצמו.
+ */
+export const getVehicleSpecs = async (
+  make: string, model: string, year: number, fuelTypeHint?: string,
+): Promise<VehicleSpecs | null> => {
+  try {
+    const { data } = await api.post<VehicleSpecs>(
+      '/ai/vehicle-specs',
+      { make, model, year, fuelTypeHint: fuelTypeHint || undefined },
+      // התשובה הראשונה לדגם חדש עוברת דרך מודל שפה ולוקחת כמה שניות
+      { timeout: 30000 },
+    );
+    return data.source === 'none' ? null : data;
+  } catch {
+    return null;
+  }
+};
+
+export interface AiFaultResponse {
+  title: string;
+  description: string;
+  action: string;
+  severity: string;
+  source: string;
+}
+
+/** הסבר AI לקוד תקלה. זורקת שגיאה — הקורא מתרגם אותה לסיבה שאפשר להציג. */
+export const explainFaultCode = async (
+  code: string,
+  vehicle?: { make: string; model: string; year: number },
+): Promise<AiFaultResponse> => {
+  const { data } = await api.post<AiFaultResponse>(
+    '/ai/explain-fault',
+    { code, make: vehicle?.make, model: vehicle?.model, year: vehicle?.year },
+    { timeout: 30000 },
+  );
+  return data;
 };

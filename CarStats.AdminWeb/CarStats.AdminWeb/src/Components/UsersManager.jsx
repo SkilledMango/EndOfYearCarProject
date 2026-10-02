@@ -15,8 +15,12 @@ const ROLE_COLORS = { 1: 'default', 2: 'primary', 3: 'error' };
 
 const emptyVehicle = (userId) => ({
     make: '', model: '', year: new Date().getFullYear(),
-    licensePlate: '', averageFuelConsumption: 0, appUserId: userId
+    licensePlate: '', averageFuelConsumption: 0,
+    isElectric: false, tankCapacity: 0, appUserId: userId
 });
+
+// Electric cars are measured in kWh, fuel cars in litres.
+const consumptionUnit = (isElectric) => (isElectric ? 'kWh/100km' : 'L/100km');
 
 export default function UsersManager() {
     const [users, setUsers] = useState([]);
@@ -238,9 +242,13 @@ export default function UsersManager() {
                     {vehicles.map((v) => (
                         <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px', padding: '10px', border: '1px solid #eee', borderRadius: '8px' }}>
                             <div style={{ flex: 1 }}>
-                                <Typography fontWeight={600}>{v.year} {v.make} {v.model}</Typography>
+                                <Typography fontWeight={600}>
+                                    {v.year} {v.make} {v.model}
+                                    {v.isElectric && <Chip label="Electric" size="small" color="success" style={{ marginLeft: '8px' }} />}
+                                </Typography>
                                 <Typography variant="body2" color="text.secondary">
-                                    {v.licensePlate}  ·  {v.averageFuelConsumption} L/100km
+                                    {v.licensePlate}  ·  {v.averageFuelConsumption} {consumptionUnit(v.isElectric)}
+                                    {v.tankCapacity > 0 && `  ·  ${v.isElectric ? 'Battery' : 'Tank'} ${v.tankCapacity} ${v.isElectric ? 'kWh' : 'L'}`}
                                 </Typography>
                             </div>
                             <Button size="small" variant="outlined" onClick={() => handleEditVehicle(v)}>Edit</Button>
@@ -263,7 +271,14 @@ export default function UsersManager() {
                                 </div>
                                 <div style={{ display: 'flex', gap: '12px' }}>
                                     <TextField label="License Plate" value={editVehicle.licensePlate} onChange={(e) => setEditVehicle({ ...editVehicle, licensePlate: e.target.value })} fullWidth />
-                                    <TextField label="Avg Fuel (L/100km)" type="number" value={editVehicle.averageFuelConsumption} onChange={(e) => setEditVehicle({ ...editVehicle, averageFuelConsumption: parseFloat(e.target.value) })} fullWidth />
+                                    <TextField label={`Avg consumption (${consumptionUnit(editVehicle.isElectric)})`} type="number" value={editVehicle.averageFuelConsumption} onChange={(e) => setEditVehicle({ ...editVehicle, averageFuelConsumption: parseFloat(e.target.value) })} fullWidth />
+                                </div>
+                                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                    <FormControlLabel
+                                        control={<Switch checked={!!editVehicle.isElectric} onChange={(e) => setEditVehicle({ ...editVehicle, isElectric: e.target.checked })} />}
+                                        label="Electric vehicle"
+                                    />
+                                    <TextField label={editVehicle.isElectric ? 'Battery size (kWh)' : 'Tank size (L)'} type="number" value={editVehicle.tankCapacity ?? 0} helperText="0 = let the app look it up" onChange={(e) => setEditVehicle({ ...editVehicle, tankCapacity: parseFloat(e.target.value) || 0 })} fullWidth />
                                 </div>
                                 <div style={{ display: 'flex', gap: '8px' }}>
                                     <Button variant="contained" onClick={handleSaveVehicle}>Save Vehicle</Button>

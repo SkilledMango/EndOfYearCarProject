@@ -1,6 +1,6 @@
 /**
  * מסך ההגדרות: מצב תצוגה, התראות סריקה, תזכורת בטיחות הילדים,
- * כתובת הבית, החשבון ופרטי הגרסה. כל מתג כאן מחובר לתכונה אמיתית.
+ * כתובת הבית, מתאם ה-OBD, החשבון ופרטי הגרסה. כל מתג כאן מחובר לתכונה אמיתית.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 // רכיבי הספרייה יורשים את הצבעים מערכת הנושא שהוגדרה בפריסה הראשית,
 // ולכן אין צורך להעביר להם צבעים במפורש.
-import { Button, Divider, SegmentedButtons, Switch, TextInput } from 'react-native-paper';
+import { Button, Divider, ProgressBar, SegmentedButtons, Switch, TextInput } from 'react-native-paper';
 import * as Location from 'expo-location';
 import Constants from 'expo-constants';
 import { geocodeAddress } from '@/services/api';
@@ -32,6 +32,14 @@ import {
   savePrefs,
   showChildReminderNotification,
 } from '@/services/notifications';
+import {
+  findScanner,
+  forgetScannerWifi,
+  getScannerAddress,
+  isScannerReachable,
+  isValidScannerAddress,
+  setScannerAddress as saveScannerAddress,
+} from '@/services/scanner';
 
 const MODE_OPTIONS: { mode: ThemeMode; label: string }[] = [
   { mode: 'light',  label: 'Light' },
@@ -61,6 +69,83 @@ export default function SettingsScreen() {
   };
 
   useEffect(() => { loadPrefs().then(setPrefs); }, []);
+
+  // ── מתאם ה-OBD ───────────────────────────────────────────────────────────
+  const [scannerAddress, setScannerAddress] = useState('');
+  const [addressInput, setAddressInput]     = useState('');
+  const [scannerOnline, setScannerOnline]   = useState<boolean | null>(null);   // null = בודק
+  const [finding, setFinding]               = useState(false);
+  const [findProgress, setFindProgress]     = useState(0);
+
+  const refreshScanner = async () => {
+    const address = await getScannerAddress();
+    setScannerAddress(address);
+    setAddressInput(address);
+    setScannerOnline(null);
+    setScannerOnline(await isScannerReachable());
+  };
+
+  useEffect(() => { refreshScanner(); }, []);
+
+  const onFindScanner = async () => {
+    setFinding(true);
+    setFindProgress(0);
+    try {
+      const found = await findScanner((checked, total) => setFindProgress(checked / total));
+      if (found) {
+        setScannerAddress(found);
+        setAddressInput(found);
+        setScannerOnline(true);
+        Alert.alert('Scanner found', `Connected at ${found}.`);
+      } else {
+        setScannerOnline(false);
+        Alert.alert(
+          'Scanner not found',
+          'Check that the scanner is powered and joined this phone’s hotspot. ' +
+          'If it is new to this phone, set it up first (steps below).',
+        );
+      }
+    } finally {
+      setFinding(false);
+    }
+  };
+
+  const onSaveAddress = async () => {
+    const address = addressInput.trim();
+    if (!isValidScannerAddress(address)) {
+      Alert.alert('Check the address', 'Enter just the address, e.g. 192.168.43.100 — no http:// and no slashes.');
+      return;
+    }
+    await saveScannerAddress(address);
+    await refreshScanner();
+  };
+
+  const onChangeHotspot = () => {
+    Alert.alert(
+      'Change the scanner’s hotspot?',
+      'The scanner will forget its current hotspot and open its setup network.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Change',
+          onPress: async () => {
+            try {
+              await forgetScannerWifi();
+              setScannerOnline(false);
+              Alert.alert(
+                'Scanner is in setup mode',
+                'On the phone you want to use: join the WiFi network “CarStats-Setup”, ' +
+                'pick that phone’s hotspot on the page that opens, and save. ' +
+                'Then turn the hotspot on and tap Find scanner.',
+              );
+            } catch (err: any) {
+              Alert.alert('Could not reach the scanner', err?.message ?? 'Try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const update = async (next: NotifPrefs) => {
     setPrefs(next);
@@ -312,6 +397,75 @@ export default function SettingsScreen() {
         )}
       </View>
 
+      {/* ── מתאם ה-OBD ── */}
+      <Text style={s.sectionLabel}>OBD SCANNER</Text>
+      <View style={s.card}>
+        <Text style={s.rowTitle}>Scanner address</Text>
+        <Text style={s.rowSub}>
+          {scannerAddress || '—'}
+          {'  ·  '}
+          <Text style={scannerOnline ? s.statusOk : s.statusOff}>
+            {scannerOnline == null ? 'checking…' : scannerOnline ? 'connected' : 'not reachable'}
+          </Text>
+        </Text>
+
+        <Button
+          mode="contained"
+          icon="radar"
+          onPress={onFindScanner}
+          disabled={finding}
+          style={s.homeBtn}
+          contentStyle={s.homeBtnContent}
+        >
+          {finding ? `Searching… ${Math.round(findProgress * 100)}%` : 'Find scanner'}
+        </Button>
+        {finding && <ProgressBar progress={findProgress} style={s.findBar} />}
+
+        <TextInput
+          mode="outlined"
+          dense
+          label="Or type the address"
+          placeholder="e.g. 192.168.43.100"
+          value={addressInput}
+          onChangeText={setAddressInput}
+          disabled={finding}
+          style={s.homeInput}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+        />
+        <Button
+          mode="outlined"
+          icon="content-save"
+          onPress={onSaveAddress}
+          disabled={finding || addressInput.trim() === scannerAddress}
+          style={s.homeBtn}
+          contentStyle={s.homeBtnContent}
+        >
+          Save address
+        </Button>
+
+        <Divider style={s.divider} />
+
+        <Text style={s.rowTitle}>Use another phone&apos;s hotspot</Text>
+        <Text style={s.rowSub}>
+          1. Tap Change hotspot — or just power the scanner on while its old hotspot is off.{'\n'}
+          2. On the new phone, join the WiFi network &quot;CarStats-Setup&quot;. A setup page opens.{'\n'}
+          3. Pick that phone&apos;s hotspot, type its password and save.{'\n'}
+          4. Turn the hotspot on, then tap Find scanner here.
+        </Text>
+        <Button
+          mode="outlined"
+          icon="wifi-cog"
+          onPress={onChangeHotspot}
+          disabled={finding}
+          style={s.homeBtn}
+          contentStyle={s.homeBtnContent}
+        >
+          Change hotspot
+        </Button>
+      </View>
+
       {/* ── חשבון ── */}
       <Text style={s.sectionLabel}>ACCOUNT</Text>
       <View style={s.card}>
@@ -399,4 +553,9 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
 
   aboutRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+
+  // מצב המתאם
+  statusOk:  { color: c.Severity.green, fontWeight: '700' },
+  statusOff: { color: c.Dashboard.textSecondary, fontWeight: '700' },
+  findBar:   { marginTop: 8, borderRadius: 2 },
 }));

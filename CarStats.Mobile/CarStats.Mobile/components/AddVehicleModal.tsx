@@ -14,20 +14,23 @@
  * עובד קשה כדי למצוא אותה בלי לשאול את הנהג.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { lookupByPlate }                          from '@/services/vehiclelookup';
-import { FEMenuItem, getMakes, getModels, getTrims, getVehicleDetails, mpgToL100km, getNRCanL100km, getGeminiL100km, suggestL100kmByFuelType } from '@/services/fueleconomy';
-import { CreateVehicleDto, Vehicle, createVehicle } from '@/services/api';
+import { FEMenuItem, getMakes, getModels, getTrims, getVehicleDetails, mpgToL100km, getNRCanL100km, suggestL100kmByFuelType, epaElectricInfo } from '@/services/fueleconomy';
+import { CreateVehicleDto, Vehicle, VehicleSpecs, createVehicle, getVehicleSpecs } from '@/services/api';
+import { saveFuelType, saveTankSize } from '@/services/tankState';
+import { capacityLabel, electricFromRegistry, energyUnit, isPlausibleCapacity } from '@/utils/powertrain';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { Plate } from '@/constants/theme';
 
@@ -76,6 +79,16 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
   const [fuelType, setFuelType]             = useState('');  // סוג הדלק בעברית, מתוך המרשם
   const [plate, setPlate]                   = useState('');
 
+  // ── חשמלי או דלק, וגודל המיכל/הסוללה ──
+  const [isElectric, setIsElectric]   = useState(false);
+  const [powerSource, setPowerSource] = useState<'registry' | 'epa' | 'ai' | 'manual' | null>(null);
+  const [tankCapacity, setTankCapacity] = useState('');
+  const [tankSource, setTankSource]   = useState<'ai' | 'manual' | null>(null);
+  const [specs, setSpecs]             = useState<VehicleSpecs | null>(null);
+  // שאלת ה-AI יוצאת לדרך ברגע שזהות הרכב ידועה, ורצה ברקע בזמן שהנהג
+  // בוחר גימור — כך שבמסך הפרטים התשובה בדרך כלל כבר מחכה
+  const specsRef = useRef<Promise<VehicleSpecs | null> | null>(null);
+
   // ── שדה החיפוש ברשימות היצרן, הדגם והגימור ──
   const [search, setSearch] = useState('');
 
@@ -85,11 +98,76 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
   const [error, setError]       = useState<string | null>(null);
 
   // ─────────────────────────────────────────────────────────────────────────
-  // שרשרת איתור צריכת הדלק: EPA ← NRCan ← Gemini ← הערכה לפי סוג דלק.
+  // שרשרת איתור צריכת הדלק: EPA ← NRCan ← AI ← הערכה לפי סוג דלק.
   // משותפת למסלול מספר הרישוי ולמסלול זיהוי השלדה.
   // ─────────────────────────────────────────────────────────────────────────
+
+  /** שולח את שאלת ה-AI לדרך ברקע, ברגע שיצרן, דגם ושנה ידועים. */
+  const startSpecsLookup = (make: string, model: string, year: number, hFuelType: string) => {
+    specsRef.current = getVehicleSpecs(make, model, year, hFuelType);
+  };
+
   /**
-   * שלבי הגיבוי המשותפים: המאגר הקנדי, ואז Gemini, ואז הערכה לפי סוג הדלק.
+   * סוגר את האיתור ועובר למסך הפרטים: מחליט אם הרכב חשמלי, ממלא את גודל
+   * המיכל או הסוללה, ולרכב חשמלי גם את הצריכה בקוט"ש.
+   * לעולם לא זורק — במקרה הגרוע הנהג פשוט ממלא בעצמו.
+   */
+  const goToDetails = async (
+    hFuelType: string,
+    epa?: { isElectric: boolean; kwhPer100km: number | null },
+  ) => {
+    try {
+      const found = specsRef.current ? await specsRef.current : null;
+      setSpecs(found);
+
+      // המרשם הישראלי הוא המקור הקובע, אחריו EPA, ורק אז ה-AI
+      const fromRegistry = electricFromRegistry(hFuelType);
+      const electric = fromRegistry ?? epa?.isElectric ?? found?.isElectric ?? false;
+      setIsElectric(electric);
+      setPowerSource(
+        fromRegistry != null ? 'registry'
+        : epa ? 'epa'
+        : found?.isElectric != null ? 'ai'
+        : null,
+      );
+
+      // לרכב חשמלי שרשרת הליטרים לא רלוונטית — הצריכה בקוט"ש
+      if (electric) {
+        const kwh = epa?.kwhPer100km ?? (found?.isElectric ? found.consumption : null);
+        setFuelL100km(kwh ? String(kwh) : '');
+        setFuelSource(kwh ? (epa?.kwhPer100km ? 'epa' : 'ai') : 'manual');
+      }
+
+      // הגודל מה-AI נכנס רק כשה-AI מסכים איתנו על סוג ההנעה
+      if (found?.tankCapacity && found.isElectric === electric) {
+        setTankCapacity(String(found.tankCapacity));
+        setTankSource('ai');
+      } else {
+        setTankCapacity('');
+        setTankSource('manual');
+      }
+    } catch {
+      setTankSource('manual');
+    }
+    setStep('details');
+  };
+
+  /**
+   * הנהג הפך את המתג. המספרים שמוצגים חייבים להתאים לסוג ההנעה שנבחר,
+   * ולכן נלקחים מה-AI אם הוא תיאר את אותו סוג, ואחרת מתרוקנים.
+   */
+  const onToggleElectric = (value: boolean) => {
+    setIsElectric(value);
+    setPowerSource('manual');
+    const match = specs != null && specs.isElectric === value;
+    setTankCapacity(match && specs?.tankCapacity ? String(specs.tankCapacity) : '');
+    setTankSource(match && specs?.tankCapacity ? 'ai' : 'manual');
+    setFuelL100km(match && specs?.consumption ? String(specs.consumption) : '');
+    setFuelSource(match && specs?.consumption ? 'ai' : 'manual');
+  };
+
+  /**
+   * שלבי הגיבוי המשותפים: המאגר הקנדי, ואז ה-AI, ואז הערכה לפי סוג הדלק.
    * תמיד מסתיים במסך הפרטים.
    */
   const applyFallbackFuel = async (
@@ -103,17 +181,17 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
         setFuelL100km(String(nrcanL100km));
         setFuelSource('nrcan');
       } else {
-        // שלב 3.5: שאלה ל-Gemini
-        console.log('[fuel] Stage 3 NRCan: no match — trying Gemini');
-        const aiL100km = await getGeminiL100km(make, model, year, hFuelType);
-        if (aiL100km) {
-          console.log(`[fuel] Stage 3.5 Gemini: ${aiL100km} L/100km`);
-          setFuelL100km(String(aiL100km));
+        // שלב 3.5: ה-AI, דרך השרת — אותה שאלה שכבר יצאה לדרך ברקע
+        console.log('[fuel] Stage 3 NRCan: no match — asking the AI');
+        const found = specsRef.current ? await specsRef.current : null;
+        if (found && found.isElectric === false && found.consumption) {
+          console.log(`[fuel] Stage 3.5 AI (${found.source}): ${found.consumption} L/100km`);
+          setFuelL100km(String(found.consumption));
           setFuelSource('ai');
         } else {
           // שלב 4: הערכה לפי סוג הדלק
           const suggested = suggestL100kmByFuelType(hFuelType);
-          console.log(`[fuel] Stage 3.5 Gemini: no result — fallback suggested=${suggested}`);
+          console.log(`[fuel] Stage 3.5 AI: no result — fallback suggested=${suggested}`);
           if (suggested !== null) {
             setFuelL100km(String(suggested));
             setFuelSource('suggested');
@@ -129,8 +207,8 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
     } finally {
       // ב-finally כדי ששגיאה באחד השלבים לא תשאיר את החלון תקוע במצב טעינה,
       // מצב שבו כל שלב מציג גלגל טעינה במקום תוכן.
+      await goToDetails(hFuelType);
       setLoading(false);
-      setStep('details');
     }
   };
 
@@ -166,6 +244,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
       setSelectedMake(prefill.make);
       setSelectedModel(prefill.model);
       setLoading(true);
+      startSpecsLookup(prefill.make, prefill.model, prefill.year, '');
       runFuelLookupChain(prefill.make, prefill.model, prefill.year, '')
         .catch(() => { setFuelSource('manual'); setLoading(false); setStep('details'); });
     }
@@ -190,6 +269,12 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
     setFuelSource(null);
     setFuelType('');
     setPlate('');
+    setIsElectric(false);
+    setPowerSource(null);
+    setTankCapacity('');
+    setTankSource(null);
+    setSpecs(null);
+    specsRef.current = null;
     setSearch('');
     setError(null);
   };
@@ -253,6 +338,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
     setSelectedModel(result.model);
     setPlate(plateText.trim());
     setFuelType(result.fuelType);   // שומרים את סוג הדלק בעברית לצורך הערכת ברירת המחדל
+    startSpecsLookup(result.make, result.model, result.year, result.fuelType);
 
     // הפעלת שרשרת איתור הצריכה המשותפת
     await runFuelLookupChain(result.make, result.model, result.year, result.fuelType);
@@ -303,6 +389,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
     setSelectedModel(model);
     setLoading(true);
     setError(null);
+    startSpecsLookup(selectedMake, model, parseInt(yearText, 10), '');
     try {
       const items = await getTrims(parseInt(yearText, 10), selectedMake, model);
       setTrims(items);
@@ -326,10 +413,16 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
     try {
       try {
         const details = await getVehicleDetails(trimId);
+        const epa = epaElectricInfo(details);
+        // רכב חשמלי: ה-MPGe של EPA לא שווה כלום בליטרים — goToDetails ממלא קוט"ש
+        if (epa.isElectric) {
+          await goToDetails(fuelType, epa);
+          return;
+        }
         if (details.comb08 > 0) {
           setFuelL100km(String(mpgToL100km(details.comb08)));
           setFuelSource('epa');
-          setStep('details');
+          await goToDetails(fuelType, epa);
           return;
         }
       } catch { /* ממשיכים לשלב הבא */ }
@@ -342,7 +435,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
       }
       const suggested = suggestL100kmByFuelType(fuelType);
       if (suggested !== null) { setFuelL100km(String(suggested)); setFuelSource('suggested'); } else { setFuelSource('manual'); }
-      setStep('details');
+      await goToDetails(fuelType);
     } finally {
       setLoading(false);
     }
@@ -354,6 +447,16 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
 
   const handleSubmit = async () => {
     if (!plate.trim()) { setError('Please enter a license plate number.'); return; }
+
+    // גודל המיכל רשות, אבל אם הוקלד — שיהיה של רכב אמיתי
+    const capacity = parseFloat(tankCapacity);
+    if (tankCapacity.trim() && !isPlausibleCapacity(capacity, isElectric)) {
+      setError(isElectric
+        ? 'Battery size should be between 10 and 200 kWh.'
+        : 'Tank size should be between 20 and 150 litres.');
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
@@ -363,9 +466,17 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
         year:                   parseInt(yearText, 10),
         licensePlate:           plate.trim().toUpperCase(),
         averageFuelConsumption: parseFloat(fuelL100km) || 0,
+        isElectric,
+        tankCapacity:           capacity > 0 ? capacity : 0,
         appUserId:              userId,
       };
       const vehicle = await createVehicle(dto);
+
+      // מסכי הדלק קוראים את גודל המיכל ואת סוג הדלק מהמכשיר — ממלאים אותם
+      // מראש כדי שהנהג לא יתבקש להקליד את מה שכבר זוהה
+      if (capacity > 0) await saveTankSize(capacity, vehicle.id);
+      if (!isElectric && fuelType.includes('דיזל')) await saveFuelType('diesel', vehicle.id);
+
       reset();
       onAdded(vehicle);
     } catch {
@@ -597,23 +708,47 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                 </View>
               )}
 
-              {/* צריכת הדלק */}
+              {/* חשמלי או דלק — קובע את כל היחידות במסכי הדלק */}
+              <View style={[s.infoCard, powerSource && powerSource !== 'manual' && s.infoCardSuccess]}>
+                <View style={s.powerRow}>
+                  <View style={{ flex: 1, paddingRight: 12 }}>
+                    <Text style={s.infoCardLabel}>
+                      {isElectric ? '⚡ ELECTRIC VEHICLE' : '⛽ FUEL VEHICLE'}
+                    </Text>
+                    <Text style={s.infoCardNote}>
+                      {powerSource === 'registry' && 'From the Israeli vehicle registry.'}
+                      {powerSource === 'epa'      && 'From EPA data for this trim.'}
+                      {powerSource === 'ai'       && 'Detected by AI — flip the switch if it is wrong.'}
+                      {(powerSource === 'manual' || powerSource === null) && 'Electric car? Turn this on.'}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={isElectric}
+                    onValueChange={onToggleElectric}
+                    trackColor={{ true: c.Dashboard.accent, false: c.Dashboard.cardBorder }}
+                  />
+                </View>
+              </View>
+
+              {/* הצריכה: ליטרים או קוט"ש ל-100 ק"מ */}
               <View style={[s.infoCard,
                 (fuelSource === 'epa' || fuelSource === 'nrcan' || fuelSource === 'ai') && s.infoCardSuccess,
                 fuelSource === 'suggested' && s.infoCardWarning,
               ]}>
                 <Text style={s.infoCardLabel}>
-                  {fuelSource === 'epa'       && '✓ FUEL CONSUMPTION — EPA DATA'}
-                  {fuelSource === 'nrcan'     && '✓ FUEL CONSUMPTION — NRCAN DATA'}
-                  {fuelSource === 'ai'        && '✓ FUEL CONSUMPTION — AI LOOKUP'}
-                  {fuelSource === 'suggested' && '⚡ FUEL CONSUMPTION — ESTIMATED'}
-                  {fuelSource === 'manual'    && 'FUEL CONSUMPTION — ENTER MANUALLY'}
-                  {fuelSource === null        && 'FUEL CONSUMPTION'}
+                  {isElectric ? 'ENERGY CONSUMPTION' : 'FUEL CONSUMPTION'}
+                  {fuelSource === 'epa'       && ' — EPA DATA'}
+                  {fuelSource === 'nrcan'     && ' — NRCAN DATA'}
+                  {fuelSource === 'ai'        && ' — AI LOOKUP'}
+                  {fuelSource === 'suggested' && ' — ESTIMATED'}
+                  {fuelSource === 'manual'    && ' — ENTER MANUALLY'}
                 </Text>
                 {fuelSource === 'epa' && (
                   <Text style={s.infoCardNote}>
-                    EPA combined city/highway figure for your trim, converted to L/100km.
-                    Adjust to match your real-world driving.
+                    {isElectric
+                      ? 'EPA combined figure for your trim, converted to kWh/100km.'
+                      : 'EPA combined city/highway figure for your trim, converted to L/100km.'}
+                    {' '}Adjust to match your real-world driving.
                   </Text>
                 )}
                 {fuelSource === 'nrcan' && (
@@ -624,7 +759,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                 )}
                 {fuelSource === 'ai' && (
                   <Text style={s.infoCardNote}>
-                    WLTP figure sourced via AI (Gemini). Accurate for most models —
+                    WLTP figure looked up by AI. Accurate for most models —
                     still worth adjusting to your actual driving conditions.
                   </Text>
                 )}
@@ -636,8 +771,9 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                 )}
                 {(fuelSource === 'manual' || fuelSource === null) && (
                   <Text style={[s.infoCardNote, { color: c.Severity.yellow }]}>
-                    ⚠ No fuel data found for this vehicle. Enter your average
-                    consumption below (check your car manual or fuel log).
+                    {isElectric
+                      ? '⚠ No consumption data found. Enter your average kWh/100km (shown in the car\'s trip computer).'
+                      : '⚠ No fuel data found for this vehicle. Enter your average consumption below (check your car manual or fuel log).'}
                   </Text>
                 )}
                 <View style={s.fuelRow}>
@@ -646,10 +782,34 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                     value={fuelL100km}
                     onChangeText={setFuelL100km}
                     keyboardType="decimal-pad"
-                    placeholder="e.g. 8.7"
+                    placeholder={isElectric ? 'e.g. 16' : 'e.g. 8.7'}
                     placeholderTextColor={c.Dashboard.textSecondary}
                   />
-                  <Text style={s.fuelUnit}>L / 100km</Text>
+                  <Text style={s.fuelUnit}>{isElectric ? 'kWh / 100km' : 'L / 100km'}</Text>
+                </View>
+              </View>
+
+              {/* גודל המיכל או הסוללה — ממולא ע"י ה-AI */}
+              <View style={[s.infoCard, tankSource === 'ai' && s.infoCardSuccess]}>
+                <Text style={s.infoCardLabel}>
+                  {capacityLabel(isElectric).toUpperCase()}
+                  {tankSource === 'ai' && ' — AI LOOKUP'}
+                </Text>
+                <Text style={s.infoCardNote}>
+                  {tankSource === 'ai'
+                    ? 'Filled in from the factory spec. Check it against your manual if unsure.'
+                    : `Optional — used for range and the cost to ${isElectric ? 'charge' : 'fill up'}.`}
+                </Text>
+                <View style={s.fuelRow}>
+                  <TextInput
+                    style={[s.input, s.fuelInput]}
+                    value={tankCapacity}
+                    onChangeText={(text) => { setTankCapacity(text); setTankSource('manual'); }}
+                    keyboardType="decimal-pad"
+                    placeholder={isElectric ? 'e.g. 75' : 'e.g. 50'}
+                    placeholderTextColor={c.Dashboard.textSecondary}
+                  />
+                  <Text style={s.fuelUnit}>{energyUnit(isElectric)}</Text>
                 </View>
               </View>
 
@@ -909,6 +1069,7 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
     lineHeight: 18,
   },
   fuelRow:   { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  powerRow:  { flexDirection: 'row', alignItems: 'center' },
   fuelInput: { flex: 1 },
   fuelUnit:  { fontSize: 14, color: c.Dashboard.textSecondary, fontWeight: '600' },
 

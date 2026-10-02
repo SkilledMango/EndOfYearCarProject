@@ -76,6 +76,19 @@ REM we are opening the app directly, we do it here. Using a forward rather than
 REM this machine's LAN IP means the script keeps working on any network.
 "%ADB%" reverse tcp:8081 tcp:8081 >nul 2>&1
 
+REM Expo Go is what actually runs the app. A new or wiped emulator does not
+REM have it, and opening the exp:// link below then fails without a message.
+"%ADB%" shell pm list packages host.exp.exponent | find "host.exp.exponent" >nul
+if errorlevel 1 (
+  echo.
+  echo  !! Expo Go is not installed on this emulator.
+  echo     Click the "CarStats dev server" window and press  a
+  echo     Expo offers to install it - answer Y, and the app opens after.
+  echo.
+  pause
+  exit /b 1
+)
+
 echo      opening the app on the emulator...
 "%ADB%" shell am start -a android.intent.action.VIEW -d "exp://localhost:8081" >nul 2>&1
 

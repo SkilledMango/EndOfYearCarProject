@@ -53,7 +53,7 @@ export default function ScannerBanner({
             {'  ·  Uptime '}{Math.floor(status.uptimeSeconds / 60)}m
           </Text>
         ) : (
-          <Text style={bannerStyles.sub}>Looking for carstats-scanner.local on your network…</Text>
+          <Text style={bannerStyles.sub}>Different phone or hotspot? Settings → OBD Scanner</Text>
         )}
       </View>
 
