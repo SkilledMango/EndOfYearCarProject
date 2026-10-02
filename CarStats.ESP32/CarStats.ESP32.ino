@@ -3,14 +3,22 @@
  * Hardware : Waveshare ESP32-S3-RS485S-CAN (CAN transceiver built-in)
  * Protocol : OBD-II over CAN (ISO 15765-4, 500 kbps)
  *
- * The device runs as a WiFi Access Point — no router needed.
- * Connect your phone to the "CarStats-Scanner" WiFi network,
- * then the app can reach the device at http://192.168.4.1
+ * The device joins a phone's mobile hotspot, so the phone keeps its internet.
+ * Which hotspot is saved in flash, not in this file — so it works with any
+ * phone without reflashing:
+ *   - At boot it tries the saved hotspot for 20 seconds.
+ *   - If it can't find it, it opens its own open WiFi network "CarStats-Setup".
+ *     Join it and a setup page pops up: pick the phone's hotspot, type the
+ *     password, save. The scanner restarts and joins that hotspot.
+ *   - On any hotspot it takes the same spot: address .100 of that network
+ *     (or the last address on small networks, like an iPhone's 172.20.10.14),
+ *     so the app's "Find scanner" button only has to check one address per network.
  *
  * Endpoints:
- *   GET /status      — health check, uptime, simulation mode flag
- *   GET /live-data   — RPM, speed, coolant temp, fuel level, engine load
- *   GET /dtcs        — array of active DTC strings (e.g. ["P0300","P0420"])
+ *   GET  /status      — health check, uptime, simulation mode flag
+ *   GET  /live-data   — RPM, speed, coolant temp, fuel level, engine load
+ *   GET  /dtcs        — array of active DTC strings (e.g. ["P0300","P0420"])
+ *   POST /forget-wifi — forget the saved hotspot and reopen the setup network
  *
  * SIMULATION MODE:
  *   When no real car is connected (no CAN bus response), the firmware
@@ -23,19 +31,21 @@
 // ─── Includes ────────────────────────────────────────────────────────────────
 #include <WiFi.h>
 #include <WebServer.h>
+#include <DNSServer.h>
+#include <ESPmDNS.h>
+#include <Preferences.h>
 #include <ArduinoJson.h>
 #include "driver/twai.h"
 
-// ─── WiFi Station config ──────────────────────────────────────────────────────
-// ESP32 connects TO the phone's mobile hotspot.
-// Phone keeps its internet connection the whole time.
-#define HOTSPOT_SSID  "OrWifi"
-#define HOTSPOT_PASS  "24681357"
+// ─── WiFi config ──────────────────────────────────────────────────────────────
+// First-boot defaults only — used until a hotspot is saved from the setup page.
+#define DEFAULT_HOTSPOT_SSID  "OrWifi"
+#define DEFAULT_HOTSPOT_PASS  "24681357"
 
-// Static IP on Samsung hotspot subnet — always 192.168.148.100
-IPAddress STATIC_IP(192, 168, 148, 100);
-IPAddress GATEWAY  (192, 168, 148,   1);
-IPAddress SUBNET   (255, 255, 255,   0);
+#define SETUP_AP_SSID       "CarStats-Setup"   // open network the setup page lives on
+#define HOTSPOT_CONNECT_MS  20000              // how long boot waits for the saved hotspot
+#define SETUP_RETRY_MS      30000              // setup mode re-tries the saved hotspot this often
+#define SCANNER_HOST_OCTET  100                // the .100 spot taken on every hotspot
 
 
 // ─── CAN pin config (Waveshare ESP32-S3-RS485S-CAN) ──────────────────────────
@@ -73,6 +83,16 @@ const int   SIM_DTC_COUNT = 2;
 // ─── Global state ─────────────────────────────────────────────────────────────
 WebServer server(80);
 bool simMode = false;   // true when no real CAN response detected
+
+// ─── WiFi / setup state ───────────────────────────────────────────────────────
+Preferences   prefs;                  // flash storage for the saved hotspot
+DNSServer     dnsServer;              // setup mode: answers every name with our own address
+String        hotspotSsid;
+String        hotspotPass;
+bool          setupMode        = false;
+unsigned long lastSetupRetryMs = 0;
+unsigned long restartAtMs      = 0;   // non-zero = restart then (lets the HTTP reply go out first)
+String        setupNetworksHtml;      // nearby networks, listed as buttons on the setup page
 
 // ─── VIN cache ────────────────────────────────────────────────────────────────
 // VIN is read once per real-car session and cached.  Cleared when car disconnects.
@@ -118,7 +138,18 @@ void   handleLiveData();
 void   handleDtcs();
 void   handleDebug();
 void   handleVin();
+void   handleForgetWifi();
 String dtcBytesToString(uint8_t high, uint8_t low);
+
+void      loadHotspotCreds();
+void      saveHotspotCreds(const String &ssid, const String &pass);
+bool      connectToHotspot(unsigned long timeoutMs);
+IPAddress scannerAddressFor(IPAddress ip, IPAddress mask);
+void      startNormalMode();
+void      startSetupMode();
+void      handleSetupPage();
+void      handleSetupSave();
+String    htmlEscape(const String &s);
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
 void setup() {
@@ -126,21 +157,13 @@ void setup() {
   delay(3000);   // wait for Serial Monitor to connect
   Serial.println("\n[CarStats] Booting...");
 
-  // 1. Connect to phone hotspot in Station mode
+  // 1. Join the saved hotspot — or open the setup network if it isn't around
+  loadHotspotCreds();
   WiFi.mode(WIFI_STA);
-  WiFi.config(STATIC_IP, GATEWAY, SUBNET);
-  WiFi.begin(HOTSPOT_SSID, HOTSPOT_PASS);
-  Serial.printf("[CarStats] Connecting to hotspot: %s\n", HOTSPOT_SSID);
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-    delay(500);
-    Serial.print(".");
-    attempts++;
-  }
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.printf("\n[CarStats] Connected! IP: %s\n", WiFi.localIP().toString().c_str());
-  } else {
-    Serial.println("\n[CarStats] Could not connect to hotspot — check SSID/password");
+  if (!connectToHotspot(HOTSPOT_CONNECT_MS)) {
+    Serial.println("[CarStats] Saved hotspot not found — opening the setup network");
+    startSetupMode();
+    return;   // no OBD in setup mode; the scanner restarts once a hotspot is saved
   }
 
   // 2. Initialise TWAI (CAN) driver
@@ -151,27 +174,41 @@ void setup() {
   }
 
   // 3. Register HTTP routes
-  server.on("/status",    HTTP_GET, handleStatus);
-  server.on("/live-data", HTTP_GET, handleLiveData);
-  server.on("/dtcs",      HTTP_GET, handleDtcs);
-  server.on("/debug",     HTTP_GET, handleDebug);
-  server.on("/vin",       HTTP_GET, handleVin);
-  server.onNotFound([]() {
-    if (server.method() == HTTP_OPTIONS) {
-      setCorsHeaders();
-      server.send(204);
-    } else {
-      server.send(404, "application/json", "{\"error\":\"Not found\"}");
-    }
-  });
-
-  server.begin();
-  Serial.println("[CarStats] HTTP server started — ready");
+  startNormalMode();
 }
 
 // ─── Loop ─────────────────────────────────────────────────────────────────────
 void loop() {
   server.handleClient();
+
+  // A handler asked for a restart (hotspot saved or forgotten) — the reply has gone out
+  if (restartAtMs != 0 && millis() >= restartAtMs) {
+    Serial.println("[CarStats] Restarting...");
+    delay(100);
+    ESP.restart();
+  }
+
+  if (setupMode) {
+    dnsServer.processNextRequest();
+
+    // Keep trying the saved hotspot in the background, so turning the hotspot on
+    // later is enough. Only while nobody is on the setup page: a connection
+    // attempt makes the setup network drop for a moment.
+    if (!hotspotSsid.isEmpty()
+        && WiFi.softAPgetStationNum() == 0
+        && millis() - lastSetupRetryMs >= SETUP_RETRY_MS) {
+      lastSetupRetryMs = millis();
+      WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);   // DHCP
+      WiFi.begin(hotspotSsid.c_str(), hotspotPass.c_str());
+    }
+    if (WiFi.status() == WL_CONNECTED) {
+      // Found it — restart into normal mode, which also claims the .100 address
+      Serial.println("[Setup] Saved hotspot is back — restarting into normal mode");
+      delay(200);
+      ESP.restart();
+    }
+    return;
+  }
 
   // Print WiFi status every 5 seconds
   static unsigned long lastStatusMs = 0;
@@ -496,7 +533,7 @@ String readVin() {
 // ─── HTTP helpers ─────────────────────────────────────────────────────────────
 void setCorsHeaders() {
   server.sendHeader("Access-Control-Allow-Origin",  "*");
-  server.sendHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
@@ -506,7 +543,7 @@ void handleStatus() {
   setCorsHeaders();
   StaticJsonDocument<256> doc;
   doc["device"]        = "carstats-scanner";
-  doc["ssid"]          = HOTSPOT_SSID;
+  doc["ssid"]          = WiFi.SSID();
   doc["ip"]            = WiFi.localIP().toString();
   doc["uptimeSeconds"] = millis() / 1000;
   doc["simMode"]       = simMode;
@@ -601,4 +638,225 @@ void handleDebug() {
   String body;
   serializeJson(doc, body);
   server.send(200, "application/json", body);
+}
+
+// ─── Saved hotspot (flash) ────────────────────────────────────────────────────
+// "configured" separates "nothing saved yet" (use the defaults above) from
+// "hotspot deliberately forgotten" (empty name — go straight to setup mode).
+
+void loadHotspotCreds() {
+  prefs.begin("carstats", true);   // read-only
+  bool configured = prefs.getBool("configured", false);
+  hotspotSsid = configured ? prefs.getString("ssid", "") : String(DEFAULT_HOTSPOT_SSID);
+  hotspotPass = configured ? prefs.getString("pass", "") : String(DEFAULT_HOTSPOT_PASS);
+  prefs.end();
+}
+
+void saveHotspotCreds(const String &ssid, const String &pass) {
+  prefs.begin("carstats", false);
+  prefs.putBool("configured", true);
+  prefs.putString("ssid", ssid);
+  prefs.putString("pass", pass);
+  prefs.end();
+}
+
+// ─── Joining a hotspot ────────────────────────────────────────────────────────
+
+bool waitForWifi(unsigned long timeoutMs) {
+  unsigned long deadline = millis() + timeoutMs;
+  while (WiFi.status() != WL_CONNECTED && millis() < deadline) {
+    delay(250);
+    Serial.print(".");
+  }
+  Serial.println();
+  return WiFi.status() == WL_CONNECTED;
+}
+
+// The address this scanner takes on a network: host .100 on normal networks
+// (Android hotspots are /24), or the last usable address on small ones —
+// an iPhone hotspot is 172.20.10.0/28, which gives 172.20.10.14.
+IPAddress scannerAddressFor(IPAddress ip, IPAddress mask) {
+  if (mask[3] == 0) {
+    return IPAddress(ip[0], ip[1], ip[2], SCANNER_HOST_OCTET);
+  }
+  uint8_t broadcastLast = (ip[3] & mask[3]) | (uint8_t)(~mask[3]);
+  return IPAddress(ip[0], ip[1], ip[2], broadcastLast - 1);
+}
+
+// Joins the saved hotspot, then moves to the fixed scanner address on it.
+// Returns false if the hotspot can't be reached in time.
+bool connectToHotspot(unsigned long timeoutMs) {
+  if (hotspotSsid.isEmpty()) return false;
+
+  // DHCP first, only to learn which network this hotspot uses
+  WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
+  WiFi.begin(hotspotSsid.c_str(), hotspotPass.c_str());
+  Serial.printf("[WiFi] Connecting to hotspot: %s\n", hotspotSsid.c_str());
+  if (!waitForWifi(timeoutMs)) return false;
+
+  IPAddress target = scannerAddressFor(WiFi.localIP(), WiFi.subnetMask());
+  if (WiFi.localIP() != target) {
+    IPAddress gateway = WiFi.gatewayIP();
+    IPAddress mask    = WiFi.subnetMask();
+    IPAddress dns     = WiFi.dnsIP();
+    WiFi.disconnect();
+    WiFi.config(target, gateway, mask, dns);
+    WiFi.begin(hotspotSsid.c_str(), hotspotPass.c_str());
+
+    if (!waitForWifi(10000)) {
+      // The hotspot refused the fixed address — keep whatever DHCP hands out.
+      // "Find scanner" won't see it, but the address can still be typed in the app.
+      Serial.println("[WiFi] Fixed address refused — falling back to DHCP");
+      WiFi.disconnect();
+      WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
+      WiFi.begin(hotspotSsid.c_str(), hotspotPass.c_str());
+      if (!waitForWifi(10000)) return false;
+    }
+  }
+
+  Serial.printf("[WiFi] Connected to %s — scanner address: %s\n",
+                hotspotSsid.c_str(), WiFi.localIP().toString().c_str());
+  return true;
+}
+
+// ─── Normal mode: the OBD-II API ──────────────────────────────────────────────
+
+void startNormalMode() {
+  // carstats.local — iPhones can find the scanner by name with no searching at all
+  if (MDNS.begin("carstats")) MDNS.addService("http", "tcp", 80);
+
+  server.on("/status",      HTTP_GET,  handleStatus);
+  server.on("/live-data",   HTTP_GET,  handleLiveData);
+  server.on("/dtcs",        HTTP_GET,  handleDtcs);
+  server.on("/debug",       HTTP_GET,  handleDebug);
+  server.on("/vin",         HTTP_GET,  handleVin);
+  server.on("/forget-wifi", HTTP_POST, handleForgetWifi);
+  server.onNotFound([]() {
+    if (server.method() == HTTP_OPTIONS) {
+      setCorsHeaders();
+      server.send(204);
+    } else {
+      server.send(404, "application/json", "{\"error\":\"Not found\"}");
+    }
+  });
+
+  server.begin();
+  Serial.println("[CarStats] HTTP server started — ready");
+}
+
+// The app's "Change hotspot" button: forget the saved hotspot and restart,
+// which lands in setup mode because there is nothing left to join.
+void handleForgetWifi() {
+  setCorsHeaders();
+  saveHotspotCreds("", "");
+  server.send(200, "application/json", "{\"ok\":true}");
+  restartAtMs = millis() + 1000;
+}
+
+// ─── Setup mode: the "CarStats-Setup" network and its page ────────────────────
+
+void startSetupMode() {
+  setupMode = true;
+  WiFi.disconnect();
+  WiFi.mode(WIFI_AP_STA);   // AP for the setup page; STA keeps retrying the saved hotspot
+
+  // Scan once now, before anyone joins — the page lists these as tap-to-fill buttons
+  int found = WiFi.scanNetworks();
+  setupNetworksHtml = "";
+  for (int i = 0; i < found && i < 15; i++) {
+    String name = htmlEscape(WiFi.SSID(i));
+    if (name.isEmpty() || setupNetworksHtml.indexOf("data-s=\"" + name + "\"") >= 0) continue;
+    setupNetworksHtml += "<button type=button class=net data-s=\"" + name + "\">" + name + "</button>";
+  }
+  WiFi.scanDelete();
+
+  // Open network on purpose: any phone should be able to join it with no password
+  WiFi.softAP(SETUP_AP_SSID);
+
+  // Every DNS name points at us, so the phone shows the page as a "sign in to network" popup
+  dnsServer.start(53, "*", WiFi.softAPIP());
+
+  server.on("/",     HTTP_GET,  handleSetupPage);
+  server.on("/save", HTTP_POST, handleSetupSave);
+  server.onNotFound(handleSetupPage);   // the phone's captive-portal checks land on the page too
+  server.begin();
+
+  Serial.printf("[Setup] Join WiFi \"%s\" and open http://%s\n",
+                SETUP_AP_SSID, WiFi.softAPIP().toString().c_str());
+}
+
+static const char SETUP_PAGE_TOP[] PROGMEM = R"HTML(<!doctype html>
+<html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>CarStats scanner setup</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#F1F1F9;color:#191B23;margin:0;padding:20px}
+.card{background:#fff;border:1px solid #E2E1ED;border-radius:14px;padding:20px;max-width:420px;margin:0 auto}
+h1{font-size:20px;margin:0 0 6px}p{color:#5B5F70;font-size:14px;line-height:1.45;margin:0 0 14px}
+label{display:block;font-size:12px;font-weight:700;letter-spacing:.06em;color:#5B5F70;margin:14px 0 6px}
+input{width:100%;box-sizing:border-box;padding:12px;font-size:16px;border:1px solid #E2E1ED;border-radius:10px}
+.net{display:inline-block;margin:0 6px 6px 0;padding:8px 12px;border:1px solid #DBE1FF;background:#F5F7FF;
+border-radius:999px;font-size:14px;color:#003FB1}
+.go{width:100%;margin-top:18px;padding:14px;font-size:16px;font-weight:700;color:#fff;background:#1353D8;border:0;border-radius:12px}
+</style></head><body><div class=card>
+<h1>CarStats scanner setup</h1>
+<p>Choose the phone hotspot the scanner should join. On the phone, the hotspot can be off for now.</p>
+<form method=post action=/save>
+<label>NEARBY NETWORKS</label><div>)HTML";
+
+static const char SETUP_PAGE_BOTTOM[] PROGMEM = R"HTML(</div>
+<label for=ssid>HOTSPOT NAME</label><input id=ssid name=ssid required autocomplete=off autocapitalize=off>
+<label for=pass>HOTSPOT PASSWORD</label><input id=pass name=pass type=password autocomplete=off>
+<button class=go type=submit>Save &amp; connect</button>
+</form></div>
+<script>document.querySelectorAll('.net').forEach(function(b){b.onclick=function(){document.getElementById('ssid').value=b.dataset.s}})</script>
+</body></html>)HTML";
+
+void handleSetupPage() {
+  String page = FPSTR(SETUP_PAGE_TOP);
+  page += setupNetworksHtml.isEmpty() ? String("<p>No networks found — type the name below.</p>") : setupNetworksHtml;
+  page += FPSTR(SETUP_PAGE_BOTTOM);
+  server.send(200, "text/html", page);
+}
+
+void handleSetupSave() {
+  String ssid = server.arg("ssid");
+  String pass = server.arg("pass");
+  ssid.trim();
+
+  if (ssid.isEmpty()) {
+    server.send(400, "text/html", "<p>Hotspot name is required. <a href=/>Back</a></p>");
+    return;
+  }
+
+  saveHotspotCreds(ssid, pass);
+  hotspotSsid = ssid;
+  hotspotPass = pass;
+
+  String page =
+    "<!doctype html><html><head><meta charset=utf-8>"
+    "<meta name=viewport content='width=device-width,initial-scale=1'></head>"
+    "<body style='font-family:system-ui,sans-serif;background:#F1F1F9;padding:20px'>"
+    "<div style='background:#fff;border:1px solid #E2E1ED;border-radius:14px;padding:20px;max-width:420px;margin:0 auto'>"
+    "<h1 style='font-size:20px;margin:0 0 8px'>Saved &#10003;</h1>"
+    "<p style='color:#5B5F70;line-height:1.5'>Now turn on the hotspot <b>" + htmlEscape(ssid) + "</b> on the phone. "
+    "The scanner restarts and joins it by itself within about 30 seconds.</p>"
+    "<p style='color:#5B5F70;line-height:1.5'>Then in the CarStats app: <b>Settings &rarr; OBD scanner &rarr; Find scanner</b>.</p>"
+    "</div></body></html>";
+  server.send(200, "text/html", page);
+  restartAtMs = millis() + 1500;
+}
+
+String htmlEscape(const String &s) {
+  String out;
+  out.reserve(s.length());
+  for (unsigned int i = 0; i < s.length(); i++) {
+    char ch = s[i];
+    if      (ch == '&')  out += "&amp;";
+    else if (ch == '<')  out += "&lt;";
+    else if (ch == '>')  out += "&gt;";
+    else if (ch == '"')  out += "&quot;";
+    else if (ch == '\'') out += "&#39;";
+    else                 out += ch;
+  }
+  return out;
 }
