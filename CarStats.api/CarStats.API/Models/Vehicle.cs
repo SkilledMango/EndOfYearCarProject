@@ -22,9 +22,15 @@ namespace CarStats.API.Models
         [MaxLength(20)]
         public string LicensePlate { get; set; } = string.Empty;
 
-        // צריכת דלק ממוצעת בליטר ל-100 ק"מ.
+        // צריכה ממוצעת ל-100 ק"מ: ליטרים ברכב דלק, קוט"ש ברכב חשמלי.
         // זה המספר שכל חישובי הדלק והנסיעה באפליקציה נשענים עליו.
         public double AverageFuelConsumption { get; set; } = 0.0;
+
+        // רכב חשמלי מחליף את כל ממשק הדלק בממשק סוללה וטעינה
+        public bool IsElectric { get; set; } = false;
+
+        // גודל המיכל בליטרים, או גודל הסוללה בקוט"ש ברכב חשמלי. 0 = עוד לא ידוע.
+        public double TankCapacity { get; set; } = 0.0;
 
         // --- הבעלים של הרכב ---
         public int AppUserId { get; set; }

@@ -49,8 +49,11 @@ builder.Services.AddCors(options =>
 // ספק המיילים לשליחת קודי אימות
 builder.Services.AddHttpClient<IEmailService, BrevoEmailService>();
 
-// לקוח HTTP כללי, משמש את הפרוקסי ל-Google
+// לקוח HTTP כללי, משמש את הפרוקסי ל-Google ואת ספקי ה-AI
 builder.Services.AddHttpClient();
+
+// שאלות AI (Groq ואז Gemini), עם מטמון בבסיס הנתונים
+builder.Services.AddScoped<AiService>();
 
 // ── אימות JWT ─────────────────────────────────────────────────────────────────
 // login ו-verify-code מנפיקים טוקן; כל שאר הנקודות דורשות אותו.

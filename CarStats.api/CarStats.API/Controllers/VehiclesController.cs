@@ -64,6 +64,8 @@ namespace CarStats.API.Controllers
             existing.Year = updatedVehicle.Year;
             existing.LicensePlate = updatedVehicle.LicensePlate;
             existing.AverageFuelConsumption = updatedVehicle.AverageFuelConsumption;
+            existing.IsElectric = updatedVehicle.IsElectric;
+            existing.TankCapacity = updatedVehicle.TankCapacity;
 
             await _context.SaveChangesAsync();
             return NoContent();

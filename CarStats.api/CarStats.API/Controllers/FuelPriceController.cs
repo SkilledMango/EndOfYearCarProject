@@ -25,6 +25,10 @@ namespace CarStats.API.Controllers
 
         private const string FallbackEffectiveFrom = "2026-08-01";
 
+        // תעריף החשמל הביתי לקוט"ש כולל מע"מ — לרכב חשמלי. עמדות טעינה ציבוריות
+        // יקרות בהרבה, אבל רוב הטעינות נעשות בבית.
+        private const decimal FallbackElectricityPerKwh = 0.65m;
+
         public FuelPriceController(IConfiguration config)
         {
             _config = config;
@@ -51,14 +55,26 @@ namespace CarStats.API.Controllers
 
             var regulated = prices.First(p => p.FuelType == RegulatedFuelType);
 
+            decimal electricity;
+            try
+            {
+                electricity = section.GetValue("ElectricityPerKwhILS", FallbackElectricityPerKwh);
+            }
+            catch (InvalidOperationException)
+            {
+                electricity = FallbackElectricityPerKwh;
+            }
+            if (electricity <= 0) electricity = FallbackElectricityPerKwh;
+
             return Ok(new FuelPriceResponse
             {
                 // המחיר המפוקח מוחזר גם ברמה העליונה, כדי שקורא שצריך
                 // רק "מחיר בנזין" — כמו מתכנן הנסיעה — לא יצטרך את הרשימה
-                PricePerLitreILS = regulated.PricePerLitreILS,
-                FuelType         = RegulatedFuelType,
-                EffectiveFrom    = effectiveFrom,
-                Prices           = prices,
+                PricePerLitreILS     = regulated.PricePerLitreILS,
+                FuelType             = RegulatedFuelType,
+                EffectiveFrom        = effectiveFrom,
+                Prices               = prices,
+                ElectricityPerKwhILS = electricity,
             });
         }
 
@@ -95,6 +111,9 @@ namespace CarStats.API.Controllers
 
             /// <summary>כל סוגי הדלק שהאפליקציה מציעה, מפוקחים או לא.</summary>
             public List<FuelPriceEntry> Prices { get; set; } = new();
+
+            /// <summary>תעריף החשמל הביתי לקוט"ש, לתמחור נסיעה ברכב חשמלי.</summary>
+            public decimal ElectricityPerKwhILS { get; set; }
         }
 
         public class FuelPriceEntry

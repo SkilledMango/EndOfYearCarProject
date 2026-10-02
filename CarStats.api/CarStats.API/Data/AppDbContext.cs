@@ -3,7 +3,7 @@ using CarStats.API.Models;
 
 namespace CarStats.API.Data
 {
-    // החיבור לבסיס הנתונים: ארבע הטבלאות והקשרים ביניהן
+    // החיבור לבסיס הנתונים: הטבלאות והקשרים ביניהן
     public class AppDbContext : DbContext
     {
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
@@ -14,6 +14,7 @@ namespace CarStats.API.Data
         public DbSet<VehicleEvent> VehicleEvents { get; set; }
         public DbSet<AppUser> Users { get; set; }
         public DbSet<Vehicle> Vehicles { get; set; }
+        public DbSet<AiCacheEntry> AiCache { get; set; }
 
         // הגדרת הקשרים וחוקי המחיקה
         protected override void OnModelCreating(ModelBuilder modelBuilder)
