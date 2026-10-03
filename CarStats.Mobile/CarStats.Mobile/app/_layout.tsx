@@ -73,6 +73,7 @@ function RootNavigator() {
           <Stack.Screen name="register"  options={{ headerShown: false }} />
           <Stack.Screen name="trip-planner" options={{ title: 'Trip Fuel Planner' }} />
           <Stack.Screen name="settings"  options={{ title: 'Settings' }} />
+          <Stack.Screen name="scanner-setup" options={{ title: 'Connect scanner' }} />
           <Stack.Screen name="fault/[code]" options={{ title: 'Fault code' }} />
         </Stack>
         <StatusBar style={isDark ? 'light' : 'dark'} />

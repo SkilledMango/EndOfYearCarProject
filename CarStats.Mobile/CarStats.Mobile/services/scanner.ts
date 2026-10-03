@@ -2,10 +2,10 @@
  * התקשורת מול מתאם ה-OBD-II מבוסס ESP32.
  *
  * נקודות הקצה של המתאם:
- *   GET  /status      → מצב החיבור
+ *   GET  /status      → מצב החיבור (עונה גם במצב הגדרה, עם setupMode)
  *   GET  /live-data   → נתוני מנוע חיים
  *   GET  /dtcs        → מערך קודי התקלה
- *   POST /forget-wifi → שכחת נקודת הגישה ופתיחת רשת ההגדרה מחדש
+ *   POST /hotspot     → שם וסיסמה של נקודת גישה חדשה; המתאם עובר אליה
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -78,6 +78,8 @@ export interface ScannerStatus {
   /** אמת כשלא זוהה רכב אמיתי והנתונים מדומים */
   simMode: boolean;
   connectedClients: number;
+  /** אמת כשהמתאם פתח את רשת ההגדרה וממתין לנקודת גישה */
+  setupMode?: boolean;
 }
 
 export interface DtcScanResult {
@@ -177,16 +179,25 @@ export async function isScannerReachable(): Promise<boolean> {
 const PROBE_TIMEOUT_MS = 1500;
 const PROBE_BATCH      = 32;
 
-/** אמת רק כשבכתובת עונה מתאם CarStats, ולא סתם מכשיר אחר ברשת. */
-async function isCarStatsScanner(address: string): Promise<boolean> {
+/**
+ * מצב המתאם בכתובת הזו, או null אם עונה שם משהו אחר או כלום.
+ * לעולם לא זורקת שגיאה.
+ */
+export async function checkScannerAt(address: string): Promise<ScannerStatus | null> {
   try {
     const res = await fetchWithTimeout(`http://${address}/status`, PROBE_TIMEOUT_MS);
-    if (!res.ok) return false;
+    if (!res.ok) return null;
     const status = await res.json();
-    return status?.device === 'carstats-scanner';
+    return status?.device === 'carstats-scanner' ? (status as ScannerStatus) : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+/** אמת רק כשבכתובת עונה מתאם CarStats רגיל, ולא סתם מכשיר אחר ברשת. */
+async function isCarStatsScanner(address: string): Promise<boolean> {
+  const status = await checkScannerAt(address);
+  return !!status && !status.setupMode;
 }
 
 /**
@@ -210,19 +221,35 @@ export async function findScanner(
   return null;
 }
 
+// ─── העברת המתאם לנקודת גישה חדשה ────────────────────────────────────────────
+
 /**
- * גורמת למתאם לשכוח את נקודת הגישה ולפתוח שוב את רשת ההגדרה.
- * זורקת שגיאה עם הודעה קריאה אם המתאם לא נגיש או שהקושחה ישנה.
+ * הכתובת של המתאם ברשת ההגדרה שלו, "CarStats-Setup".
+ * זו כתובת ברירת המחדל של ESP32 כנקודת גישה, והיא אותה כתובת בכל מתאם.
  */
-export async function forgetScannerWifi(): Promise<void> {
+export const SETUP_NETWORK_ADDRESS = '192.168.4.1';
+
+/**
+ * שולחת למתאם שם וסיסמה של נקודת גישה. המתאם שומר אותם, מאתחל את עצמו
+ * ומתחבר אליה. לא צריך אינטרנט: זו הודעה ישירה מהטלפון למתאם.
+ * זורקת שגיאה עם הודעה קריאה כשמשהו נכשל.
+ */
+export async function sendHotspotToScanner(address: string, ssid: string, pass: string): Promise<void> {
   let res: Response;
   try {
-    res = await fetchWithTimeout(`${await baseUrl()}/forget-wifi`, FETCH_TIMEOUT_MS, { method: 'POST' });
+    res = await fetchWithTimeout(`http://${address}/hotspot`, FETCH_TIMEOUT_MS, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ ssid, pass }),
+    });
   } catch {
-    throw new Error('The scanner is not reachable. Make sure it is powered and on this phone\'s hotspot.');
+    throw new Error('The scanner stopped answering. Make sure you are still on its WiFi and try again.');
   }
   if (res.status === 404) {
     throw new Error('This scanner has older firmware. Flash the latest CarStats.ESP32 firmware first.');
   }
-  if (!res.ok) throw new Error(`The scanner answered with an error (${res.status}).`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error ?? `The scanner answered with an error (${res.status}).`);
+  }
 }

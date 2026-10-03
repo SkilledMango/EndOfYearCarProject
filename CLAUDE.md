@@ -6,7 +6,7 @@ OBD-II car diagnostics app for Israeli drivers: plain-language fault codes, fuel
 - `CarStats.api/CarStats.API/` — ASP.NET Core 10 + EF Core, SQL Server. Migrations auto-apply on startup (`db.Database.Migrate()`).
 - `CarStats.Mobile/CarStats.Mobile/` — React Native + Expo (TypeScript, expo-router tabs).
 - `CarStats.AdminWeb/CarStats.AdminWeb/` — React + Vite + MUI admin panel.
-- `CarStats.ESP32/` — ESP32 OBD-II adapter firmware (serves `/status`, `/live-data`, `/dtcs`, `/vin` over WiFi at 192.168.148.100).
+- `CarStats.ESP32/` — ESP32 OBD-II adapter firmware (serves `/status`, `/live-data`, `/dtcs`, `/vin`, `POST /hotspot` over WiFi). Joins a phone hotspot saved in flash and takes `.100` on it (192.168.148.100 on the original phone; 172.20.10.14 on iPhones). No hotspot → opens open WiFi `CarStats-Setup` (scanner at 192.168.4.1); the app's Settings → "Connect scanner to a hotspot" wizard (`app/scanner-setup.tsx`) sends it the hotspot name/password.
 - `design/` — Stitch design exports (PNG + HTML per screen). The app follows this light "Soft Tech" design system.
 
 ## Commands

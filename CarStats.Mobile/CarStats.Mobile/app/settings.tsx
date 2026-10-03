@@ -3,7 +3,8 @@
  * כתובת הבית, מתאם ה-OBD, החשבון ופרטי הגרסה. כל מתג כאן מחובר לתכונה אמיתית.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
 import {
   Alert,
   Pressable,
@@ -34,7 +35,6 @@ import {
 } from '@/services/notifications';
 import {
   findScanner,
-  forgetScannerWifi,
   getScannerAddress,
   isScannerReachable,
   isValidScannerAddress,
@@ -49,6 +49,7 @@ const MODE_OPTIONS: { mode: ThemeMode; label: string }[] = [
 
 export default function SettingsScreen() {
   const { user } = useAuth();
+  const router = useRouter();
   // אין צורך בצבעים מפורשים: כל פקד במסך הזה מקבל אותם מערכת הנושא.
   const { mode, setMode } = useTheme();
   const s = useStyles();
@@ -85,7 +86,8 @@ export default function SettingsScreen() {
     setScannerOnline(await isScannerReachable());
   };
 
-  useEffect(() => { refreshScanner(); }, []);
+  // גם בחזרה מאשף החיבור, שבו הכתובת והמצב משתנים
+  useFocusEffect(useCallback(() => { refreshScanner(); }, []));
 
   const onFindScanner = async () => {
     setFinding(true);
@@ -120,32 +122,6 @@ export default function SettingsScreen() {
     await refreshScanner();
   };
 
-  const onChangeHotspot = () => {
-    Alert.alert(
-      'Change the scanner’s hotspot?',
-      'The scanner will forget its current hotspot and open its setup network.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Change',
-          onPress: async () => {
-            try {
-              await forgetScannerWifi();
-              setScannerOnline(false);
-              Alert.alert(
-                'Scanner is in setup mode',
-                'On the phone you want to use: join the WiFi network “CarStats-Setup”, ' +
-                'pick that phone’s hotspot on the page that opens, and save. ' +
-                'Then turn the hotspot on and tap Find scanner.',
-              );
-            } catch (err: any) {
-              Alert.alert('Could not reach the scanner', err?.message ?? 'Try again.');
-            }
-          },
-        },
-      ],
-    );
-  };
 
   const update = async (next: NotifPrefs) => {
     setPrefs(next);
@@ -447,22 +423,19 @@ export default function SettingsScreen() {
 
         <Divider style={s.divider} />
 
-        <Text style={s.rowTitle}>Use another phone&apos;s hotspot</Text>
+        <Text style={s.rowTitle}>New phone or hotspot?</Text>
         <Text style={s.rowSub}>
-          1. Tap Change hotspot — or just power the scanner on while its old hotspot is off.{'\n'}
-          2. On the new phone, join the WiFi network &quot;CarStats-Setup&quot;. A setup page opens.{'\n'}
-          3. Pick that phone&apos;s hotspot, type its password and save.{'\n'}
-          4. Turn the hotspot on, then tap Find scanner here.
+          Type your hotspot&apos;s name and password, and the app hands them to the scanner.
         </Text>
         <Button
           mode="outlined"
           icon="wifi-cog"
-          onPress={onChangeHotspot}
+          onPress={() => router.push('/scanner-setup')}
           disabled={finding}
           style={s.homeBtn}
           contentStyle={s.homeBtnContent}
         >
-          Change hotspot
+          Connect scanner to a hotspot
         </Button>
       </View>
 
