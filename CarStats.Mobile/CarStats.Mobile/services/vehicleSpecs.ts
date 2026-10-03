@@ -22,7 +22,9 @@ export async function ensureVehicleSpecs(vehicle: Vehicle): Promise<Vehicle> {
   attempted.add(vehicle.id);
 
   const specs = await getVehicleSpecs(vehicle.make, vehicle.model, vehicle.year);
-  const isElectric = specs?.isElectric ?? vehicle.isElectric;
+  // ה-AI יכול רק לגלות שרכב ישן הוא חשמלי, ולא להפוך רכב חשמלי בחזרה לדלק:
+  // הסימון החשמלי הגיע מהמרשם או מהנהג עצמו, ושניהם אמינים יותר מניחוש
+  const isElectric = vehicle.isElectric || specs?.isElectric === true;
   const becameElectric = isElectric && !vehicle.isElectric;
 
   // מיכל שהנהג כבר הקליד גובר על ה-AI — אלא אם הרכב התגלה כחשמלי,

@@ -18,12 +18,12 @@ namespace CarStats.API.Controllers
         // ערכי גיבוי, למקרה שהקונפיגורציה חסרה או שגויה
         private static readonly (string Type, decimal Price)[] Fallbacks =
         {
-            (RegulatedFuelType, 8.09m),
+            (RegulatedFuelType, 8.27m),
             ("98",             10.50m),
             ("diesel",         11.41m),
         };
 
-        private const string FallbackEffectiveFrom = "2026-08-01";
+        private const string FallbackEffectiveFrom = "2026-10-01";
 
         // תעריף החשמל הביתי לקוט"ש כולל מע"מ — לרכב חשמלי. עמדות טעינה ציבוריות
         // יקרות בהרבה, אבל רוב הטעינות נעשות בבית.

@@ -164,17 +164,31 @@ namespace CarStats.API.Services
             return entry?.Value;
         }
 
+        // שמירה במטמון היא בונוס: אם היא נכשלת (למשל שתי בקשות זהות באותו רגע),
+        // המשתמש עדיין מקבל את התשובה ולא שגיאת שרת
         public async Task SetCachedAsync(string key, string json)
         {
             var entry = await _db.AiCache.FindAsync(key);
             if (entry == null)
-                _db.AiCache.Add(new AiCacheEntry { Key = key, Value = json, CreatedAt = DateTime.UtcNow });
+            {
+                entry = new AiCacheEntry { Key = key, Value = json, CreatedAt = DateTime.UtcNow };
+                _db.AiCache.Add(entry);
+            }
             else
             {
                 entry.Value     = json;
                 entry.CreatedAt = DateTime.UtcNow;
             }
-            await _db.SaveChangesAsync();
+
+            try
+            {
+                await _db.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                _log.LogWarning(ex, "Could not cache AI answer for {Key}", key);
+                _db.Entry(entry).State = EntityState.Detached;
+            }
         }
 
         // ─── עזרים ────────────────────────────────────────────────────────────

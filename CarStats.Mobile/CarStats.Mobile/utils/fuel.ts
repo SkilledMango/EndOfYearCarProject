@@ -29,7 +29,7 @@ export const FUEL_TYPE_LABELS: Record<FuelType, string> = {
  * here so an offline estimate shows a plausible cost rather than nothing.
  */
 export const FALLBACK_FUEL_PRICES: Record<FuelType, number> = {
-  '95':     8.09,
+  '95':     8.27,
   '98':    10.50,
   diesel:  11.41,
 };

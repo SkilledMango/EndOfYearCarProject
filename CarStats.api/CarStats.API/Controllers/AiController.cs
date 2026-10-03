@@ -41,6 +41,9 @@ namespace CarStats.API.Controllers
         {
             if (string.IsNullOrWhiteSpace(request.Make) || string.IsNullOrWhiteSpace(request.Model) || request.Year <= 0)
                 return BadRequest("make, model and year are required.");
+            // אותם גבולות כמו בטבלת הרכבים, וכך גם מפתח המטמון לא חורג מ-200 תווים
+            if (request.Make.Length > 50 || request.Model.Length > 50 || (request.FuelTypeHint?.Length ?? 0) > 30)
+                return BadRequest("make, model or fuel type is too long.");
 
             var key = $"specs:{request.Year}:{request.Make}:{request.Model}:{request.FuelTypeHint}"
                 .ToLowerInvariant().Trim();
@@ -80,11 +83,14 @@ namespace CarStats.API.Controllers
         public async Task<IActionResult> ExplainFault([FromBody] ExplainFaultRequest request)
         {
             var code = request.Code?.Trim().ToUpperInvariant() ?? "";
-            if (code.Length < 4 || code.Length > 8)
+            if (code.Length < 4 || code.Length > 8 || !code.All(char.IsAsciiLetterOrDigit))
                 return BadRequest("A valid fault code is required.");
+            if ((request.Make?.Length ?? 0) > 50 || (request.Model?.Length ?? 0) > 50)
+                return BadRequest("make or model is too long.");
 
-            // קודים ייחודיים ליצרן משנים משמעות בין יצרנים — לכן היצרן חלק מהמפתח
-            var key = $"dtc:{code}:{request.Make}".ToLowerInvariant().Trim();
+            // כל מה שנכנס לשאלה חייב להיות גם במפתח. אחרת משתמש אחד יכול להכניס
+            // הוראות לשדה הדגם, והתשובה המזויפת הייתה נשמרת לכל בעלי אותו יצרן.
+            var key = $"dtc:{code}:{request.Make}:{request.Model}:{request.Year}".ToLowerInvariant().Trim();
 
             var cached = await _ai.GetCachedAsync(key);
             if (cached != null)
