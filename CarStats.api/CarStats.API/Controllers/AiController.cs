@@ -110,6 +110,11 @@ namespace CarStats.API.Controllers
                 "action: 1 sentence on what they should do and how urgently.\n" +
                 "severity: low if it can wait, medium if it should be booked in, high if " +
                 "driving on could be unsafe or cause damage.\n" +
+                // P1/B1/C1/U1 ו-P3 הם קודי יצרן: אותו קוד אומר דברים שונים אצל יצרנים שונים
+                (car.Length > 0
+                    ? "Codes whose second character is 1 or 3 are manufacturer-specific: give the meaning this " +
+                      "manufacturer uses, not a generic one.\n"
+                    : "") +
                 "Do not mention prices. If you do not recognise the code, reply exactly: {\"title\": \"unknown\"}";
 
             var result = await _ai.AskJsonAsync(prompt, json =>

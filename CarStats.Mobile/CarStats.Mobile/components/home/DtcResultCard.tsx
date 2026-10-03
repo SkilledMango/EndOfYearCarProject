@@ -5,19 +5,23 @@
 
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { ReportDtcResponse } from '@/services/api';
+import { CarIdentity, ReportDtcResponse } from '@/services/api';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { resultSeverity, severityMeta } from '@/utils/severity';
+import { faultParams } from '@/utils/faultRoute';
 import { useRouter } from 'expo-router';
 
 export default function DtcResultCard({
   result,
   rawCode,
+  vehicle,
 }: {
   result: ReportDtcResponse;
   /** הקוד שנסרק. נדרש כי לתקלה ללא תרגום אין אובייקט שממנו לקרוא אותו,
       ודווקא אלה הקודים שלמסך הפירוט יש מה להוסיף עליהם דרך ה-AI. */
   rawCode?: string;
+  /** הרכב שנסרק, כדי שהסבר ה-AI יתאים לקודי היצרן שלו. */
+  vehicle?: CarIdentity | null;
 }) {
   const { colors: c } = useTheme();
   const styles = useStyles();
@@ -29,7 +33,7 @@ export default function DtcResultCard({
   return (
     <Pressable
       style={[styles.resultCard, { borderColor: meta.color }]}
-      onPress={code ? () => router.push({ pathname: '/fault/[code]', params: { code } }) : undefined}
+      onPress={code ? () => router.push({ pathname: '/fault/[code]', params: faultParams(code, vehicle) }) : undefined}
       // לא לחיץ רק כשאין באמת קוד לחפש
       disabled={!code}
     >

@@ -132,16 +132,24 @@ namespace CarStats.API.Controllers
                 .DistinctBy(d => d.ErrorCode)
                 .ToDictionary(d => d.ErrorCode);
 
+            // הרכב שעליו נסרקה כל תקלה: קודים ייחודיים ליצרן (P1xxx) משנים
+            // משמעות בין יצרנים, ולכן הסבר ה-AI צריך לדעת על איזה רכב מדובר
+            var vehicleMap = await _context.Vehicles
+                .Where(v => v.AppUserId == userId)
+                .ToDictionaryAsync(v => v.Id);
+
             // חיבור כל אירוע לתרגום שלו, אם קיים
             var enriched = events.Select(ev =>
             {
                 dtcMap.TryGetValue(ev.RawErrorCode, out var dtc);
+                var car = ev.VehicleId is int vid && vehicleMap.TryGetValue(vid, out var v) ? v : null;
                 return new
                 {
                     ev.Id,
                     ev.RawErrorCode,
                     ev.Timestamp,
                     ev.IsAcknowledged,
+                    vehicle = car != null ? (object)new { car.Make, car.Model, car.Year } : null,
                     translation = dtc != null ? (object)new
                     {
                         dtc.HumanTitle,

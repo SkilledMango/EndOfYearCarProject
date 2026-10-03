@@ -15,6 +15,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { severityMeta } from '@/utils/severity';
+import { faultParams } from '@/utils/faultRoute';
 import { useRouter } from 'expo-router';
 
 const formatDate = (iso: string) =>
@@ -86,7 +87,7 @@ export default function HistoryScreen() {
             <Pressable
               key={ev.id}
               style={styles.card}
-              onPress={() => router.push({ pathname: '/fault/[code]', params: { code: ev.rawErrorCode } })}
+              onPress={() => router.push({ pathname: '/fault/[code]', params: faultParams(ev.rawErrorCode, ev.vehicle) })}
             >
               <View style={styles.cardHeader}>
                 <Text style={styles.rawCode}>{ev.rawErrorCode}</Text>

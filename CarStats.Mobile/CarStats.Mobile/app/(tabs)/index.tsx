@@ -95,6 +95,9 @@ export default function HomeScreen() {
   // הגולמי כשאין לו רשומה במילון, ולכן זו הדרך שתקלה לא מוכרת עדיין
   // יודעת מה היא.
   const [scannedCodes, setScannedCodes]     = useState<string[]>([]);
+  // הרכב שנסרק בפועל. התוצאות נשארות על המסך גם אחרי החלפת רכב, ולכן
+  // הסבר ה-AI חייב להתייחס לרכב של הסריקה ולא לזה שנבחר עכשיו
+  const [scannedVehicle, setScannedVehicle] = useState<Vehicle | null>(null);
   const [scanError, setScanError]           = useState<string | null>(null);
   const [scanOverlayVisible, setScanOverlayVisible] = useState(false);
 
@@ -362,6 +365,7 @@ export default function HomeScreen() {
       );
       setDtcResults(responses);
       setScannedCodes(codes);
+      setScannedVehicle(selectedVehicle ?? null);
       loadData();
 
       // התראה מקומית (נשלטת בהגדרות)
@@ -589,7 +593,7 @@ export default function HomeScreen() {
         <View>
           <Text style={styles.sectionTitle}>SCAN RESULTS</Text>
           {dtcResults.map((r, i) => (
-            <DtcResultCard key={i} result={r} rawCode={scannedCodes[i]} />
+            <DtcResultCard key={i} result={r} rawCode={scannedCodes[i]} vehicle={scannedVehicle} />
           ))}
         </View>
       )}

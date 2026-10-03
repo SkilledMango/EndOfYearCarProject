@@ -16,10 +16,18 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SeverityLevel, explainFaultCode } from './api';
+import { CarIdentity, SeverityLevel, explainFaultCode } from './api';
 
 /** מטמון ההסברים, כדי שכל קוד יעלה בקשה אחת בלבד אי פעם. */
 const CACHE_PREFIX = '@carstats_dtc_ai_';
+
+/**
+ * מפתח המטמון: הקוד, ועם הרכב כשהוא ידוע — אותו P1326 הוא תקלה אחרת
+ * ביונדאי ובטויוטה, ואסור שהסבר של רכב אחד יוצג לרכב אחר.
+ */
+export const cacheKey = (code: string, car?: CarIdentity): string =>
+  CACHE_PREFIX + code.toUpperCase()
+  + (car ? `:${car.year}:${car.make}:${car.model}`.toUpperCase() : '');
 
 export interface AiFaultExplanation {
   humanTitle:     string;
@@ -35,18 +43,18 @@ export type AiLookupResult =
   | { ok: true;  explanation: AiFaultExplanation; cached: boolean }
   | { ok: false; reason: AiFailureReason };
 
-async function readCache(code: string): Promise<AiFaultExplanation | null> {
+async function readCache(key: string): Promise<AiFaultExplanation | null> {
   try {
-    const raw = await AsyncStorage.getItem(CACHE_PREFIX + code.toUpperCase());
+    const raw = await AsyncStorage.getItem(key);
     return raw ? (JSON.parse(raw) as AiFaultExplanation) : null;
   } catch {
     return null;
   }
 }
 
-async function writeCache(code: string, value: AiFaultExplanation): Promise<void> {
+async function writeCache(key: string, value: AiFaultExplanation): Promise<void> {
   try {
-    await AsyncStorage.setItem(CACHE_PREFIX + code.toUpperCase(), JSON.stringify(value));
+    await AsyncStorage.setItem(key, JSON.stringify(value));
   } catch { /* האחסון מלא — ההסבר פשוט יעלה בקשה נוספת בפעם הבאה */ }
 }
 
@@ -74,11 +82,12 @@ function failureReason(err: any): AiFailureReason {
  */
 export async function explainFaultWithAi(
   code: string,
-  vehicle?: { make: string; model: string; year: number },
+  vehicle?: CarIdentity,
 ): Promise<AiLookupResult> {
   if (!code) return { ok: false, reason: 'unavailable' };
 
-  const cached = await readCache(code);
+  const key = cacheKey(code, vehicle);
+  const cached = await readCache(key);
   if (cached) return { ok: true, explanation: cached, cached: true };
 
   try {
@@ -89,7 +98,7 @@ export async function explainFaultWithAi(
       actionRequired: data.action,
       severity:       parseSeverity(data.severity ?? ''),
     };
-    await writeCache(code, explanation);
+    await writeCache(key, explanation);
     return { ok: true, explanation, cached: false };
   } catch (err) {
     console.warn('[dtcLookup] server could not explain', code, err);

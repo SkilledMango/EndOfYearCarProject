@@ -107,12 +107,21 @@ export interface DtcTranslation {
   estimatedCostMax: number;
 }
 
+/** יצרן, דגם ושנה — מספיק כדי שהסבר ה-AI יתאים לרכב עצמו. */
+export interface CarIdentity {
+  make: string;
+  model: string;
+  year: number;
+}
+
 export interface VehicleEventEnriched {
   id: number;
   rawErrorCode: string;
   timestamp: string;
   isAcknowledged: boolean;
   translation: DtcTranslation | null;
+  /** הרכב שעליו נסרקה התקלה. null כשהרכב כבר נמחק מהמוסך. */
+  vehicle?: CarIdentity | null;
 }
 
 export interface ReportDtcResponse {
@@ -309,7 +318,7 @@ export interface AiFaultResponse {
 /** הסבר AI לקוד תקלה. זורקת שגיאה — הקורא מתרגם אותה לסיבה שאפשר להציג. */
 export const explainFaultCode = async (
   code: string,
-  vehicle?: { make: string; model: string; year: number },
+  vehicle?: CarIdentity,
 ): Promise<AiFaultResponse> => {
   const { data } = await api.post<AiFaultResponse>(
     '/ai/explain-fault',

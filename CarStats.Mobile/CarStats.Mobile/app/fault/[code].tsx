@@ -19,7 +19,10 @@ import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { severityMeta } from '@/utils/severity';
 
 export default function FaultDetailScreen() {
-  const { code } = useLocalSearchParams<{ code: string }>();
+  // הרכב אופציונלי: כשהוא ידוע, הסבר ה-AI מתאים לקודי היצרן שלו
+  const { code, make, model, year } =
+    useLocalSearchParams<{ code: string; make?: string; model?: string; year?: string }>();
+  const car = make && model && Number(year) > 0 ? { make, model, year: Number(year) } : undefined;
   const { colors: c } = useTheme();
   const s = useStyles();
   const router = useRouter();
@@ -45,7 +48,7 @@ export default function FaultDetailScreen() {
         } else {
           // לא נמצא במילון. קודים ייחודיים ליצרן מגיעים לאלפים, ולכן שואלים
           // את המודל במקום להציג קוד עירום.
-          const explained = await explainFaultWithAi(code ?? '');
+          const explained = await explainFaultWithAi(code ?? '', car);
           if (!cancelled) {
             if (explained.ok) setAi(explained.explanation);
             else setAiFailure(explained.reason);
@@ -58,7 +61,7 @@ export default function FaultDetailScreen() {
       }
     })();
     return () => { cancelled = true; };
-  }, [code]);
+  }, [code, make, model, year]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
@@ -98,8 +101,9 @@ export default function FaultDetailScreen() {
               what they are looking at before they read it. */}
           <View style={s.aiNotice}>
             <Text style={s.aiNoticeText}>
-              ✨ Not in our dictionary — explained by AI. Treat it as a starting
-              point and confirm with a mechanic.
+              ✨ Not in our dictionary — explained by AI
+              {car ? ` for your ${car.year} ${car.make} ${car.model}` : ''}. Treat it as a
+              starting point and confirm with a mechanic.
             </Text>
           </View>
 
