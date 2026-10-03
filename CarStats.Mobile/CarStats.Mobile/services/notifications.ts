@@ -3,8 +3,8 @@
  *
  *  1. התראת סריקה — התראה מקומית כשסריקה מוצאת קודי תקלה.
  *
- *  2. תזכורת בטיחות ילדים — גדר גיאוגרפית סביב כתובת הבית השמורה.
- *     הגעה אליה מפעילה תזכורת "בדוק את המושב האחורי" גם כשהאפליקציה סגורה.
+ *  2. תזכורת בטיחות ילדים — גדר גיאוגרפית סביב הבית ומקום העבודה השמורים.
+ *     הגעה לאחד מהם מפעילה תזכורת "בדוק את המושב האחורי" גם כשהאפליקציה סגורה.
  *
  * ההעדפות נשמרות במכשיר ונערכות במסך ההגדרות. הקובץ מיובא מהפריסה הראשית
  * כדי שהגדר תירשם מחדש בכל הפעלה, כולל הפעלה ברקע.
@@ -14,10 +14,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
+import { ReminderPlace, placeFromRegion } from '@/utils/reminderRegions';
 
 const PREFS_KEY = '@carstats_notif_prefs';
 const CHILD_REMINDER_TASK = 'carstats-child-reminder';
-const HOME_RADIUS_METERS = 150;
 
 export interface NotifPrefs {
   faultAlerts: boolean;
@@ -31,6 +31,10 @@ export interface NotifPrefs {
    * עם היעדרו.
    */
   homeLabel: string | null;
+  /** מקום העבודה — עיגול שני לתזכורת. null כשלא נשמר. */
+  workLat: number | null;
+  workLng: number | null;
+  workLabel: string | null;
 }
 
 export const DEFAULT_PREFS: NotifPrefs = {
@@ -39,6 +43,9 @@ export const DEFAULT_PREFS: NotifPrefs = {
   homeLat: null,
   homeLng: null,
   homeLabel: null,
+  workLat: null,
+  workLng: null,
+  workLabel: null,
 };
 
 // להציג התראות גם כשהאפליקציה פתוחה
@@ -52,11 +59,17 @@ Notifications.setNotificationHandler({
 });
 
 
-export async function showChildReminderNotification(): Promise<void> {
+const ARRIVED_TITLE: Record<ReminderPlace, string> = {
+  home: '👶 Arrived home — check the back seat',
+  work: '👶 Arrived at work — check the back seat',
+};
+
+/** place אומר לאן הגעת; בלי place — הנוסח הכללי של עיגולים ישנים. */
+export async function showChildReminderNotification(place?: ReminderPlace | null): Promise<void> {
   // פונקציה מוכנה של ספריית ההתראות: בונה את ההתראה מהתוכן שנתנו לה
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: '👶 Arrived — check the back seat',
+      title: place ? ARRIVED_TITLE[place] : '👶 Arrived — check the back seat',
       body: "You've reached your saved location. Make sure no child or pet is left in the car.",
       sound: true,
     },
@@ -66,10 +79,10 @@ export async function showChildReminderNotification(): Promise<void> {
 // מגדיר את הפונקציה ככה שהיא תעבוד גם כשהאפליקציה סגורה (מערכת ההפעלה עוקבת אחרי המיקום)
 TaskManager.defineTask(CHILD_REMINDER_TASK, async ({ data, error }) => {
   if (error || !data) return;
-  // סוג האירוע שקרה: כניסה לעיגול או יציאה ממנו.
-  const { eventType } = data as { eventType: Location.GeofencingEventType };
+  // סוג האירוע שקרה (כניסה או יציאה), ולאיזה עיגול — בית או עבודה
+  const { eventType, region } = data as { eventType: Location.GeofencingEventType; region?: Location.LocationRegion };
   if (eventType === Location.GeofencingEventType.Enter) { // רק בכניסה לעיגול, לא ביציאה ממנו
-    await showChildReminderNotification();
+    await showChildReminderNotification(placeFromRegion(region?.identifier));
   }
 });
 
@@ -127,10 +140,14 @@ export async function sendFaultAlert(faultCount: number, worstLabel: string) {
 // ─── תזכורת בטיחות ילדים ─────────────────────────────────────────────────────
 
 /**
- * מתחיל מעקב אחר עיגול סביב הכתובת השמורה.
+ * מתחיל מעקב אחר העיגולים — הבית, העבודה או שניהם (ראו reminderRegions).
+ * קריאה חוזרת מחליפה את העיגולים הקודמים, כך שאותה פונקציה גם מעדכנת.
  * דורש שלוש הרשאות: התראות, מיקום רגיל ומיקום ברקע
  */
-export async function enableChildReminder(lat: number, lng: number): Promise<void> {
+export async function enableChildReminder(regions: Location.LocationRegion[]): Promise<void> {
+  if (regions.length === 0) {
+    throw new Error('Save a home or work location first.');
+  }
   if (!(await ensureNotifPermission())) {
     throw new Error('Notification permission is required for the reminder.');
   }
@@ -145,15 +162,8 @@ export async function enableChildReminder(lat: number, lng: number): Promise<voi
     );
   }
 
-  await Location.startGeofencingAsync(CHILD_REMINDER_TASK, [ // מערכת ההפעלה עוקבת אחרי העיגול והפונקציה תופעל כשנכנס אליו
-    {
-      latitude: lat,
-      longitude: lng,
-      radius: HOME_RADIUS_METERS,
-      notifyOnEnter: true,
-      notifyOnExit: false,
-    },
-  ]);
+  // מערכת ההפעלה עוקבת אחרי העיגולים והפונקציה למעלה תופעל כשנכנסים לאחד מהם
+  await Location.startGeofencingAsync(CHILD_REMINDER_TASK, regions);
 }
 
 export async function disableChildReminder(): Promise<void> {
@@ -163,12 +173,20 @@ export async function disableChildReminder(): Promise<void> {
   } catch { /* המשימה מעולם לא נרשמה במכשיר הזה */ }
 }
 
-/** לוקח את המיקום הנוכחי כדי לשמור אותו כבית עבור הגאופנס. */
-export async function captureHomeLocation(): Promise<{ lat: number; lng: number }> {
+/** לוקח את המיקום הנוכחי כדי לשמור אותו כבית או כעבודה עבור הגאופנס. */
+export async function captureCurrentLocation(): Promise<{ lat: number; lng: number }> {
   const fg = await Location.requestForegroundPermissionsAsync();
   if (fg.status !== 'granted') {
-    throw new Error('Location permission is required to save your home location.');
+    throw new Error('Location permission is required to save this location.');
   }
-  const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-  return { lat: loc.coords.latitude, lng: loc.coords.longitude };
+  try {
+    const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    return { lat: loc.coords.latitude, lng: loc.coords.longitude };
+  } catch {
+    // באנדרואיד הבקשה נכשלת כשהגדרת "דיוק מיקום" כבויה, גם כשהטלפון יודע
+    // איפה הוא. המיקום האחרון הידוע (עד 10 דקות) מספיק כדי לשמור כתובת.
+    const last = await Location.getLastKnownPositionAsync({ maxAge: 10 * 60 * 1000 }).catch(() => null);
+    if (last) return { lat: last.coords.latitude, lng: last.coords.longitude };
+    throw new Error('Your location is not available right now. Turn location on, or type the address instead.');
+  }
 }

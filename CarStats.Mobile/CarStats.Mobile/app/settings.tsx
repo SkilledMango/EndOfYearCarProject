@@ -1,13 +1,12 @@
 /**
  * מסך ההגדרות: מצב תצוגה, התראות סריקה, תזכורת בטיחות הילדים,
- * כתובת הבית, מתאם ה-OBD, החשבון ופרטי הגרסה. כל מתג כאן מחובר לתכונה אמיתית.
+ * כתובות הבית והעבודה, מתאם ה-OBD, החשבון ופרטי הגרסה. כל מתג כאן מחובר לתכונה אמיתית.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
   Alert,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,16 +15,13 @@ import {
 // רכיבי הספרייה יורשים את הצבעים מערכת הנושא שהוגדרה בפריסה הראשית,
 // ולכן אין צורך להעביר להם צבעים במפורש.
 import { Button, Divider, ProgressBar, SegmentedButtons, Switch, TextInput } from 'react-native-paper';
-import * as Location from 'expo-location';
 import Constants from 'expo-constants';
-import { geocodeAddress } from '@/services/api';
-import { usePlaceSuggestions } from '@/hooks/usePlaceSuggestions';
 import { useAuth } from '@/context/AuthContext';
 import { createThemedStyles, useTheme, ThemeMode } from '@/context/ThemeContext';
+import PlaceEditor from '@/components/settings/PlaceEditor';
 import {
   NotifPrefs,
   DEFAULT_PREFS,
-  captureHomeLocation,
   disableChildReminder,
   enableChildReminder,
   ensureNotifPermission,
@@ -33,6 +29,7 @@ import {
   savePrefs,
   showChildReminderNotification,
 } from '@/services/notifications';
+import { ReminderPlace, REMINDER_RADIUS_METERS, reminderRegions } from '@/utils/reminderRegions';
 import {
   findScanner,
   getScannerAddress,
@@ -56,18 +53,6 @@ export default function SettingsScreen() {
 
   const [prefs, setPrefs] = useState<NotifPrefs>(DEFAULT_PREFS);
   const [busy, setBusy]   = useState(false);
-  const [homeAddress, setHomeAddress] = useState('');
-  const { suggestions, visible, search, clear } = usePlaceSuggestions();
-
-  const onHomeAddressChange = (text: string) => {
-    setHomeAddress(text);
-    search(text);
-  };
-
-  const pickSuggestion = (description: string) => {
-    setHomeAddress(description);
-    clear();
-  };
 
   useEffect(() => { loadPrefs().then(setPrefs); }, []);
 
@@ -146,16 +131,17 @@ export default function SettingsScreen() {
       setBusy(false);
       return;
     }
-    if (prefs.homeLat == null || prefs.homeLng == null) {
+    const regions = reminderRegions(prefs);
+    if (regions.length === 0) {
       Alert.alert(
-        'Set a home location first',
-        'The reminder fires when you arrive at your saved location. Set a home address below, then enable the reminder.',
+        'Set a location first',
+        'The reminder fires when you arrive home or at work. Set at least one address below, then enable the reminder.',
       );
       return;
     }
     setBusy(true);
     try {
-      await enableChildReminder(prefs.homeLat, prefs.homeLng);
+      await enableChildReminder(regions);
       await update({ ...prefs, childReminder: true });
     } catch (err: any) {
       Alert.alert('Could not enable reminder', err?.message ?? 'Unknown error.');
@@ -175,79 +161,46 @@ export default function SettingsScreen() {
     await showChildReminderNotification();
   };
 
-  // ── שמירת כתובת הבית ─────────────────────────────────────────────────────
-  /** שומר את מיקום הבית ומעגן מחדש גדר פעילה סביבו. */
-  const saveHome = async (lat: number, lng: number, label: string) => {
-    const next = { ...prefs, homeLat: lat, homeLng: lng, homeLabel: label };
-    await update(next);
+  // ── הבית והעבודה ─────────────────────────────────────────────────────────
+  /**
+   * שומר או מוחק מקום (lat = null מוחק), ומעדכן גדר פעילה כך שתעקוב בדיוק
+   * אחרי המקומות שנשארו. אם לא נשאר אף מקום — התזכורת נכבית.
+   */
+  const setPlace = async (place: ReminderPlace, lat: number | null, lng: number | null, label: string | null) => {
+    const next: NotifPrefs = place === 'home'
+      ? { ...prefs, homeLat: lat, homeLng: lng, homeLabel: label }
+      : { ...prefs, workLat: lat, workLng: lng, workLabel: label };
+
     if (prefs.childReminder) {
+      const regions = reminderRegions(next);
       await disableChildReminder();
-      await enableChildReminder(lat, lng);
+      if (regions.length > 0) {
+        try {
+          await enableChildReminder(regions);
+        } catch (err: any) {
+          next.childReminder = false;
+          Alert.alert('Reminder turned off', err?.message ?? 'Could not restart the arrival reminder.');
+        }
+      } else {
+        next.childReminder = false;
+      }
     }
+    await update(next);
+  };
+
+  const savePlace = async (place: ReminderPlace, lat: number, lng: number, label: string) => {
+    await setPlace(place, lat, lng, label);
     Alert.alert(
-      'Home location saved',
-      `${label}\n\nThe arrival reminder will trigger within ~150 m of this spot.`,
+      place === 'home' ? 'Home location saved' : 'Work location saved',
+      `${label}\n\nThe arrival reminder will trigger within ~${REMINDER_RADIUS_METERS} m of this spot.`,
     );
   };
 
-  // הקלדת כתובת לא דורשת GPS כלל, וזה חשוב במכשיר שלא מצליח לאכן —
-  // וגם מאפשרת להגדיר בית שלא נמצאים בו כרגע.
-  const setHomeFromAddress = async () => {
-    const query = homeAddress.trim();
-    if (!query) { Alert.alert('Enter an address', 'Type your home address first.'); return; }
+  const removePlace = (place: ReminderPlace) => setPlace(place, null, null, null);
 
-    setBusy(true);
-    try {
-      const found = await geocodeAddress(query);
-      if (!found) {
-        Alert.alert('Address not found', 'Try adding the city, e.g. "Agmon 13, Hadera".');
-        return;
-      }
-      await saveHome(found.latitude, found.longitude, found.formattedAddress);
-      setHomeAddress('');
-      clear();
-    } catch (err: any) {
-      console.warn('[settings] geocode failed', err);
-      const status = err?.response?.status;
-      Alert.alert(
-        'Could not save location',
-        status === 404
-          ? 'The server does not have address lookup yet. It needs to be published.'
-          : status === 503
-            ? 'Address lookup is not configured on the server.'
-            : 'Check your connection and try again.',
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const setHomeFromGps = async () => {
-    setBusy(true);
-    try {
-      const { lat, lng } = await captureHomeLocation();
-
-      // המרת הקואורדינטות לכתובת קריאה. נעשה במכשיר ולא דרך השרת, כי
-      // הספרייה כבר יודעת לעשות זאת וזה חוסך פנייה שלמה בשביל תווית.
-      let label = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-      try {
-        const [place] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
-        if (place) {
-          const parts = [
-            [place.street, place.streetNumber].filter(Boolean).join(' '),
-            place.city ?? place.subregion,
-          ].filter(Boolean);
-          if (parts.length) label = parts.join(', ');
-        }
-      } catch { /* אין המרה הפוכה זמינה — הקואורדינטות יספיקו */ }
-
-      await saveHome(lat, lng, label);
-    } catch (err: any) {
-      Alert.alert('Could not get your location', err?.message ?? 'Type your address instead.');
-    } finally {
-      setBusy(false);
-    }
-  };
+  // מקומות שנשמרו לפני שהתווית נוספה מוצגים לפי הקואורדינטות
+  const placeLabel = (lat: number | null, lng: number | null, label: string | null) =>
+    lat == null ? null : label ?? `${lat.toFixed(4)}, ${lng?.toFixed(4)}`;
 
   const version = Constants.expoConfig?.version ?? '1.0.0';
 
@@ -284,7 +237,7 @@ export default function SettingsScreen() {
           <View style={{ flex: 1, paddingRight: 12 }}>
             <Text style={s.rowTitle}>Child safety reminder</Text>
             <Text style={s.rowSub}>
-              When you arrive at your saved location, remind me to check the back seat.
+              When you arrive home or at work, remind me to check the back seat.
             </Text>
           </View>
           <Switch
@@ -306,71 +259,31 @@ export default function SettingsScreen() {
 
         <Divider style={s.divider} />
 
-        <Text style={s.rowTitle}>Home location</Text>
-        <Text style={s.rowSub}>
-          Used by the arrival reminder, and as a search point on the Mechanics tab.
-        </Text>
-
-        <View>
-          <TextInput
-            mode="outlined"
-            dense
-            label="Home address"
-            placeholder="e.g. Agmon 13, Hadera"
-            value={homeAddress}
-            onChangeText={onHomeAddressChange}
-            disabled={busy}
-            style={s.homeInput}
-            left={<TextInput.Icon icon="home-outline" />}
-            onSubmitEditing={setHomeFromAddress}
-            returnKeyType="done"
-            autoCorrect={false}
-          />
-
-          {visible && suggestions.length > 0 && (
-            <View style={s.dropdown}>
-              {suggestions.map((sug, i) => (
-                <Pressable
-                  key={sug.placeId}
-                  style={[s.dropdownItem, i < suggestions.length - 1 && s.dropdownDivider]}
-                  onPress={() => pickSuggestion(sug.description)}
-                >
-                  <Text style={s.dropdownText} numberOfLines={1}>{sug.description}</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-        </View>
-
-        <Button
-          mode="contained"
-          icon="content-save"
-          onPress={setHomeFromAddress}
-          disabled={busy || !homeAddress.trim()}
-          style={s.homeBtn}
-          contentStyle={s.homeBtnContent}
-        >
-          Save this address
-        </Button>
-
-        <Button
-          mode="outlined"
-          icon="crosshairs-gps"
-          onPress={setHomeFromGps}
+        <PlaceEditor
+          title="Home location"
+          subtitle="Used by the arrival reminder, and as a search point on the Mechanics tab."
+          name="Home"
+          placeholder="e.g. Agmon 13, Hadera"
+          icon="home-outline"
+          savedLabel={placeLabel(prefs.homeLat, prefs.homeLng, prefs.homeLabel)}
           disabled={busy}
-          style={s.homeBtn}
-          contentStyle={s.homeBtnContent}
-        >
-          Use my current location
-        </Button>
+          onSave={(lat, lng, label) => savePlace('home', lat, lng, label)}
+          onRemove={() => removePlace('home')}
+        />
 
-        {prefs.homeLat != null && (
-          <Text style={s.homeSetBadge} numberOfLines={2}>
-            {/* נופל לקואורדינטות עבור בתים שנשמרו לפני שהתווית נוספה,
-                כדי שגם התקנה ישנה תציג משהו. */}
-            Home: {prefs.homeLabel ?? `${prefs.homeLat.toFixed(4)}, ${prefs.homeLng?.toFixed(4)}`}
-          </Text>
-        )}
+        <Divider style={s.divider} />
+
+        <PlaceEditor
+          title="Work location"
+          subtitle="The reminder also fires when you arrive at work."
+          name="Work"
+          placeholder="e.g. Azrieli Center, Tel Aviv"
+          icon="briefcase-outline"
+          savedLabel={placeLabel(prefs.workLat, prefs.workLng, prefs.workLabel)}
+          disabled={busy}
+          onSave={(lat, lng, label) => savePlace('work', lat, lng, label)}
+          onRemove={() => removePlace('work')}
+        />
       </View>
 
       {/* ── מתאם ה-OBD ── */}
@@ -497,33 +410,8 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   divider:   { marginVertical: 14 },
 
   homeInput:      { marginTop: 12 },
-  // רשימת ההצעות מרחפת מעל התוכן ולא דוחפת אותו, כדי שהכרטיס לא יקפוץ
-  // בכל פעם שההצעות מופיעות.
-  dropdown: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    zIndex: 20,
-    backgroundColor: c.Dashboard.card,
-    borderWidth: 1,
-    borderColor: c.Dashboard.cardBorder,
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
-  dropdownItem:    { paddingHorizontal: 14, paddingVertical: 12 },
-  dropdownDivider: { borderBottomWidth: 1, borderBottomColor: c.Dashboard.cardBorder },
-  dropdownText:    { fontSize: 14, color: c.Dashboard.textPrimary },
   homeBtn:        { marginTop: 10 },
   homeBtnContent: { paddingVertical: 4 },
-  homeSetBadge: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: c.Severity.green,
-    letterSpacing: 1,
-    textAlign: 'center',
-    marginTop: 8,
-  },
 
   aboutRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 
