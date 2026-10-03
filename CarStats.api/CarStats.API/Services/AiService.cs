@@ -39,7 +39,7 @@ namespace CarStats.API.Services
 
         private string? GroqKey   => _config["Ai:GroqKey"];
         private string? GeminiKey => _config["Ai:GeminiKey"];
-        private string  GroqModel => _config["Ai:GroqModel"] ?? "llama-3.3-70b-versatile";
+        private string  GroqModel => _config["Ai:GroqModel"] ?? "openai/gpt-oss-120b";
 
         /// <summary>
         /// שואלת את הספקים לפי הסדר ומחזירה את התשובה הראשונה שעוברת את isUsable.
@@ -95,14 +95,19 @@ namespace CarStats.API.Services
             using var request = new HttpRequestMessage(HttpMethod.Post,
                 "https://api.groq.com/openai/v1/chat/completions");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", GroqKey);
-            request.Content = JsonContent(new
+            var body = new Dictionary<string, object>
             {
-                model = GroqModel,
-                messages = new[] { new { role = "user", content = prompt } },
-                temperature = 0,
-                max_tokens = 600,
-                response_format = new { type = "json_object" },
-            });
+                ["model"]           = GroqModel,
+                ["messages"]        = new[] { new { role = "user", content = prompt } },
+                ["temperature"]     = 0,
+                ["max_tokens"]      = 600,
+                ["response_format"] = new { type = "json_object" },
+            };
+            // מודלי gpt-oss "חושבים" לפני התשובה. חשיבה קצרה מספיקה לשאלה עובדתית,
+            // ועולה רבע מהטוקנים — וכך המכסה היומית מחזיקה פי ארבעה
+            if (GroqModel.StartsWith("openai/gpt-oss"))
+                body["reasoning_effort"] = "low";
+            request.Content = JsonContent(body);
 
             using var response = await client.SendAsync(request);
             if ((int)response.StatusCode == 429) return (null, true);
