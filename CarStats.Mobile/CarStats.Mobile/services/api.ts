@@ -85,7 +85,12 @@ export interface NearbyShop {
   reviewCount: number;
   latitude: number;
   longitude: number;
+  /** המוסך המורשה של יצרן הרכב — תמיד ראשון ברשימה כשנמצא כזה. */
+  isBrandService?: boolean;
 }
+
+/** fuel — כל המוסכים; electric — מוסכים לרכב חשמלי והיברידי. */
+export type ShopKind = 'fuel' | 'electric';
 
 export interface DiagnosticCode {
   id: number;
@@ -180,9 +185,16 @@ export const deleteVehicle = async (id: number): Promise<void> => {
   await api.delete(`/vehicles/${id}`);
 };
 
-export const getNearbyShops = async (lat: number, lng: number): Promise<NearbyShop[]> => {
+/**
+ * מוסכים אמיתיים סביב נקודה. עם make, המוסך המורשה הקרוב של היצרן עולה
+ * ראשון (makeHe — השם בעברית, כפי שהוא מופיע בשלטים ובשמות המוסכים).
+ */
+export const getNearbyShops = async (
+  lat: number, lng: number,
+  options: { kind?: ShopKind; make?: string; makeHe?: string } = {},
+): Promise<NearbyShop[]> => {
   const { data } = await api.get<NearbyShop[]>('/navigation/nearby-shops', {
-    params: { lat, lng },
+    params: { lat, lng, kind: options.kind, make: options.make, makeHe: options.makeHe },
   });
   return data;
 };

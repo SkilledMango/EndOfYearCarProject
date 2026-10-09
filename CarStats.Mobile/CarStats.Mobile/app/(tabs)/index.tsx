@@ -46,6 +46,7 @@ import ScannerBanner from '@/components/home/ScannerBanner';
 import LiveGauges from '@/components/home/LiveGauges';
 import FuelSetModal from '@/components/home/FuelSetModal';
 import DtcResultCard from '@/components/home/DtcResultCard';
+import { loadSelectedVehicleId, saveSelectedVehicleId } from '@/services/selectedVehicle';
 
 // ─── נקודת ההתחלה של מפלס הדלק, נשמרת במכשיר לכל רכב ─────────────────────────
 // החישוב עצמו יושב ב-utils/fuel.ts כדי שאפשר יהיה לבדוק אותו בלי המסך.
@@ -123,15 +124,17 @@ export default function HomeScreen() {
   const loadData = useCallback(async () => {
     if (!authUser) return;
     try {
-      const [userData, events] = await Promise.all([
+      const [userData, events, storedId] = await Promise.all([
         getUser(authUser.id),
         getUserEvents(authUser.id),
+        loadSelectedVehicleId(),
       ]);
       setUser(userData);
       // שומרים על הרכב שנבחר רק אם הוא עדיין קיים ברשימה שחזרה — אחרת
       // רכב שנמחק מהפרופיל היה נשאר על המסך הזה עד להפעלה מחדש.
+      // בפתיחה הראשונה חוזרים לרכב שנבחר בפעם הקודמת
       const pickSelected = (list: Vehicle[]) => setSelectedVehicle(prev =>
-        (prev ? list.find(v => v.id === prev.id) : null) ?? list[0] ?? null);
+        list.find(v => v.id === (prev?.id ?? storedId)) ?? list[0] ?? null);
       pickSelected(userData.vehicles ?? []);
       setRecentEvents(events.slice(0, 3));
 
@@ -241,6 +244,11 @@ export default function HomeScreen() {
       setLiveError(true);
     }
   }, [scannerOnline]);
+
+  // זוכרים את הבחירה, כדי שגם מוצא המוסכים יידע על איזה רכב מדובר
+  useEffect(() => {
+    if (selectedVehicle) saveSelectedVehicleId(selectedVehicle.id);
+  }, [selectedVehicle?.id]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     loadData();

@@ -122,6 +122,17 @@ const MAKE_MAP: Record<string, string> = {
   'סאנגיונג':        'SsangYong',
 };
 
+/**
+ * השם בעברית של יצרן, למשל "Kia" ← "קיה" — כך הוא כתוב בשמות המוסכים
+ * המורשים. null כשהיצרן לא בטבלה.
+ */
+export function hebrewMakeName(englishMake: string): string | null {
+  const wanted = englishMake.trim().toLowerCase();
+  // מדלגים על מפתחות שהם קיצורים באותיות לועזיות (כמו "MG") — הם לא עברית
+  const entry = Object.entries(MAKE_MAP).find(([he, en]) => en.toLowerCase() === wanted && /[א-ת]/.test(he));
+  return entry ? entry[0] : null;
+}
+
 // ─── תרגום שם היצרן, כולל טיפול בשמות חתוכים ─────────────────────────────────
 //
 // המרשם חותך את שם היצרן סביב 14 תווים, ולכן שם המדינה נקטע באמצע.

@@ -53,18 +53,74 @@ namespace CarStats.API.Controllers
         }
 
         // GET: api/navigation/nearby-shops — מוסכים חיים סביב המשתמש.
+        //   kind=fuel (ברירת מחדל) — כל המוסכים, מהקרוב לרחוק
+        //   kind=electric — מוסכים לרכב חשמלי והיברידי
+        //   make / makeHe — יצרן הרכב באנגלית ובעברית: המוסך המורשה הקרוב שלו עולה לראש הרשימה
         // התשובה מקוצצת לשדות שהמסך באמת מציג, כי המקורית ענקית.
         [HttpGet("nearby-shops")]
-        public async Task<IActionResult> NearbyShops([FromQuery] double lat, [FromQuery] double lng)
+        public async Task<IActionResult> NearbyShops(
+            [FromQuery] double lat, [FromQuery] double lng,
+            [FromQuery] string? kind = null, [FromQuery] string? make = null, [FromQuery] string? makeHe = null)
         {
             if (string.IsNullOrWhiteSpace(ApiKey))
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, "Shop search is not configured.");
 
+            List<Shop> shops;
+            if (kind == "electric")
+            {
+                // "רכב חשמלי" לבד מחזיר גם מעבדות קורקינטים, ולכן שתי שאילתות וסינון
+                var a = await SearchAsync(lat, lng, "מוסך היברידי חשמלי");
+                var b = await SearchAsync(lat, lng, "רכב חשמלי");
+                if (a == null && b == null)
+                    return StatusCode(StatusCodes.Status502BadGateway, "Places search failed.");
+                shops = (a ?? new()).Concat(b ?? new())
+                    .Where(s => !NotACarShop.IsMatch(s.Name))
+                    .DistinctBy(s => s.PlaceId)
+                    .OrderBy(s => DistanceKm(lat, lng, s.Latitude, s.Longitude))
+                    .ToList();
+            }
+            else
+            {
+                var all = await SearchAsync(lat, lng, null);
+                if (all == null) return StatusCode(StatusCodes.Status502BadGateway, "Places search failed.");
+                shops = all;
+            }
+
+            // המוסך המורשה הקרוב של יצרן הרכב — ראשון ברשימה, ומסומן ככזה.
+            // החיפוש של Google לפי מילת מפתח מחזיר גם מוסכים כלליים, ולכן נדרש
+            // שהיצרן יופיע בשם המוסך עצמו.
+            var names = new[] { make, makeHe }.Where(n => !string.IsNullOrWhiteSpace(n) && n!.Length <= 30).ToList();
+            if (names.Count > 0)
+            {
+                var brandHits = await SearchAsync(lat, lng, makeHe ?? make);
+                var brand = brandHits?.FirstOrDefault(s =>
+                    names.Any(n => s.Name.Contains(n!, StringComparison.OrdinalIgnoreCase)));
+                if (brand != null)
+                {
+                    shops.RemoveAll(s => s.PlaceId == brand.PlaceId);
+                    shops.Insert(0, brand with { IsBrandService = true });
+                }
+            }
+
+            return Ok(shops);
+        }
+
+        private record Shop(string PlaceId, string Name, string Address, double Rating, int ReviewCount,
+                            double Latitude, double Longitude, bool IsBrandService = false);
+
+        // שמות שמסגירים שזה לא מוסך לרכב: קורקינטים, אופניים, עמדות טעינה ניידות
+        private static readonly System.Text.RegularExpressions.Regex NotACarShop =
+            new("קורקינט|אופני|scooter|bike|דלקן", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        /// <summary>חיפוש מוסכים אחד ב-Google, מהקרוב לרחוק. null כשהחיפוש נכשל.</summary>
+        private async Task<List<Shop>?> SearchAsync(double lat, double lng, string? keyword)
+        {
             var url =
                 "https://maps.googleapis.com/maps/api/place/nearbysearch/json" +
                 $"?location={lat},{lng}" +
                 "&rankby=distance" +
                 "&type=car_repair" +
+                (keyword == null ? "" : $"&keyword={Uri.EscapeDataString(keyword)}") +
                 // שמות בעברית, כדי שהרשימה תתאים לשילוט ברחוב
                 "&language=he" +
                 $"&key={ApiKey}";
@@ -74,29 +130,37 @@ namespace CarStats.API.Controllers
 
             using var doc = JsonDocument.Parse(json);
             var status = doc.RootElement.GetProperty("status").GetString();
-            if (status != "OK" && status != "ZERO_RESULTS")
-                return StatusCode(StatusCodes.Status502BadGateway, $"Places search failed ({status}).");
+            if (status != "OK" && status != "ZERO_RESULTS") return null;
 
             // בניית רשימה מצומצמת: שם, כתובת, דירוג ומיקום
-            var shops = new List<object>();
+            var shops = new List<Shop>();
             if (doc.RootElement.TryGetProperty("results", out var results))
             {
                 foreach (var place in results.EnumerateArray())
                 {
                     var loc = place.GetProperty("geometry").GetProperty("location");
-                    shops.Add(new
-                    {
-                        placeId     = place.GetProperty("place_id").GetString(),
-                        name        = place.GetProperty("name").GetString(),
-                        address     = place.TryGetProperty("vicinity", out var v) ? v.GetString() : "",
-                        rating      = place.TryGetProperty("rating", out var r) ? r.GetDouble() : 0,
-                        reviewCount = place.TryGetProperty("user_ratings_total", out var t) ? t.GetInt32() : 0,
-                        latitude    = loc.GetProperty("lat").GetDouble(),
-                        longitude   = loc.GetProperty("lng").GetDouble(),
-                    });
+                    shops.Add(new Shop(
+                        place.GetProperty("place_id").GetString() ?? "",
+                        place.GetProperty("name").GetString() ?? "",
+                        place.TryGetProperty("vicinity", out var v) ? v.GetString() ?? "" : "",
+                        place.TryGetProperty("rating", out var r) ? r.GetDouble() : 0,
+                        place.TryGetProperty("user_ratings_total", out var t) ? t.GetInt32() : 0,
+                        loc.GetProperty("lat").GetDouble(),
+                        loc.GetProperty("lng").GetDouble()));
                 }
             }
-            return Ok(shops);
+            return shops;
+        }
+
+        // מרחק אווירי בק"מ (הברסין) — לסידור תוצאות של שתי שאילתות יחד
+        private static double DistanceKm(double lat1, double lng1, double lat2, double lng2)
+        {
+            const double R = 6371;
+            var dLat = (lat2 - lat1) * Math.PI / 180;
+            var dLng = (lng2 - lng1) * Math.PI / 180;
+            var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                    Math.Cos(lat1 * Math.PI / 180) * Math.Cos(lat2 * Math.PI / 180) * Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
+            return R * 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
         }
 
         // GET: api/navigation/shop-phone — מספר הטלפון של מוסך.

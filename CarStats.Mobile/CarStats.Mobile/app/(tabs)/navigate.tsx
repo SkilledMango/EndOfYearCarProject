@@ -5,13 +5,19 @@
  * כולל שמות, דירוגים ומספר ביקורות. מספרי טלפון נשלפים רק בלחיצה על חיוג,
  * כי כל שליפה כזו מחויבת בנפרד.
  * כשאין הרשאת מיקום, החיפוש מתרכז בתל אביב.
+ *
+ * החיפוש מותאם לרכב שנבחר במסך המוסך: המוסך המורשה הקרוב של היצרן מופיע
+ * ראשון, ורכב חשמלי מקבל כברירת מחדל מוסכים לרכב חשמלי והיברידי.
  */
 
 import ShopMap from '@/components/ShopMap';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
-import { NearbyShop, getNearbyShops, getShopPhone } from '@/services/api';
+import { NearbyShop, ShopKind, Vehicle, getNearbyShops, getShopPhone, getUser } from '@/services/api';
 import { loadPrefs } from '@/services/notifications';
+import { loadSelectedVehicleId } from '@/services/selectedVehicle';
+import { hebrewMakeName } from '@/services/vehiclelookup';
+import { useAuth } from '@/context/AuthContext';
 import * as Location from 'expo-location';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -67,6 +73,12 @@ export default function MechanicFinderScreen() {
   // ברירת מחדל 'home': קריאת כתובת שמורה מיידית, איכון עלול להיתקע.
   const [origin, setOrigin]         = useState<SearchOrigin>('home');
   const [hasHome, setHasHome]       = useState(false);
+  const { user: authUser }          = useAuth();
+  // הרכב שנבחר במסך המוסך; החיפוש מחכה לו כדי לא לחפש פעמיים
+  const [vehicle, setVehicle]       = useState<Vehicle | null>(null);
+  const [vehicleReady, setVehicleReady] = useState(false);
+  const [kind, setKind]             = useState<ShopKind>('fuel');
+  const vehicleId = useRef<number | null>(null);
   // מספרי טלפון שכבר נשלפו בסשן הזה, כדי לא לשלוף פעמיים
   const phoneCache = useRef<Record<string, string | null>>({});
       
@@ -106,7 +118,11 @@ export default function MechanicFinderScreen() {
       setUsedFallback(!pos); // אם לא הצלחנו לקבל שום מיקום, נופלים לתל אביב
 
       const center = pos ?? FALLBACK_CENTER; // מרכז תל אביב אם אין מיקום
-      const results = await getNearbyShops(center.lat, center.lng);
+      const results = await getNearbyShops(center.lat, center.lng, {
+        kind,
+        make: vehicle?.make,
+        makeHe: vehicle ? hebrewMakeName(vehicle.make) ?? undefined : undefined,
+      });
 
       setShops(results.map(shop => ({
         ...shop,
@@ -117,21 +133,42 @@ export default function MechanicFinderScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [origin]);
+  }, [origin, kind, vehicle]);
 
-  useEffect(() => { load(); }, [load]);
+  // נטען מחדש בכל שינוי של נקודת המוצא, סוג המוסך או הרכב
+  useEffect(() => {
+    if (!vehicleReady) return;
+    setLoading(true);
+    load();
+  }, [load, vehicleReady]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   useFocusEffect(
     useCallback(() => {
       loadPrefs().then(p => setHasHome(p.homeLat != null && p.homeLng != null));
-    }, []),
+
+      // הרכב שנבחר במסך המוסך — אולי הוחלף מאז הביקור הקודם כאן
+      (async () => {
+        try {
+          if (!authUser) return;
+          const [fresh, storedId] = await Promise.all([getUser(authUser.id), loadSelectedVehicleId()]);
+          const list = fresh.vehicles ?? [];
+          const picked = list.find(v => v.id === storedId) ?? list[0] ?? null;
+          // רכב אחר מבפעם הקודמת — גם סוג המוסכים מתאים את עצמו אליו
+          if (picked?.id !== vehicleId.current) {
+            vehicleId.current = picked?.id ?? null;
+            setVehicle(picked);
+            setKind(picked?.isElectric ? 'electric' : 'fuel');
+          }
+        } catch { /* בלי רכב — חיפוש כללי */ }
+        finally {
+          setVehicleReady(true);
+        }
+      })();
+    }, [authUser?.id]),   // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const switchOrigin = (next: SearchOrigin) => {
-    if (next === origin) return;
-    setOrigin(next);
-    setLoading(true);
-    load(false, next);
+    if (next !== origin) setOrigin(next);
   };
 
   const call = async (shop: LocatedShop) => {
@@ -177,6 +214,7 @@ export default function MechanicFinderScreen() {
             specialty: s.address,
             latitude: s.latitude,
             longitude: s.longitude,
+            highlighted: !!s.isBrandService,
           }))}
           userPos={myPos}
         />
@@ -186,9 +224,26 @@ export default function MechanicFinderScreen() {
       <View style={styles.sheet}>
         <View style={styles.sheetHandle} />
         <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle}>Nearby Mechanics</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sheetTitle}>Nearby Mechanics</Text>
+            {vehicle && (
+              <Text style={styles.sheetFor} numberOfLines={1}>
+                For your {vehicle.year} {vehicle.make} {vehicle.model}
+              </Text>
+            )}
+          </View>
           <Text style={styles.sheetCount}>{shops.length} found</Text>
         </View>
+        <SegmentedButtons
+          style={styles.originSwitch}
+          density="small"
+          value={kind}
+          onValueChange={(v) => setKind(v as ShopKind)}
+          buttons={[
+            { value: 'fuel',     label: 'Fuel cars',     icon: 'gas-station' },
+            { value: 'electric', label: 'Electric cars', icon: 'lightning-bolt' },
+          ]}
+        />
         {hasHome && (
           <SegmentedButtons
             style={styles.originSwitch}
@@ -218,16 +273,21 @@ export default function MechanicFinderScreen() {
           {shops.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyIcon}>🔧</Text>
-              <Text style={styles.emptyText}>No mechanics found nearby.</Text>
+              <Text style={styles.emptyText}>
+                {kind === 'electric' ? 'No electric-car mechanics found nearby.' : 'No mechanics found nearby.'}
+              </Text>
               <Text style={styles.emptySubtext}>Pull to refresh, or check your connection.</Text>
             </View>
           ) : (
             shops.map((shop, i) => (
-              <View key={shop.placeId} style={styles.shopCard}>
+              <View key={shop.placeId} style={[styles.shopCard, shop.isBrandService && styles.brandCard]}>
                 <View style={[
                   styles.shopAccentBar,
                   { backgroundColor: i % 2 === 0 ? c.Dashboard.accentDeep : c.Severity.green },
                 ]} />
+                {shop.isBrandService && vehicle && (
+                  <Text style={styles.brandBadge}>{vehicle.make.toUpperCase()} SERVICE CENTER · YOUR CAR&apos;S BRAND</Text>
+                )}
                 <View style={styles.shopHeader}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
                     <Text style={styles.shopName} numberOfLines={1}>{shop.name}</Text>
@@ -294,6 +354,7 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
   sheetTitle:     { fontSize: 20, lineHeight: 28, fontWeight: '600', color: c.Dashboard.textPrimary },
   sheetCount:     { fontSize: 14, lineHeight: 20, color: c.Dashboard.textSecondary },
+  sheetFor:       { fontSize: 13, lineHeight: 18, color: c.Dashboard.textSecondary, marginTop: 2 },
   originSwitch: { marginHorizontal: 20, marginBottom: 10 },
   fallbackNote:   {
     fontSize: 12, color: c.Dashboard.textSecondary,
@@ -312,6 +373,9 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
     elevation: 2,
   },
   shopAccentBar:  { position: 'absolute', left: 0, top: 0, bottom: 0, width: 2 },
+  // המוסך המורשה של היצרן בולט מעל השאר
+  brandCard:      { borderColor: c.Dashboard.accentDeep, borderWidth: 2 },
+  brandBadge:     { fontSize: 11, fontWeight: '800', letterSpacing: 1, color: c.Dashboard.accentDeep, marginBottom: 6 },
   shopHeader:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
   shopName:       { fontSize: 20, lineHeight: 24, fontWeight: '700', color: c.Dashboard.textPrimary, marginBottom: 4 },
   shopAddress:    { fontSize: 14, lineHeight: 20, color: c.Dashboard.textSecondary },

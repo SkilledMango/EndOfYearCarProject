@@ -1,4 +1,4 @@
-import { translateMake } from '@/services/vehiclelookup';
+import { hebrewMakeName, translateMake } from '@/services/vehiclelookup';
 
 // Exact tozeret_nm values from the Israeli registry (data.gov.il), October 2026
 describe('translateMake — names as the registry writes them', () => {
@@ -48,5 +48,23 @@ describe('translateMake — names as the registry writes them', () => {
 
   it('falls back to the name without the country for an unknown brand', () => {
     expect(translateMake('מותג חדש סין')).toBe('מותג חדש');
+  });
+});
+
+describe('hebrewMakeName — for finding the brand garage by its sign', () => {
+  it.each([
+    ['Kia', 'קיה'],
+    ['Toyota', 'טויוטה'],
+    ['Hyundai', 'יונדאי'],
+    ['Mercedes-Benz', 'מרצדס בנץ'],
+    ['Geely', "ג'ילי"],
+    ['kia', 'קיה'],            // case doesn't matter
+  ])('%s → %s', (english, hebrew) => {
+    expect(hebrewMakeName(english)).toBe(hebrew);
+  });
+
+  it('skips Latin-letter keys and returns null for unknown brands', () => {
+    expect(hebrewMakeName('MG')).toBe('מ.ג');
+    expect(hebrewMakeName('Batmobile')).toBeNull();
   });
 });

@@ -6,6 +6,8 @@ export interface ShopPin {
   specialty: string;
   latitude: number;
   longitude: number;
+  /** המוסך המורשה של יצרן הרכב — מסומן בסיכה בולטת */
+  highlighted?: boolean;
 }
 
 export interface ShopMapProps {

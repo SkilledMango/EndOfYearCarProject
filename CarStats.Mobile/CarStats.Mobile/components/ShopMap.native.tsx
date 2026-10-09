@@ -72,13 +72,21 @@ export default function ShopMap({ shops, userPos }: ShopMapProps) {
           anchor={{ x: 0.5, y: 0.5 }}
           tracksViewChanges={trackPins}
         >
-          {/* העיצוב מחליף בין סיכות מלאות למתוארות */}
-          <View style={[styles.pin, i % 2 === 1 && styles.pinOutlined]}>
-            <IconSymbol
-              name="wrench.fill"
-              size={18}
-              color={i % 2 === 1 ? c.Dashboard.accentDeep : c.Dashboard.onAccent}
-            />
+          {/* אנדרואיד מצייר סיכה מותאמת כתמונה בגודל המדויק של הרכיב, וכל מה
+              שבולט ממנו — צל, מסגרת — נחתך. לכן הסיכה יושבת בתוך מסגרת שקופה
+              גדולה ממנה, בלי צל. העיצוב מחליף בין סיכות מלאות למתוארות. */}
+          <View style={styles.pinFrame} collapsable={false}>
+            <View style={[
+              styles.pin,
+              !shop.highlighted && i % 2 === 1 && styles.pinOutlined,
+              shop.highlighted && styles.pinBrand,
+            ]}>
+              <IconSymbol
+                name={shop.highlighted ? 'star.fill' : 'wrench.fill'}
+                size={18}
+                color={!shop.highlighted && i % 2 === 1 ? c.Dashboard.accentDeep : c.Dashboard.onAccent}
+              />
+            </View>
           </View>
         </Marker>
       ))}
@@ -89,16 +97,19 @@ export default function ShopMap({ shops, userPos }: ShopMapProps) {
 const useStyles = createThemedStyles((c) => StyleSheet.create({
   map: { flex: 1 },
 
+  // מרווח שקוף סביב הסיכה, כדי שהקצוות שלה לא ייחתכו
+  pinFrame: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   // עיגולים בקוטר 40, בגרסה מלאה ובגרסה מתוארת
   pin: {
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: c.Dashboard.accentDeep,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 20, shadowOffset: { width: 0, height: 8 },
-    elevation: 5,
+    borderWidth: 2, borderColor: c.Dashboard.card,
   },
   pinOutlined: {
     backgroundColor: c.Dashboard.card,
-    borderWidth: 2, borderColor: c.Dashboard.accentDeep,
+    borderColor: c.Dashboard.accentDeep,
   },
+  // המוסך המורשה של היצרן
+  pinBrand: { backgroundColor: c.Severity.green },
 }));
