@@ -23,6 +23,9 @@
  *   POST /hotspot     — {"ssid","pass"}: save a new hotspot and restart onto it (also in setup mode)
  *   POST /forget-wifi — forget the saved hotspot and reopen the setup network
  *
+ * Once a minute on a hotspot it also tells the CarStats server its local address
+ * (POST api/scanner/announce), so the app finds it with nothing to type.
+ *
  * SIMULATION MODE:
  *   When no real car is connected (no CAN bus response), the firmware
  *   automatically falls back to returning realistic fake data so the app
@@ -38,6 +41,8 @@
 #include <ESPmDNS.h>
 #include <Preferences.h>
 #include <ArduinoJson.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include "driver/twai.h"
 
 // ─── WiFi config ──────────────────────────────────────────────────────────────
@@ -50,6 +55,11 @@
 #define SETUP_RETRY_MS      30000              // setup mode re-tries the saved hotspot this often
 #define HOTSPOT_LOST_MS     45000              // hotspot gone this long → restart, which opens setup mode
 #define SCANNER_HOST_OCTET  100                // the .100 spot taken on every hotspot
+
+// The scanner tells the CarStats server where it is on the hotspot, so the app
+// finds it with no address to type (hotspot networks change between phones).
+#define ANNOUNCE_URL        "https://carproject.somee.com/api/scanner/announce"
+#define ANNOUNCE_EVERY_MS   60000
 
 
 // ─── CAN pin config (Waveshare ESP32-S3-RS485S-CAN) ──────────────────────────
@@ -97,6 +107,7 @@ bool          setupMode        = false;
 unsigned long lastSetupRetryMs = 0;
 unsigned long restartAtMs      = 0;   // non-zero = restart then (lets the HTTP reply go out first)
 unsigned long wifiLostSinceMs  = 0;   // non-zero = the hotspot dropped at this time
+unsigned long lastAnnounceMs   = 0;   // last time the server was told our address
 String        setupNetworksHtml;      // nearby networks, listed as buttons on the setup page
 
 // ─── VIN cache ────────────────────────────────────────────────────────────────
@@ -148,6 +159,7 @@ void   handleHotspot();
 void   handleSetupStatus();
 String hotspotError(const String &ssid, const String &pass);
 void   applyHotspot(const String &ssid, const String &pass);
+void   announceToServer();
 String dtcBytesToString(uint8_t high, uint8_t low);
 
 void      loadHotspotCreds();
@@ -231,6 +243,13 @@ void loop() {
     Serial.println("[WiFi] Hotspot lost — restarting");
     delay(100);
     ESP.restart();
+  }
+
+  // Tell the server where we are — right after joining, then once a minute
+  if (WiFi.status() == WL_CONNECTED
+      && (lastAnnounceMs == 0 || millis() - lastAnnounceMs >= ANNOUNCE_EVERY_MS)) {
+    lastAnnounceMs = millis();
+    announceToServer();
   }
 
   // Print WiFi status every 5 seconds
@@ -744,6 +763,28 @@ bool connectToHotspot(unsigned long timeoutMs) {
 }
 
 // ─── Normal mode: the OBD-II API ──────────────────────────────────────────────
+
+// POST {deviceId, localIp} to the server. The server sees the phone's public
+// address on this request and on the app's — that is how it pairs them.
+// Best effort: no internet just means the app falls back to searching.
+void announceToServer() {
+  WiFiClientSecure client;
+  client.setInsecure();   // only our own local address is sent; nothing secret
+  HTTPClient http;
+  http.setTimeout(5000);
+  if (!http.begin(client, ANNOUNCE_URL)) return;
+  http.addHeader("Content-Type", "application/json");
+
+  JsonDocument doc;
+  doc["deviceId"] = WiFi.macAddress();
+  doc["localIp"]  = WiFi.localIP().toString();
+  String body;
+  serializeJson(doc, body);
+
+  int code = http.POST(body);
+  Serial.printf("[Announce] %s -> HTTP %d\n", WiFi.localIP().toString().c_str(), code);
+  http.end();
+}
 
 void startNormalMode() {
   // carstats.local — iPhones can find the scanner by name with no searching at all

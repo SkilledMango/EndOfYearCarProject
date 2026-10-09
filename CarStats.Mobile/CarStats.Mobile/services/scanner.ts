@@ -12,15 +12,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchWithTimeout } from './http';
 import { demoDtcs, demoLiveData, demoStatus, demoVin } from './demoScanner';
 import { candidateAddresses, firstHit } from '@/utils/scannerDiscovery';
+import { getNearbyScanners } from './api';
 
 /** כמה מילישניות לחכות לפני שבקשה נחשבת ככישלון */
 const FETCH_TIMEOUT_MS = 3000;
 
 // ─── כתובת המתאם ─────────────────────────────────────────────────────────────
 //
-// המתאם מתחבר לנקודת הגישה של הטלפון ותופס בה תמיד את הכתובת 100. של
-// הרשת (או את האחרונה ברשת קטנה, כמו 172.20.10.14 באייפון). לכל טלפון
-// רשת אחרת, ולכן הכתובת נשמרת כהגדרה ולא קבועה בקוד.
+// המתאם מתחבר לנקודת הגישה של הטלפון ותופס בה את הכתובת 100. של הרשת.
+// הרשת עצמה משתנה בין טלפונים — ובאנדרואיד חדש גם בין הפעלות — ולכן
+// הכתובת לא מוצגת לנהג בכלל: המתאם מדווח לשרת איפה הוא, והאפליקציה
+// שואלת את השרת כשהכתובת השמורה מפסיקה לענות (ראו isScannerReachable).
 
 const ADDRESS_KEY = '@carstats_scanner_address';
 
@@ -43,10 +45,6 @@ export async function getScannerAddress(): Promise<string> {
   await addressLoaded;
   return scannerAddress;
 }
-
-/** אמת לכתובת IP או לשם מארח, בלי פרוטוקול ובלי נתיב. */
-export const isValidScannerAddress = (address: string): boolean =>
-  /^[a-z0-9.\-]{3,63}$/i.test(address.trim());
 
 export async function setScannerAddress(address: string): Promise<void> {
   scannerAddress = address.trim();
@@ -167,10 +165,9 @@ export async function isScannerReachable(): Promise<boolean> {
   if (demoMode) return true;
   try {
     const status = await getScannerStatus();
-    return !!status.device;
-  } catch {
-    return false;
-  }
+    if (status.device) return true;
+  } catch { /* הכתובת השמורה לא ענתה — אולי המתאם עבר רשת */ }
+  return (await locateViaServer()) != null;
 }
 
 // ─── איתור המתאם על נקודת גישה חדשה ──────────────────────────────────────────
@@ -201,12 +198,32 @@ async function isCarStatsScanner(address: string): Promise<boolean> {
 }
 
 /**
+ * שואלת את השרת איפה המתאם דיווח שהוא נמצא, בודקת שהוא באמת עונה שם,
+ * ושומרת את הכתובת. null כשאין דיווח או שאף כתובת לא ענתה.
+ */
+async function locateViaServer(): Promise<string | null> {
+  const reported = await getNearbyScanners();
+  if (reported.length === 0) return null;
+  const hit = await firstHit(reported, isCarStatsScanner);
+  if (hit) await setScannerAddress(hit);
+  return hit;
+}
+
+/**
  * מחפשת את המתאם ושומרת את הכתובת שנמצאה. מחזירה אותה, או null.
  * onProgress מקבל כמה כתובות נבדקו מתוך כמה, בשביל פס התקדמות.
  */
 export async function findScanner(
   onProgress?: (checked: number, total: number) => void,
 ): Promise<string | null> {
+  // הדרך המהירה: הכתובת שהמתאם עצמו דיווח עליה לשרת
+  const reported = await locateViaServer();
+  if (reported) {
+    onProgress?.(1, 1);
+    return reported;
+  }
+
+  // אין אינטרנט, או מתאם עם קושחה ישנה — סריקה של הכתובות האפשריות
   const candidates = candidateAddresses(await getScannerAddress());
 
   for (let i = 0; i < candidates.length; i += PROBE_BATCH) {

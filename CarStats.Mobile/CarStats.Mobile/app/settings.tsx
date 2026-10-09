@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 // רכיבי הספרייה יורשים את הצבעים מערכת הנושא שהוגדרה בפריסה הראשית,
 // ולכן אין צורך להעביר להם צבעים במפורש.
-import { Button, Divider, ProgressBar, SegmentedButtons, Switch, TextInput } from 'react-native-paper';
+import { Button, Divider, ProgressBar, SegmentedButtons, Switch } from 'react-native-paper';
 import Constants from 'expo-constants';
 import { useAuth } from '@/context/AuthContext';
 import { createThemedStyles, useTheme, ThemeMode } from '@/context/ThemeContext';
@@ -32,10 +32,7 @@ import {
 import { ReminderPlace, REMINDER_RADIUS_METERS, reminderRegions } from '@/utils/reminderRegions';
 import {
   findScanner,
-  getScannerAddress,
   isScannerReachable,
-  isValidScannerAddress,
-  setScannerAddress as saveScannerAddress,
 } from '@/services/scanner';
 
 const MODE_OPTIONS: { mode: ThemeMode; label: string }[] = [
@@ -57,16 +54,12 @@ export default function SettingsScreen() {
   useEffect(() => { loadPrefs().then(setPrefs); }, []);
 
   // ── מתאם ה-OBD ───────────────────────────────────────────────────────────
-  const [scannerAddress, setScannerAddress] = useState('');
-  const [addressInput, setAddressInput]     = useState('');
   const [scannerOnline, setScannerOnline]   = useState<boolean | null>(null);   // null = בודק
   const [finding, setFinding]               = useState(false);
   const [findProgress, setFindProgress]     = useState(0);
 
+  // הכתובת לא מוצגת: האפליקציה מוצאת את המתאם לבד (ראו isScannerReachable)
   const refreshScanner = async () => {
-    const address = await getScannerAddress();
-    setScannerAddress(address);
-    setAddressInput(address);
     setScannerOnline(null);
     setScannerOnline(await isScannerReachable());
   };
@@ -79,17 +72,12 @@ export default function SettingsScreen() {
     setFindProgress(0);
     try {
       const found = await findScanner((checked, total) => setFindProgress(checked / total));
-      if (found) {
-        setScannerAddress(found);
-        setAddressInput(found);
-        setScannerOnline(true);
-        Alert.alert('Scanner found', `Connected at ${found}.`);
-      } else {
-        setScannerOnline(false);
+      setScannerOnline(!!found);
+      if (!found) {
         Alert.alert(
           'Scanner not found',
-          'Check that the scanner is powered and joined this phone’s hotspot. ' +
-          'If it is new to this phone, set it up first (steps below).',
+          'Check that the scanner is powered and your hotspot is on. ' +
+          'If it is new to this phone, connect it with the button below.',
         );
       }
     } finally {
@@ -97,15 +85,6 @@ export default function SettingsScreen() {
     }
   };
 
-  const onSaveAddress = async () => {
-    const address = addressInput.trim();
-    if (!isValidScannerAddress(address)) {
-      Alert.alert('Check the address', 'Enter just the address, e.g. 192.168.43.100 — no http:// and no slashes.');
-      return;
-    }
-    await saveScannerAddress(address);
-    await refreshScanner();
-  };
 
 
   const update = async (next: NotifPrefs) => {
@@ -289,13 +268,9 @@ export default function SettingsScreen() {
       {/* ── מתאם ה-OBD ── */}
       <Text style={s.sectionLabel}>OBD SCANNER</Text>
       <View style={s.card}>
-        <Text style={s.rowTitle}>Scanner address</Text>
-        <Text style={s.rowSub}>
-          {scannerAddress || '—'}
-          {'  ·  '}
-          <Text style={scannerOnline ? s.statusOk : s.statusOff}>
-            {scannerOnline == null ? 'checking…' : scannerOnline ? 'connected' : 'not reachable'}
-          </Text>
+        <Text style={s.rowTitle}>Scanner</Text>
+        <Text style={[s.rowSub, scannerOnline ? s.statusOk : s.statusOff]}>
+          {scannerOnline == null ? 'Looking for the scanner…' : scannerOnline ? 'Connected' : 'Not connected'}
         </Text>
 
         <Button
@@ -310,29 +285,6 @@ export default function SettingsScreen() {
         </Button>
         {finding && <ProgressBar progress={findProgress} style={s.findBar} />}
 
-        <TextInput
-          mode="outlined"
-          dense
-          label="Or type the address"
-          placeholder="e.g. 192.168.43.100"
-          value={addressInput}
-          onChangeText={setAddressInput}
-          disabled={finding}
-          style={s.homeInput}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="url"
-        />
-        <Button
-          mode="outlined"
-          icon="content-save"
-          onPress={onSaveAddress}
-          disabled={finding || addressInput.trim() === scannerAddress}
-          style={s.homeBtn}
-          contentStyle={s.homeBtnContent}
-        >
-          Save address
-        </Button>
 
         <Divider style={s.divider} />
 
@@ -409,7 +361,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   // הקו עצמו מגיע מהספרייה; כאן רק המרווח סביבו
   divider:   { marginVertical: 14 },
 
-  homeInput:      { marginTop: 12 },
   homeBtn:        { marginTop: 10 },
   homeBtnContent: { paddingVertical: 4 },
 

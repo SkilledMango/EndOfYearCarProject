@@ -269,6 +269,21 @@ export const getFuelPrice = async (): Promise<FuelPrice | null> => {
   }
 };
 
+/**
+ * הכתובות שמתאמים דיווחו עליהן מהרשת של הטלפון הזה.
+ * המתאם מדווח לשרת איפה הוא בנקודת הגישה, והשרת מזהה את הטלפון לפי אותה
+ * כתובת ציבורית — כך האפליקציה מוצאת את המתאם בלי שאף אחד יקליד כתובת.
+ * לעולם לא זורקת שגיאה: בלי אינטרנט פשוט חוזרת רשימה ריקה.
+ */
+export const getNearbyScanners = async (): Promise<string[]> => {
+  try {
+    const { data } = await api.get<{ addresses: string[] }>('/scanner/nearby', { timeout: 8000 });
+    return Array.isArray(data.addresses) ? data.addresses : [];
+  } catch {
+    return [];
+  }
+};
+
 // ----- שאלות AI, דרך השרת -----
 //
 // השרת שואל קודם את Groq ואם המכסה שלו נגמרה — את Gemini, ושומר כל תשובה

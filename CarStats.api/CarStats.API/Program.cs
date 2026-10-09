@@ -54,6 +54,8 @@ builder.Services.AddHttpClient();
 
 // שאלות AI (Groq ואז Gemini), עם מטמון בבסיס הנתונים
 builder.Services.AddScoped<AiService>();
+// איפה כל מתאם נמצא ברשת המקומית שלו — בזיכרון, משותף לכל הבקשות
+builder.Services.AddSingleton<ScannerRegistry>();
 
 // ── אימות JWT ─────────────────────────────────────────────────────────────────
 // login ו-verify-code מנפיקים טוקן; כל שאר הנקודות דורשות אותו.

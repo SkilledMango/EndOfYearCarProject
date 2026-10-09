@@ -47,7 +47,6 @@ export default function ScannerSetupScreen() {
   const [error, setError]       = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [showDataTip, setShowDataTip] = useState(false);
-  const [found, setFound]       = useState<string | null>(null);
   const [searchProgress, setSearchProgress] = useState(0);
 
   // כל שלב מתחיל לולאה משלו; הדגל עוצר אותה כשעוברים שלב או יוצאים מהמסך
@@ -128,7 +127,7 @@ export default function ScannerSetupScreen() {
         // מצליח רק כשהמתאם מדווח שהוא באמת על נקודת הגישה שנשלחה
         const status = address ? await checkScannerAt(address) : null;
         if (stop) return;
-        if (address && status?.ssid === target) { setFound(address); setStep('done'); return; }
+        if (address && status?.ssid === target) { setStep('done'); return; }
         await new Promise(r => setTimeout(r, 3000));
       }
       if (!stop) setStep('notFound');
@@ -190,10 +189,9 @@ export default function ScannerSetupScreen() {
       {step === 'join' && (
         <View style={s.card}>
           <Text style={s.title}>Connect to the scanner&apos;s WiFi</Text>
-          <Text style={s.stepLine}><Text style={s.stepNum}>1.</Text> Turn your hotspot <Text style={s.strong}>off</Text> for now — a phone can&apos;t share a hotspot and join WiFi at the same time.</Text>
-          <Text style={s.stepLine}><Text style={s.stepNum}>2.</Text> Make sure the scanner is plugged in. Within about a minute it opens a WiFi called <Text style={s.strong}>CarStats-Setup</Text>.</Text>
-          <Text style={s.stepLine}><Text style={s.stepNum}>3.</Text> Join <Text style={s.strong}>CarStats-Setup</Text>. If your phone says it has no internet, choose <Text style={s.strong}>Stay connected</Text>. If a setup page pops up, you can close it.</Text>
-          <Text style={s.stepLine}><Text style={s.stepNum}>4.</Text> Come back here — the app sends the hotspot details by itself.</Text>
+          <Text style={s.stepLine}><Text style={s.stepNum}>1.</Text> Make sure the scanner is plugged in. Within about a minute it opens a WiFi called <Text style={s.strong}>CarStats-Setup</Text>.</Text>
+          <Text style={s.stepLine}><Text style={s.stepNum}>2.</Text> Join <Text style={s.strong}>CarStats-Setup</Text>. If your phone says it has no internet, choose <Text style={s.strong}>Stay connected</Text>. If a setup page pops up, you can close it.</Text>
+          <Text style={s.stepLine}><Text style={s.stepNum}>3.</Text> Come back here — the app sends the hotspot details by itself.</Text>
 
           {Platform.OS === 'android' && (
             <Button mode="outlined" icon="wifi" onPress={openWifiSettings} style={s.button} contentStyle={s.buttonContent}>
@@ -227,10 +225,10 @@ export default function ScannerSetupScreen() {
 
       {step === 'waiting' && (
         <View style={s.card}>
-          <Text style={s.title}>Sent ✓  Now turn your hotspot on</Text>
+          <Text style={s.title}>Sent ✓  Make sure your hotspot is on</Text>
           <Text style={s.body}>
-            Turn on the hotspot <Text style={s.strong}>{name}</Text>. The scanner restarts and joins
-            it by itself — this takes up to a minute. Keep this screen open.
+            Check that the hotspot <Text style={s.strong}>{name}</Text> is on. The scanner restarts and
+            joins it by itself — this takes up to a minute. Keep this screen open.
           </Text>
           <View style={s.statusRow}>
             <ActivityIndicator color={c.Dashboard.accent} />
@@ -244,8 +242,8 @@ export default function ScannerSetupScreen() {
         <View style={s.card}>
           <Text style={[s.title, s.ok]}>Connected ✓</Text>
           <Text style={s.body}>
-            The scanner is on <Text style={s.strong}>{name}</Text> at {found}. Next time you turn this
-            hotspot on, the scanner joins it automatically.
+            The scanner is on <Text style={s.strong}>{name}</Text>. Next time you turn this hotspot
+            on, the scanner joins it and the app finds it automatically.
           </Text>
           <Button mode="contained" onPress={() => router.back()} style={s.button} contentStyle={s.buttonContent}>
             Done
