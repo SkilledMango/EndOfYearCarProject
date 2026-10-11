@@ -17,7 +17,7 @@ import { login } from '../Services/api';
  * accounts through (enforced in api.login). On success, hands the user
  * object up to App so it can persist the session.
  */
-function LoginPage({ onLogin }) {
+function LoginPage({ onLogin, notice }) {
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading]   = useState(false);
@@ -101,6 +101,12 @@ function LoginPage({ onLogin }) {
             onChange={(e) => { setPassword(e.target.value); setError(null); }}
             disabled={loading}
           />
+
+          {notice && !error && (
+            <Alert severity="info" sx={{ mt: 1 }}>
+              {notice}
+            </Alert>
+          )}
 
           {error && (
             <Alert severity="error" sx={{ mt: 1 }}>

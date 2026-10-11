@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Tabs, Tab, Box, Container, AppBar, Toolbar, Typography, Button } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
@@ -6,7 +6,7 @@ import Analytics    from './Components/Analytics';
 import Dashboard    from './Components/Dashboard';
 import UsersManager from './Components/UsersManager';
 import LoginPage    from './Components/LoginPage';
-import { logout as clearToken, hasToken } from './Services/api';
+import { logout as clearToken, hasToken, onSessionExpired } from './Services/api';
 
 const SESSION_KEY = 'carstats_admin_user';
 
@@ -27,9 +27,11 @@ function loadSession() {
 function App() {
   const [tabValue, setTabValue] = useState(0);
   const [admin, setAdmin]       = useState(loadSession);
+  const [expired, setExpired]   = useState(false);
 
   const handleLogin = (user) => {
     localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    setExpired(false);
     setAdmin(user);
   };
 
@@ -40,9 +42,17 @@ function App() {
     setTabValue(0);
   };
 
+  // The saved login ran out (tokens last 30 days) — back to the login page, with a reason
+  useEffect(() => {
+    onSessionExpired(() => {
+      handleLogout();
+      setExpired(true);
+    });
+  }, []);
+
   // Not signed in → show the login gate instead of the panel
   if (!admin) {
-    return <LoginPage onLogin={handleLogin} />;
+    return <LoginPage onLogin={handleLogin} notice={expired ? 'Your session expired — please log in again.' : null} />;
   }
 
   return (

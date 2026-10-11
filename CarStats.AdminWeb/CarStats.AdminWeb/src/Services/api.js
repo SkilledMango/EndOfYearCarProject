@@ -18,6 +18,19 @@ http.interceptors.request.use((config) => {
     return config;
 });
 
+// A token lasts 30 days. When it runs out every request comes back 401, and
+// the panel used to sit there showing "Could not load…" errors with the old
+// session still on screen. Instead, App is told so it can sign out.
+let sessionExpiredHandler = null;
+export const onSessionExpired = (handler) => { sessionExpiredHandler = handler; };
+http.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error?.response?.status === 401 && sessionExpiredHandler) sessionExpiredHandler();
+        return Promise.reject(error);
+    },
+);
+
 // Role values mirror the C# UserRole enum
 export const ROLE_ADMIN = 2;
 export const ROLE_SUPERADMIN = 3;
