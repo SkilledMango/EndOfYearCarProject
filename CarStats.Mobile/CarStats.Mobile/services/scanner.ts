@@ -60,8 +60,13 @@ export interface LiveData {
   rpm: number;
   speedKmh: number;
   coolantCelsius: number;
-  /** null כשהרכב לא תומך ב-PID 0x2F ולא מדווח מפלס דלק */
+  /** null כשאין קריאה מהרכב (עדיין, או בכלל) */
   fuelPercent: number | null;
+  /**
+   * מה הרכב עצמו אמר כששאלנו אילו נתונים הוא מדווח: false = אין לו מפלס דלק,
+   * true = יש, null או חסר = לא ידוע (מתאם ישן, או שהרכב לא ענה על השאלה)
+   */
+  fuelSupported?: boolean | null;
   engineLoadPct: number;
   /** אמת כשהמתאם מקבל הודעות CAN אמיתיות */
   valid: boolean;

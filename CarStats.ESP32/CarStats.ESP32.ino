@@ -100,10 +100,19 @@ WebServer server(80);
 bool simMode = false;   // true when no real CAN response detected
 
 // A PID the car never answers costs a full timeout on every poll. After this many
-// misses in a row it is skipped until the car reconnects, so the loop stays fast
-// enough to answer the phone.
+// misses in a row it is only asked every PID_RETRY_MS, so the loop stays fast
+// enough to answer the phone — but a slow PID is never given up on for good.
 #define PID_MAX_MISSES 3
-uint8_t pidMisses[256] = {0};
+#define PID_RETRY_MS   10000
+uint8_t       pidMisses[256]  = {0};
+unsigned long pidLastTry[256] = {0};
+
+// What the car says it supports (OBD mode 01 PIDs 0x00 and 0x20, PIDs 0x01–0x40).
+// Asked once per car, so "this car doesn't report fuel" is the car's own answer
+// and not a guess from a missing reply.
+bool    carSession   = false;   // a car has answered since the last disconnect
+bool    supportKnown = false;
+uint8_t supportBits[8] = {0};
 
 // ─── WiFi / setup state ───────────────────────────────────────────────────────
 Preferences   prefs;                  // flash storage for the saved hotspot
@@ -151,7 +160,7 @@ unsigned long lastPollMs = 0;
 bool   twaiInit();
 bool   sendObdRequest(uint8_t mode, uint8_t pid);
 bool   waitForObdReply(uint8_t mode, uint8_t pid, twai_message_t &out, unsigned long timeoutMs = OBD_TIMEOUT_MS);
-int    readPidInt(uint8_t pid);
+int    readPidInt(uint8_t pid, unsigned long timeoutMs = OBD_TIMEOUT_MS);
 String readVin();
 void   pollLiveData();
 void   readDtcs(JsonArray &arr);
@@ -398,11 +407,56 @@ bool waitForObdReply(uint8_t mode, uint8_t pid, twai_message_t &out, unsigned lo
   return false;
 }
 
-int readPidInt(uint8_t pid) {
-  if (pidMisses[pid] >= PID_MAX_MISSES) return -1;   // the car doesn't report this one
+// 1 = the car says it supports this PID, 0 = it says it doesn't, -1 = unknown
+int pidSupport(uint8_t pid) {
+  if (!supportKnown || pid == 0 || pid > 0x40) return -1;
+  uint8_t n = pid - 1;
+  return (supportBits[n / 8] >> (7 - n % 8)) & 0x01;
+}
+
+// Collects one "supported PIDs" bitmap (4 bytes), OR-ed over every computer that answers
+bool readSupportBitmap(uint8_t basePid, uint8_t out[4]) {
+  if (!sendObdRequest(0x01, basePid)) return false;
+  bool any = false;
+  unsigned long deadline = millis() + 300;
+  for (;;) {
+    unsigned long now = millis();
+    if (now >= deadline) break;
+    twai_message_t reply;
+    if (!waitForObdReply(0x01, basePid, reply, deadline - now)) break;
+    for (int i = 0; i < 4; i++) out[i] |= reply.data[3 + i];
+    any = true;
+  }
+  return any;
+}
+
+void querySupportedPids() {
+  uint8_t low[4] = {0}, high[4] = {0};
+  if (!readSupportBitmap(0x00, low)) { supportKnown = false; return; }
+  // The last bit of PID 0x00's answer says whether PID 0x20 (the next list) exists
+  if (low[3] & 0x01) readSupportBitmap(0x20, high);
+  memcpy(supportBits, low, 4);
+  memcpy(supportBits + 4, high, 4);
+  supportKnown = true;
+  Serial.printf("[OBD] Supported PIDs %02X%02X%02X%02X %02X%02X%02X%02X  fuel=%s\n",
+    low[0], low[1], low[2], low[3], high[0], high[1], high[2], high[3],
+    pidSupport(PID_FUEL_LEVEL) == 1 ? "yes" : "no");
+}
+
+// A PID is skipped when the car said it doesn't have it, and slowed to every
+// PID_RETRY_MS after repeated misses
+bool pidDue(uint8_t pid) {
+  if (pidSupport(pid) == 0) return false;
+  if (pidMisses[pid] < PID_MAX_MISSES) return true;
+  return millis() - pidLastTry[pid] >= PID_RETRY_MS;
+}
+
+int readPidInt(uint8_t pid, unsigned long timeoutMs) {
+  if (!pidDue(pid)) return -1;
+  pidLastTry[pid] = millis();
   if (!sendObdRequest(0x01, pid)) return -1;
   twai_message_t reply;
-  if (!waitForObdReply(0x01, pid, reply)) {
+  if (!waitForObdReply(0x01, pid, reply, timeoutMs)) {
     if (pidMisses[pid] < 255) pidMisses[pid]++;
     return -1;
   }
@@ -419,20 +473,11 @@ int readPidInt(uint8_t pid) {
   }
 }
 
-// ─── Fuel level — longer timeout + retries because some ECUs respond slowly ───
+// ─── Fuel level — a longer wait, because some cars answer it slowly ───────────
 // One try per poll (it used to be 3 × 500 ms, 1.6 s of silence every second on
-// a car without this PID); after PID_MAX_MISSES polls it is not asked again.
+// a car without this PID). Not asked at all when the car says it doesn't have it.
 int readFuelPercent() {
-  if (pidMisses[PID_FUEL_LEVEL] >= PID_MAX_MISSES) return -1;
-  if (!sendObdRequest(0x01, PID_FUEL_LEVEL)) return -1;
-  twai_message_t reply;
-  if (waitForObdReply(0x01, PID_FUEL_LEVEL, reply, 400)) {
-    pidMisses[PID_FUEL_LEVEL] = 0;
-    uint8_t A = reply.data[3];
-    return (A * 100) / 255;
-  }
-  if (pidMisses[PID_FUEL_LEVEL] < 255) pidMisses[PID_FUEL_LEVEL]++;
-  return -1; // car doesn't support this PID
+  return readPidInt(PID_FUEL_LEVEL, 500);
 }
 
 // איתור: קריאת נתונים חיים מהרכב (מתאם)
@@ -443,12 +488,18 @@ void pollLiveData() {
 
   if (rpm >= 0) {
     // ── Real car responding ──
-    // If we just left sim mode, clear out any stuck simulation values
-    if (simMode) {
+    // A new car: clear simulation (or boot-time) values and ask what it supports.
+    // Keyed on carSession, not simMode, because the scanner usually boots already
+    // plugged into the car — simMode starts false, and the old check never ran.
+    if (!carSession) {
+      carSession = true;
       liveData.fuelPercent    = -1;  // -1 = "not yet read from car"
       liveData.speedKmh       = 0;
       liveData.coolantCelsius = -40;
       liveData.engineLoadPct  = 0;
+      memset(pidMisses, 0, sizeof(pidMisses));
+      server.handleClient();
+      querySupportedPids();
     }
     simMode = false;
     liveData.rpm            = rpm;
@@ -477,8 +528,9 @@ void pollLiveData() {
       // Car just disconnected — clear VIN cache so we re-read on next connection
       cachedVin    = "";
       vinAttempted = false;
-      memset(pidMisses, 0, sizeof(pidMisses));   // the next car may report them
     }
+    carSession   = false;   // the next car is asked again what it supports
+    supportKnown = false;
     simMode = true;
     liveData.rpm            = SIM_RPM;
     liveData.speedKmh       = SIM_SPEED;
@@ -647,16 +699,20 @@ void handleStatus() {
 
 void handleLiveData() {
   setCorsHeaders();
-  StaticJsonDocument<256> doc;
+  StaticJsonDocument<384> doc;
   doc["rpm"]            = liveData.rpm;
   doc["speedKmh"]       = liveData.speedKmh;
   doc["coolantCelsius"] = liveData.coolantCelsius;
-  // fuelPercent = -1 means the car doesn't support PID 0x2F — send null
+  // fuelPercent = -1 means no reading yet — send null. fuelSupported says why:
+  // false = the car itself said it has no fuel level, null = not known (yet)
   if (liveData.fuelPercent >= 0) {
     doc["fuelPercent"]  = liveData.fuelPercent;
   } else {
     doc["fuelPercent"]  = nullptr;
   }
+  int fuelSupport = pidSupport(PID_FUEL_LEVEL);
+  if (simMode || fuelSupport < 0) doc["fuelSupported"] = nullptr;
+  else                            doc["fuelSupported"] = (fuelSupport == 1);
   doc["engineLoadPct"]  = liveData.engineLoadPct;
   doc["valid"]          = liveData.valid;
   doc["simMode"]        = simMode;
@@ -700,7 +756,7 @@ void handleDebug() {
   twai_status_info_t info;
   bool gotInfo = (twai_get_status_info(&info) == ESP_OK);
 
-  StaticJsonDocument<512> doc;
+  StaticJsonDocument<768> doc;
   doc["simMode"]          = simMode;
   doc["lastTxErr"]        = canDiag.lastTxErr;
   // TWAI states: 0=STOPPED, 1=RUNNING, 2=BUS_OFF, 3=RECOVERING
@@ -726,6 +782,16 @@ void handleDebug() {
     diag = "OBD-II frames matched — should be in REAL mode";
   }
   doc["diagnosis"] = diag;
+
+  // What the car said it supports, and how the fuel level is doing
+  char bits[20];
+  snprintf(bits, sizeof(bits), "%02X%02X%02X%02X %02X%02X%02X%02X",
+    supportBits[0], supportBits[1], supportBits[2], supportBits[3],
+    supportBits[4], supportBits[5], supportBits[6], supportBits[7]);
+  doc["supportedPids"]  = supportKnown ? bits : "unknown";
+  doc["fuelSupported"]  = pidSupport(PID_FUEL_LEVEL);   // 1 yes, 0 no, -1 unknown
+  doc["fuelMisses"]     = pidMisses[PID_FUEL_LEVEL];
+  doc["fuelPercent"]    = liveData.fuelPercent;
 
   String body;
   serializeJson(doc, body);

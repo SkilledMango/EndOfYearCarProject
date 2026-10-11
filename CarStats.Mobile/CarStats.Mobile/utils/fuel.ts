@@ -274,3 +274,25 @@ function clampPercent(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.min(100, Math.max(0, value));
 }
+
+/**
+ * The note under the fuel/battery tile when there is no reading from the car.
+ * Says "the car doesn't report it" only when the car itself said so; a missing
+ * reply alone used to produce that message, which blamed cars that do report
+ * fuel but had not answered yet.
+ */
+export function fuelTileNote({ isElectric, fuelSupported, hasEstimate }: {
+  isElectric: boolean;
+  fuelSupported: boolean | null | undefined;
+  hasEstimate: boolean;
+}): string {
+  const level = isElectric ? 'battery level' : 'fuel level';
+  if (fuelSupported === false) {
+    return hasEstimate
+      ? `⚠ This car doesn't report its ${level} over OBD-II — using estimate`
+      : `⚠ This car doesn't report its ${level} over OBD-II`;
+  }
+  return hasEstimate
+    ? `Waiting for the car's ${level} reading — using estimate`
+    : `Waiting for the car's ${level} reading…`;
+}

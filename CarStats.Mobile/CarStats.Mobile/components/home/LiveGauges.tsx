@@ -7,6 +7,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LiveData } from '@/services/scanner';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
+import { fuelTileNote } from '@/utils/fuel';
 import { levelLabel } from '@/utils/powertrain';
 
 // איתור: לוח הנתונים החיים
@@ -78,13 +79,7 @@ export default function LiveGauges({
           {/* הערה שמוצגת כשהרכב לא מדווח מפלס */}
           {!fuelIsReal && (
             <Text style={gaugeStyles.tileNote}>
-              {isElectric
-                ? (fuelIsEst
-                    ? '⚠ Battery level not reported over OBD — using estimate'
-                    : '⚠ Car does not report battery level over OBD-II')
-                : (fuelIsEst
-                    ? '⚠ OBD fuel not supported — using estimate'
-                    : '⚠ Car does not report fuel level via OBD-II (PID 0x2F unsupported)')}
+              {fuelTileNote({ isElectric, fuelSupported: data.fuelSupported, hasEstimate: fuelIsEst })}
             </Text>
           )}
           <View style={gaugeStyles.barTrack}>
