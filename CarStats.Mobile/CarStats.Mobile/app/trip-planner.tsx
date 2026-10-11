@@ -14,6 +14,7 @@ import {
 import { routeErrorMessage } from '@/utils/route';
 import { FALLBACK_ELECTRICITY_PER_KWH, consumptionUnit, energyUnit } from '@/utils/powertrain';
 import * as Location from 'expo-location';
+import { Stack } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -299,6 +300,8 @@ export default function TripPlannerScreen() {
       style={{ flex: 1, backgroundColor: c.Dashboard.bg }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      {/* הכותרת תואמת לכרטיס במסך הבית: "אנרגיה" לרכב חשמלי */}
+      <Stack.Screen options={{ title: isElectric ? 'Trip Energy Planner' : 'Trip Fuel Planner' }} />
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
