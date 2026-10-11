@@ -53,6 +53,7 @@ export function demoStatus(): ScannerStatus {
   };
 }
 
+// איתור: מצב הדגמה - נתונים חיים מדומים
 export function demoLiveData(electric = false): LiveData {
   // טווח מסרק ועד נסיעה, במחזור איטי, כשהמהירות והסל"ד מתואמים
   // כדי שהמספרים ייראו כמו מנוע אחד ולא כארבעה שעונים אקראיים.
@@ -85,6 +86,7 @@ export function demoLiveData(electric = false): LiveData {
   };
 }
 
+// איתור: מצב הדגמה - קודי התקלה (בנזין או חשמלי)
 export function demoDtcs(electric = false): DtcScanResult {
   return { codes: [...(electric ? DEMO_EV_CODES : DEMO_CODES)] };
 }

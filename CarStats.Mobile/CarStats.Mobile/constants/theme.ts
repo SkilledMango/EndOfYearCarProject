@@ -6,6 +6,7 @@
  * מתג המצב הכהה משנה את כל האפליקציה בבת אחת.
  */
 
+// איתור: צבעי האפליקציה
 export interface ThemeColors {
   Dashboard: {
     bg: string;            // רקע הדף

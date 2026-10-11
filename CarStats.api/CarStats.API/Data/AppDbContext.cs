@@ -3,6 +3,7 @@ using CarStats.API.Models;
 
 namespace CarStats.API.Data
 {
+    // איתור: טבלאות מסד הנתונים (DbContext)
     // החיבור לבסיס הנתונים: הטבלאות והקשרים ביניהן
     public class AppDbContext : DbContext
     {

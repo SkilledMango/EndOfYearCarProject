@@ -22,6 +22,7 @@ const emptyVehicle = (userId) => ({
 // Electric cars are measured in kWh, fuel cars in litres.
 const consumptionUnit = (isElectric) => (isElectric ? 'kWh/100km' : 'L/100km');
 
+// איתור: ניהול משתמשים ורכבים (פאנל ניהול)
 export default function UsersManager() {
     const [users, setUsers] = useState([]);
 

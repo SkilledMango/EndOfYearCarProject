@@ -308,6 +308,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
   // מסלול א': איתור לפי מספר רישוי
   // ─────────────────────────────────────────────────────────────────────────
 
+  // איתור: הוספת רכב לפי מספר רישוי
   const handlePlateLookup = async () => {
     if (plateText.replace(/\D/g, '').length < 5) {
       setLookupError('Enter a valid license plate number');
@@ -348,6 +349,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
   // מסלול ב': הזנה ידנית — שלב 1, שנה
   // ─────────────────────────────────────────────────────────────────────────
 
+  // איתור: הוספת רכב ידנית - יצרן, דגם, גרסה
   const handleFindMakes = async () => {
     const year = parseInt(yearText, 10);
     if (!year || year < 1980 || year > new Date().getFullYear() + 1) {
@@ -445,6 +447,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
   // משותף: שמירת הרכב
   // ─────────────────────────────────────────────────────────────────────────
 
+  // איתור: שמירת רכב חדש (אפליקציה)
   const handleSubmit = async () => {
     if (!plate.trim()) { setError('Please enter a license plate number.'); return; }
 

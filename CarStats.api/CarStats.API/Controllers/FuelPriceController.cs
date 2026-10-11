@@ -34,6 +34,7 @@ namespace CarStats.API.Controllers
             _config = config;
         }
 
+        // איתור: מחיר דלק וחשמל (שרת)
         // GET: api/fuelprice — מחזיר את שלושת סוגי הדלק, כל אחד מסומן אם הוא רשמי
         [HttpGet]
         public ActionResult<FuelPriceResponse> GetFuelPrice()

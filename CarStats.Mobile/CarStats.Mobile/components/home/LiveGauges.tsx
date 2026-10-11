@@ -9,6 +9,7 @@ import { LiveData } from '@/services/scanner';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { levelLabel } from '@/utils/powertrain';
 
+// איתור: לוח הנתונים החיים
 export default function LiveGauges({
   data,
   estimatedFuel,

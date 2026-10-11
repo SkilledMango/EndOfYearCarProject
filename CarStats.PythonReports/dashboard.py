@@ -11,6 +11,7 @@ st.set_page_config(page_title="CarStats Admin Reports", page_icon="🚗", layout
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
+# איתור: לוח הדוחות בדפדפן - Streamlit (פייתון)
 # login screen - nothing below runs until an admin logs in
 if not st.session_state.logged_in:
     st.title("🚗 CarStats — Admin Reports")

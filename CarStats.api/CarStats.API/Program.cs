@@ -14,6 +14,7 @@ var connectionString = builder.Environment.IsDevelopment()
     ? builder.Configuration.GetConnectionString("DefaultConnection")
     : builder.Configuration.GetConnectionString("ProductionConnection");
 
+// איתור: חיבור למסד הנתונים
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(connectionString, sql =>
         // ניסיונות חוזרים על תקלות זמניות: בסיס נתונים באחסון חינמי משותף
@@ -23,6 +24,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
             maxRetryDelay: TimeSpan.FromSeconds(10),
             errorNumbersToAdd: null)));
 
+// איתור: הגדרת CORS - מי רשאי לפנות לשרת
 // ── CORS ──────────────────────────────────────────────────────────────────────
 // בפיתוח מותר רק localhost, בייצור פתוח לאפליקציה ולפאנל הניהול
 builder.Services.AddCors(options =>
@@ -57,6 +59,7 @@ builder.Services.AddScoped<AiService>();
 // איפה כל מתאם נמצא ברשת המקומית שלו — בזיכרון, משותף לכל הבקשות
 builder.Services.AddSingleton<ScannerRegistry>();
 
+// איתור: אימות טוקן JWT בשרת
 // ── אימות JWT ─────────────────────────────────────────────────────────────────
 // login ו-verify-code מנפיקים טוקן; כל שאר הנקודות דורשות אותו.
 builder.Services.AddSingleton<ITokenService, TokenService>();
@@ -86,6 +89,7 @@ builder.Services.AddAuthorization(options =>
         .RequireAuthenticatedUser()
         .Build();
 
+    // איתור: הרשאת מנהל (AdminOnly)
     // פעולות פאנל הניהול: משתמשים, מילון התקלות וסטטיסטיקות
     options.AddPolicy("AdminOnly", policy =>
         policy.RequireRole(nameof(CarStats.API.Models.UserRole.Admin),
@@ -113,6 +117,7 @@ using (var scope = app.Services.CreateScope())
     {
         try
         {
+            // איתור: יצירת מסד הנתונים בהפעלת השרת (Migrations + מילון)
             db.Database.Migrate();
             await DbSeeder.SeedDiagnosticCodesAsync(db);
 

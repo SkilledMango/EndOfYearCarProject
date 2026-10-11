@@ -101,6 +101,7 @@ export async function getTrims(year: number, make: string, model: string): Promi
   return normalizeItems(data);
 }
 
+// איתור: צריכת דלק ממאגר EPA
 /**
  * הפרטים המלאים של רכב מסוים לפי המזהה שהתקבל מרשימת הגימורים.
  */
@@ -145,6 +146,7 @@ function norm(s: string) {
   return s.toLowerCase().replace(/[\s\-_\.]/g, '');
 }
 
+// איתור: צריכת דלק ממאגר NRCan
 /**
  * שולפת צריכה משולבת מהמאגר הקנדי.
  *

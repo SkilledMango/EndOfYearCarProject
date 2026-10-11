@@ -26,6 +26,7 @@ namespace CarStats.API.Controllers
 
         private string? ApiKey => _config["GoogleMaps:ApiKey"];
 
+        // איתור: חישוב מסלול נסיעה עם פקקים (Google, שרת)
         // GET: api/navigation/route — מסלול, מרחק וזמן נסיעה עם תנועה חיה.
         // התשובה של Google מועברת כמו שהיא, כי הלקוח כבר יודע לפרסר אותה.
         [HttpGet("route")]
@@ -52,6 +53,7 @@ namespace CarStats.API.Controllers
             return Content(json, "application/json");
         }
 
+        // איתור: חיפוש מוסכים קרובים (שרת)
         // GET: api/navigation/nearby-shops — מוסכים חיים סביב המשתמש.
         //   kind=fuel (ברירת מחדל) — כל המוסכים, מהקרוב לרחוק
         //   kind=electric — מוסכים לרכב חשמלי והיברידי
@@ -66,6 +68,7 @@ namespace CarStats.API.Controllers
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, "Shop search is not configured.");
 
             List<Shop> shops;
+            // איתור: מוסכים לרכב חשמלי
             if (kind == "electric")
             {
                 // "רכב חשמלי" לבד מחזיר גם מעבדות קורקינטים, ולכן שתי שאילתות וסינון
@@ -92,6 +95,7 @@ namespace CarStats.API.Controllers
             var names = new[] { make, makeHe }.Where(n => !string.IsNullOrWhiteSpace(n) && n!.Length <= 30).ToList();
             if (names.Count > 0)
             {
+                // איתור: מוסך של יצרן הרכב ראשון ברשימה
                 var brandHits = await SearchAsync(lat, lng, makeHe ?? make);
                 var brand = brandHits?.FirstOrDefault(s =>
                     names.Any(n => s.Name.Contains(n!, StringComparison.OrdinalIgnoreCase)));
@@ -163,6 +167,7 @@ namespace CarStats.API.Controllers
             return R * 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
         }
 
+        // איתור: טלפון של מוסך
         // GET: api/navigation/shop-phone — מספר הטלפון של מוסך.
         // נשלף רק בלחיצה על "חייג", כי הוא לא חלק מתוצאות החיפוש והקריאה מחויבת בנפרד.
         [HttpGet("shop-phone")]
@@ -192,6 +197,7 @@ namespace CarStats.API.Controllers
             return Ok(new { phone });
         }
 
+        // איתור: השלמה אוטומטית של כתובות (שרת)
         // GET: api/navigation/autocomplete — השלמה אוטומטית של כתובות
         [HttpGet("autocomplete")]
         public async Task<IActionResult> Autocomplete([FromQuery] string input)
@@ -217,6 +223,7 @@ namespace CarStats.API.Controllers
             return Content(json, "application/json");
         }
 
+        // איתור: המרת כתובת לקואורדינטות
         // GET: api/navigation/geocode — כתובת שהוקלדה אל קואורדינטות,
         // כדי שלא כל תכונה תהיה תלויה ב-GPS של המכשיר.
         // כאן התשובה כן מקוצצת: הקורא רוצה נקודה אחת ולא את כל הפלט של Google.

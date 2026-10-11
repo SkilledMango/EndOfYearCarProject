@@ -100,6 +100,7 @@ let demoMode = false;
 // הרכב שנבחר חשמלי? ההדגמה מחזירה אז קודים ושעונים של רכב חשמלי
 let demoElectric = false;
 
+// איתור: הפעלת מצב הדגמה
 /** מדליק או מכבה את מצב ההדגמה. */
 export function setDemoMode(on: boolean): void {
   demoMode = on;
@@ -128,6 +129,7 @@ export async function getScannerStatus(): Promise<ScannerStatus> {
   return res.json() as Promise<ScannerStatus>;
 }
 
+// איתור: קריאת נתונים חיים מהמתאם - סל"ד, מהירות, טמפרטורה
 /**
  * מחזירה את קריאות החיישנים האחרונות מהרכב.
  * המתאם מרענן אותן בערך פעם בשנייה בלולאה שלו.
@@ -140,6 +142,7 @@ export async function getLiveData(): Promise<LiveData> {
   return res.json() as Promise<LiveData>;
 }
 
+// איתור: קריאת קודי תקלה מהמתאם (אפליקציה)
 /**
  * מפעילה סריקת תקלות חדשה ומחזירה את הקודים הגולמיים.
  * לדוגמה: { codes: ["P0300", "P0420"] }
@@ -152,6 +155,7 @@ export async function scanDtcs(): Promise<DtcScanResult> {
   return res.json() as Promise<DtcScanResult>;
 }
 
+// איתור: קריאת מספר שלדה (VIN) מהמתאם
 /**
  * שולפת את מספר השלדה מהמתאם, פעם אחת לכל חיבור.
  * מחזירה null אם הרכב לא תומך בכך או במצב הדגמה.
@@ -164,6 +168,7 @@ export async function getVehicleVin(): Promise<VinResult> {
   return res.json() as Promise<VinResult>;
 }
 
+// איתור: בדיקה אם המתאם מחובר
 /**
  * בדיקה מהירה אם המתאם נגיש. מחזירה אמת אם הוא ענה בזמן הקצוב.
  * לעולם לא זורקת שגיאה.
@@ -204,6 +209,7 @@ async function isCarStatsScanner(address: string): Promise<boolean> {
   return !!status && !status.setupMode;
 }
 
+// איתור: איתור המתאם דרך השרת (אפליקציה)
 /**
  * שואלת את השרת איפה המתאם דיווח שהוא נמצא, בודקת שהוא באמת עונה שם,
  * ושומרת את הכתובת. null כשאין דיווח או שאף כתובת לא ענתה.
@@ -216,6 +222,7 @@ async function locateViaServer(): Promise<string | null> {
   return hit;
 }
 
+// איתור: חיפוש המתאם ברשת
 /**
  * מחפשת את המתאם ושומרת את הכתובת שנמצאה. מחזירה אותה, או null.
  * onProgress מקבל כמה כתובות נבדקו מתוך כמה, בשביל פס התקדמות.
@@ -253,6 +260,7 @@ export async function findScanner(
  */
 export const SETUP_NETWORK_ADDRESS = '192.168.4.1';
 
+// איתור: שליחת פרטי ההוטספוט למתאם
 /**
  * שולחת למתאם שם וסיסמה של נקודת גישה. המתאם שומר אותם, מאתחל את עצמו
  * ומתחבר אליה. לא צריך אינטרנט: זו הודעה ישירה מהטלפון למתאם.

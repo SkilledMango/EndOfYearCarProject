@@ -63,6 +63,7 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));   // מהזווית חזרה לק"מ
 }
 
+// איתור: מסך המוסכים
 export default function MechanicFinderScreen() {
   const { colors: c } = useTheme();
   const styles = useStyles();

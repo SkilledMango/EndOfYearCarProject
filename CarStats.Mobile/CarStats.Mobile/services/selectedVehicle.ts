@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const KEY = '@carstats_selected_vehicle';
 
+// איתור: זכירת הרכב הנבחר
 export async function saveSelectedVehicleId(id: number): Promise<void> {
   try {
     await AsyncStorage.setItem(KEY, String(id));

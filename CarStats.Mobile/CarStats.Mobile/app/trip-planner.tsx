@@ -64,6 +64,7 @@ function trafficMeta(c: ThemeColors, ratio: number): { label: string; color: str
   return               { label: 'SEVERE',   color: c.Severity.red    };
 }
 
+// איתור: חישוב דלק לנסיעה כולל פקקים
 function calcFuelWithTraffic(
   distanceKm: number,
   durationSec: number,
@@ -104,6 +105,7 @@ async function getOriginCoords(): Promise<{ latitude: number; longitude: number 
   return null;
 }
 
+// איתור: מתכנן נסיעה
 // ─── המסך הראשי ──────────────────────────────────────────────────────────────
 export default function TripPlannerScreen() {
   const { user: authUser }            = useAuth();

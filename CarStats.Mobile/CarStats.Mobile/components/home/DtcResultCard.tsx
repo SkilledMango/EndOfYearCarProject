@@ -11,6 +11,7 @@ import { resultSeverity, severityMeta } from '@/utils/severity';
 import { faultParams } from '@/utils/faultRoute';
 import { useRouter } from 'expo-router';
 
+// איתור: כרטיס תוצאת תקלה
 export default function DtcResultCard({
   result,
   rawCode,

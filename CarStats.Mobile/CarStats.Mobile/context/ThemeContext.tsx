@@ -26,6 +26,7 @@ const ThemeContext = createContext<ThemeContextValue>({
   setMode: () => {},
 });
 
+// איתור: מצב כהה / ערכת נושא
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemScheme = useColorScheme();
   const [mode, setModeState] = useState<ThemeMode>('system');

@@ -18,6 +18,7 @@ namespace CarStats.API.Controllers
             _context = context;
         }
 
+        // איתור: סטטיסטיקות לפאנל הניהול (שרת)
         // GET: api/stats — כל נתוני הדאשבורד בקריאה אחת
         [HttpGet]
         public async Task<IActionResult> GetStats()

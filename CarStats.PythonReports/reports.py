@@ -15,6 +15,7 @@ SEVERITY_INFO = {
 EXPORT_DIR = "exports"
 
 
+# איתור: דוח משתמשים (פייתון)
 # report 1 - table of all users + a chart of how many faults each one logged
 def build_users():
     users = api_client.get_users()
@@ -41,6 +42,7 @@ def build_users():
     return table, figure
 
 
+# איתור: דוח רכבים לפי יצרן (פייתון)
 # report 2 - how many vehicles of each make are registered
 def build_vehicles():
     users = api_client.get_users()
@@ -62,6 +64,7 @@ def build_vehicles():
     return table, figure
 
 
+# איתור: דוח חומרת תקלות (פייתון)
 # report 3 - fault events split by severity, shown as a pie chart
 def build_severity():
     stats = api_client.get_stats()
@@ -89,6 +92,7 @@ def build_severity():
     return table, figure
 
 
+# איתור: דוח הקודים הנפוצים (פייתון)
 # report 4 - the fault codes reported most often
 def build_top_codes():
     stats = api_client.get_stats()
@@ -154,6 +158,7 @@ def show_in_console(title: str, save: bool = False) -> None:
         plt.show()
 
 
+# איתור: ייצוא הדוחות לאקסל (פייתון)
 # save all four report tables into one Excel file, each on its own sheet
 def save_all_to_excel(path: str = "CarStats_Reports.xlsx") -> str:
     with pd.ExcelWriter(path) as writer:

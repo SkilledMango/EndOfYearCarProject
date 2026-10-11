@@ -80,6 +80,7 @@ const monthKey = (d: Date) => d.toISOString().slice(0, 7);
 const prevMonthKey = (d: Date) =>
   monthKey(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)));
 
+// איתור: חישוב הוצאות דלק החודש והשנה
 /**
  * What the driver has actually spent on fuel.
  *
@@ -112,6 +113,7 @@ export function fuelSpend(entries: FuelSpendEntry[], now: Date = new Date()): Fu
   };
 }
 
+// איתור: עלות ל-100 ק"מ
 /**
  * Running cost in ₪ per 100km — the figure a driver can compare against another
  * car, where L/100km alone can't be compared across fuel types.
@@ -143,6 +145,7 @@ export interface FillCost {
   cost: number;
 }
 
+// איתור: כמה עולה מיכל מלא או טעינה מלאה
 /**
  * What it would cost to fill the tank from here.
  *
@@ -173,6 +176,7 @@ export type TripFuelOutlook =
   | { enough: true;  litresLeft: number; pctLeft: number }
   | { enough: false; shortfallL: number; topUpCost: number };
 
+// איתור: האם יש מספיק דלק לנסיעה
 /**
  * Whether the fuel in the tank covers a planned trip.
  *
@@ -233,6 +237,7 @@ export interface FuelEstimateInput {
   avgL100km: number | null | undefined;
 }
 
+// איתור: הערכת מפלס הדלק
 /**
  * Returns the estimated fuel percentage (0–100, whole numbers), or null when
  * there is nothing to estimate from.

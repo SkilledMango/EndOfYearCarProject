@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CarStats.API.Models
 {
+    // איתור: מודל רכב
     // טבלת הרכבים של המשתמשים
     public class Vehicle
     {

@@ -20,6 +20,7 @@ namespace CarStats.API.Controllers
             _context = context;
         }
 
+        // איתור: שליפת מילון התקלות (שרת)
         // GET: api/dtc — מחזיר את כל המילון. משמש גם את האפליקציה וגם את פאנל הניהול
         [HttpGet]
         public async Task<ActionResult<IEnumerable<DiagnosticCode>>> GetDiagnosticCodes()
@@ -27,6 +28,7 @@ namespace CarStats.API.Controllers
             return await _context.DiagnosticCodes.ToListAsync();
         }
 
+        // איתור: הוספת קוד תקלה למילון (שרת)
         // POST: api/dtc — הוספת קוד חדש למילון מפאנל הניהול
         [HttpPost]
         [Authorize(Policy = "AdminOnly")]
@@ -38,6 +40,7 @@ namespace CarStats.API.Controllers
             return CreatedAtAction(nameof(GetDiagnosticCodes), new { id = diagnosticCode.Id }, diagnosticCode);
         }
 
+        // איתור: מחיקת קוד תקלה מהמילון (שרת)
         // DELETE: api/dtc/{id} — מחיקת קוד מהמילון
         [HttpDelete("{id}")]
         [Authorize(Policy = "AdminOnly")]

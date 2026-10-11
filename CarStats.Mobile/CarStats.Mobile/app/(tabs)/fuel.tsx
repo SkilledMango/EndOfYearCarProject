@@ -196,6 +196,7 @@ function TrendChart({ values }: { values: number[] }) {
 
 // ─── המסך ────────────────────────────────────────────────────────────────────
 
+// איתור: מסך מעקב דלק / טעינה
 export default function FuelScreen() {
   const { user: authUser } = useAuth();
   const { colors: c } = useTheme();
@@ -376,6 +377,7 @@ export default function FuelScreen() {
     }
   };
 
+  // איתור: רישום תדלוק או טעינה
   const handleAdd = async () => {
     const l = parseFloat(liters);
     const p = parseFloat(price);
@@ -408,6 +410,7 @@ export default function FuelScreen() {
     closeModal();
   };
 
+  // איתור: מחיקת תדלוק או טעינה
   const handleDelete = (entry: FillUp) => {
     Alert.alert(isElectric ? 'Delete charge?' : 'Delete fill-up?', `${formatDay(entry.date)} · ${entry.liters} ${unit} · ₪${entry.price}`, [
       { text: 'Cancel', style: 'cancel' },

@@ -17,6 +17,7 @@ const RECENT_FIX_MS = 2 * 60 * 1000;
 
 let accuracyPromptDeclined = false;
 
+// איתור: מיקום נוכחי של הטלפון
 export async function getCurrentPosition(): Promise<Location.LocationObject> {
   if (!accuracyPromptDeclined) {
     try {

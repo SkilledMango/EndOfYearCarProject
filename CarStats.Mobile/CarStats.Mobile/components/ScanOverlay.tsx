@@ -29,6 +29,7 @@ interface Props {
   onClose: () => void;
 }
 
+// איתור: מסך הסריקה - טבעת התקדמות ותקלות שנמצאו
 export default function ScanOverlay({
   visible,
   scanning,

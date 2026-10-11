@@ -9,6 +9,7 @@ const VEHICLES_URL = `${BASE_URL}/vehicles`;
 
 const TOKEN_KEY = 'carstats_admin_token';
 
+// איתור: כתובת השרת בפאנל הניהול
 // All panel requests go through this instance, which attaches the JWT the
 // API handed out at login. Without it every endpoint returns 401.
 const http = axios.create({ baseURL: BASE_URL });
@@ -23,6 +24,7 @@ http.interceptors.request.use((config) => {
 // session still on screen. Instead, App is told so it can sign out.
 let sessionExpiredHandler = null;
 export const onSessionExpired = (handler) => { sessionExpiredHandler = handler; };
+// איתור: יציאה אוטומטית כשהחיבור פג (פאנל ניהול)
 http.interceptors.response.use(
     (response) => response,
     (error) => {
@@ -35,6 +37,7 @@ http.interceptors.response.use(
 export const ROLE_ADMIN = 2;
 export const ROLE_SUPERADMIN = 3;
 
+// איתור: התחברות לפאנל הניהול
 /**
  * Logs in against the shared /auth/login endpoint and stores the session
  * token for all subsequent panel requests.

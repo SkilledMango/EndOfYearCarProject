@@ -11,6 +11,7 @@ namespace CarStats.API.Models
         Red = 3     // קריטי, לעצור בבטחה
     }
 
+    // איתור: מודל קוד תקלה במילון
     // מילון התקלות: קוד אחד ומה שהנהג צריך לדעת עליו
     public class DiagnosticCode
     {

@@ -5,6 +5,7 @@ import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/context/ThemeContext';
 
+// איתור: הלשוניות בתחתית המסך
 export default function TabLayout() {
   const { colors: c } = useTheme();
   return (

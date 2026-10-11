@@ -2,6 +2,7 @@
 import { ReportDtcResponse, SeverityLevel } from '@/services/api';
 import { ThemeColors } from '@/constants/theme';
 
+// איתור: צבע ותווית לפי חומרת התקלה
 /** צבע הערכה לפי דרגת חומרה. חומרה לא ידועה מקבלת צהוב. */
 export const severityColor = (c: ThemeColors, s: SeverityLevel | undefined): string => {
   switch (s) {

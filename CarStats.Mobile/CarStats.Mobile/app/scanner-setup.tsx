@@ -35,6 +35,7 @@ const WAIT_FOR_SCANNER_MS = 3 * 60 * 1000;
 /** המתאם מאתחל 1.5 שניות אחרי שקיבל את הפרטים; מחכים שיסיים לפני שמחפשים */
 const RESTART_GRACE_MS = 5000;
 
+// איתור: אשף חיבור המתאם להוטספוט
 export default function ScannerSetupScreen() {
   const router = useRouter();
   const { colors: c } = useTheme();

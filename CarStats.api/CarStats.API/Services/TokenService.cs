@@ -55,6 +55,7 @@ namespace CarStats.API.Services
             return "carstats-local-development-signing-key-not-for-production";
         }
 
+        // איתור: יצירת טוקן JWT
         // הרכבת הטוקן: מזהה, מייל ותפקיד, עם חתימה ותאריך תפוגה
         public string CreateToken(AppUser user)
         {

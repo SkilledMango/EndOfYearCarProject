@@ -21,12 +21,14 @@ namespace CarStats.API.Controllers
     [Authorize]
     public class MobileController : ControllerBase
     {
+        // איתור: מניעת רישום כפול של אותה תקלה (24 שעות)
         /// <summary>
         /// כמה זמן אותו קוד נחשב אותה תקלה מתמשכת ולא תקלה חדשה.
         /// רכב מדווח על תקלה פעילה מחדש בכל סריקה.
         /// </summary>
         private static readonly TimeSpan DuplicateFaultWindow = TimeSpan.FromHours(24);
 
+        // איתור: בדיקת תקינות קוד תקלה (P0300)
         /// <summary>
         /// קוד OBD-II תקני: אות המערכת (P/B/C/U) וארבע ספרות הקסדצימליות, למשל P0300.
         /// המתאם תמיד מפיק קוד בצורה הזו; כל דבר אחר הוא זבל שהיה נכנס לסטטיסטיקה.
@@ -41,6 +43,7 @@ namespace CarStats.API.Controllers
             _context = context;
         }
 
+        // איתור: תרגום קוד תקלה - קבלת תקלה מהאפליקציה, שמירה ותרגום (שרת)
         // POST: api/mobile/report-dtc — מקבל קוד מהסריקה, רושם אותו ומחזיר את התרגום
         [HttpPost("report-dtc")]
         public async Task<IActionResult> ReportDtc([FromBody] ReportDtcRequest request)
@@ -116,6 +119,7 @@ namespace CarStats.API.Controllers
             });
         }
 
+        // איתור: מחיקת אירוע תקלה (מנהל)
         // DELETE: api/mobile/events/{id} — מחיקת אירוע תקלה בודד, למנהלים בלבד
         // (למשל אירוע בדיקה, או קוד שנרשם בטעות)
         [HttpDelete("events/{id}")]
@@ -129,6 +133,7 @@ namespace CarStats.API.Controllers
             return NoContent();
         }
 
+        // איתור: היסטוריית התקלות של משתמש (שרת)
         // GET: api/mobile/events/{userId} — היסטוריית התקלות של המשתמש, כולל התרגומים
         [HttpGet("events/{userId}")]
         public async Task<IActionResult> GetUserEvents(int userId)

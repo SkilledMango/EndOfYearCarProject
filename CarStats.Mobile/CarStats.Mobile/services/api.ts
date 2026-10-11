@@ -1,5 +1,6 @@
 import axios from 'axios';
 
+// איתור: כתובת השרת באפליקציה
 /**
  * הלקוח של השרת: כתובת בסיס אחת, טוקן אחד וכל הטיפוסים המשותפים.
  *
@@ -19,6 +20,7 @@ export const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+// איתור: צירוף הטוקן לכל בקשה לשרת
 /**
  * מצרף או מנקה את טוקן הסשן בכל בקשה לשרת.
  * נקרא רק מ-AuthContext בתחילת סשן, בשחזורו ובסיומו.
@@ -143,6 +145,7 @@ export const getUser = async (userId: number): Promise<AppUser> => {
   return data;
 };
 
+// איתור: שליחת קוד תקלה לשרת (אפליקציה)
 export const reportDtc = async (
   rawCode: string,
   userId?: number,
@@ -185,6 +188,7 @@ export const deleteVehicle = async (id: number): Promise<void> => {
   await api.delete(`/vehicles/${id}`);
 };
 
+// איתור: בקשת מוסכים קרובים מהשרת (אפליקציה)
 /**
  * מוסכים אמיתיים סביב נקודה. עם make, המוסך המורשה הקרוב של היצרן עולה
  * ראשון (makeHe — השם בעברית, כפי שהוא מופיע בשלטים ובשמות המוסכים).

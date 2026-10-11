@@ -77,6 +77,7 @@ export async function showChildReminderNotification(place?: ReminderPlace | null
     trigger: null, // להציג מיד, בלי תזמון
   });
 }
+// איתור: תזכורת ילד ברכב - מה קורה כשמגיעים הביתה או לעבודה
 // מגדיר את הפונקציה ככה שהיא תעבוד גם כשהאפליקציה סגורה (מערכת ההפעלה עוקבת אחרי המיקום)
 TaskManager.defineTask(CHILD_REMINDER_TASK, async ({ data, error }) => {
   if (error || !data) return;
@@ -122,6 +123,7 @@ export async function ensureNotifPermission(): Promise<boolean> {
 
 // ─── התראות סריקה ────────────────────────────────────────────────────────────
 
+// איתור: התראה על תקלות שנמצאו בסריקה
 /** שולחת התראה מקומית שמסכמת סריקה שהסתיימה, אם ההתראות מופעלות. */
 export async function sendFaultAlert(faultCount: number, worstLabel: string) {
   const prefs = await loadPrefs();
@@ -140,6 +142,7 @@ export async function sendFaultAlert(faultCount: number, worstLabel: string) {
 
 // ─── תזכורת בטיחות ילדים ─────────────────────────────────────────────────────
 
+// איתור: תזכורת ילד ברכב - הפעלה (גאופנס)
 /**
  * מתחיל מעקב אחר העיגולים — הבית, העבודה או שניהם (ראו reminderRegions).
  * קריאה חוזרת מחליפה את העיגולים הקודמים, כך שאותה פונקציה גם מעדכנת.

@@ -35,6 +35,7 @@ namespace CarStats.API.Controllers
             _ai = ai;
         }
 
+        // איתור: AI משלים מפרט רכב - מיכל או סוללה, צריכה, חשמלי
         // POST: api/ai/vehicle-specs — חשמלי או דלק, גודל מיכל/סוללה וצריכה, בשאלה אחת
         [HttpPost("vehicle-specs")]
         public async Task<IActionResult> VehicleSpecs([FromBody] VehicleSpecsRequest request)
@@ -88,6 +89,7 @@ namespace CarStats.API.Controllers
             return Ok(specs);
         }
 
+        // איתור: הסבר AI לקוד תקלה שלא במילון (שרת)
         // POST: api/ai/explain-fault — הסבר בשפה פשוטה לקוד שאינו במילון שלנו
         [HttpPost("explain-fault")]
         public async Task<IActionResult> ExplainFault([FromBody] ExplainFaultRequest request)

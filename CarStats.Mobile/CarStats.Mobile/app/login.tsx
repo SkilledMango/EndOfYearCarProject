@@ -32,6 +32,7 @@ export default function LoginScreen() {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState<string | null>(null);
 
+  // איתור: מסך התחברות
   const handleLogin = async () => {
     setError(null);
 

@@ -82,6 +82,7 @@ function RootNavigator() {
   );
 }
 
+// איתור: ניווט בין המסכים (Router)
 // ─── הפריסה הראשית: מספקת את ערכת הצבעים ואת המשתמש לכל האפליקציה ────────────
 export default function RootLayout() {
   return (

@@ -76,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
+  // איתור: שמירת ושחזור החיבור (סשן) באפליקציה
   // בטעינה הראשונה: שחזור הסשן מהאחסון
   useEffect(() => {
     (async () => {
@@ -117,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => api.interceptors.response.eject(id);
   }, []);
 
+  // איתור: התחברות באפליקציה
   // ── התחברות ──────────────────────────────────────────────────────────────
   const login = async (email: string, password: string) => {
     try {
@@ -142,6 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // איתור: הרשמה באפליקציה
   // ── הרשמה ────────────────────────────────────────────────────────────────
   const register = async (fullName: string, email: string, password: string) => {
     try {
@@ -159,6 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // איתור: אימות קוד מהמייל (אפליקציה)
   // ── אימות הקוד ───────────────────────────────────────────────────────────
   const verifyCode = async (email: string, code: string): Promise<AppUser> => {
     try {
@@ -207,6 +211,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // איתור: התנתקות
   // ── התנתקות ──────────────────────────────────────────────────────────────
   const logout = async () => {
     // הגדר הגיאוגרפית רשומה אצל מערכת ההפעלה ולא באחסון, ולכן היא שורדת

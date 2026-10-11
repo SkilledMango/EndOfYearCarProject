@@ -24,6 +24,7 @@ function loadSession() {
   }
 }
 
+// איתור: מבנה פאנל הניהול - לשוניות
 function App() {
   const [tabValue, setTabValue] = useState(0);
   const [admin, setAdmin]       = useState(loadSession);

@@ -256,6 +256,7 @@ function SectionTitle({ icon, children }) {
     );
 }
 
+// איתור: גרפים וסטטיסטיקות (פאנל ניהול)
 // ─── Main Analytics ────────────────────────────────────────────────────────────
 export default function Analytics() {
     const [stats, setStats]     = useState(null);

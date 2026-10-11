@@ -79,6 +79,7 @@
 #define OBD_TIMEOUT_MS   200
 #define POLL_INTERVAL_MS 1000
 
+// איתור: מצב סימולציה במתאם (בלי רכב)
 // ─── SIMULATION MODE — edit these for your presentation ──────────────────────
 // These values are shown when no real car is connected.
 // Change them to whatever makes your demo look best.
@@ -172,6 +173,7 @@ void      handleSetupPage();
 void      handleSetupSave();
 String    htmlEscape(const String &s);
 
+// איתור: הפעלת המתאם
 // ─── Setup ────────────────────────────────────────────────────────────────────
 void setup() {
   Serial.begin(115200);
@@ -231,6 +233,7 @@ void loop() {
     return;
   }
 
+  // איתור: אתחול המתאם כשההוטספוט נעלם
   // Hotspot gone for a while (phone switched it off, or the scanner moved to a
   // new car/phone) — restart. If the hotspot is still missing after the restart,
   // the scanner opens the setup network, so a new phone can take it over
@@ -282,6 +285,7 @@ void loop() {
   }
 }
 
+// איתור: חיבור לרשת ה-CAN של הרכב
 // ─── TWAI initialisation ──────────────────────────────────────────────────────
 bool twaiInit() {
   twai_general_config_t gConfig = TWAI_GENERAL_CONFIG_DEFAULT(CAN_TX_PIN, CAN_RX_PIN, TWAI_MODE_NORMAL);
@@ -292,6 +296,7 @@ bool twaiInit() {
   return true;
 }
 
+// איתור: שליחת בקשת OBD לרכב
 // ─── OBD-II helpers ───────────────────────────────────────────────────────────
 bool sendObdRequest(uint8_t mode, uint8_t pid) {
   twai_message_t msg = {};
@@ -408,6 +413,7 @@ int readFuelPercent() {
   return -1; // car doesn't support this PID
 }
 
+// איתור: קריאת נתונים חיים מהרכב (מתאם)
 // ─── Live data polling ────────────────────────────────────────────────────────
 void pollLiveData() {
   int rpm = readPidInt(PID_RPM);
@@ -455,6 +461,7 @@ void pollLiveData() {
   }
 }
 
+// איתור: קריאת קודי תקלה מהרכב (מתאם)
 // ─── DTC reading ──────────────────────────────────────────────────────────────
 void readDtcs(JsonArray &arr) {
   if (simMode) {
@@ -479,6 +486,7 @@ void readDtcs(JsonArray &arr) {
   }
 }
 
+// איתור: המרת בתים לקוד תקלה כמו P0300
 String dtcBytesToString(uint8_t high, uint8_t low) {
   char type;
   switch ((high >> 6) & 0x03) {
@@ -504,6 +512,7 @@ String dtcBytesToString(uint8_t high, uint8_t low) {
 //
 // Returns the 17-char VIN string, or "" if unsupported / timed out.
 
+// איתור: קריאת מספר שלדה מהרכב (מתאם)
 String readVin() {
   if (simMode) return "";
 
@@ -715,6 +724,7 @@ bool waitForWifi(unsigned long timeoutMs) {
   return WiFi.status() == WL_CONNECTED;
 }
 
+// איתור: הכתובת הקבועה של המתאם (100)
 // The address this scanner takes on a network: host .100 on normal networks
 // (Android hotspots are /24), or the last usable address on small ones —
 // an iPhone hotspot is 172.20.10.0/28, which gives 172.20.10.14.
@@ -726,6 +736,7 @@ IPAddress scannerAddressFor(IPAddress ip, IPAddress mask) {
   return IPAddress(ip[0], ip[1], ip[2], broadcastLast - 1);
 }
 
+// איתור: המתאם מתחבר להוטספוט
 // Joins the saved hotspot, then moves to the fixed scanner address on it.
 // Returns false if the hotspot can't be reached in time.
 bool connectToHotspot(unsigned long timeoutMs) {
@@ -764,6 +775,7 @@ bool connectToHotspot(unsigned long timeoutMs) {
 
 // ─── Normal mode: the OBD-II API ──────────────────────────────────────────────
 
+// איתור: המתאם מדווח לשרת איפה הוא (מתאם)
 // POST {deviceId, localIp} to the server. The server sees the phone's public
 // address on this request and on the app's — that is how it pairs them.
 // Best effort: no internet just means the app falls back to searching.
@@ -786,6 +798,7 @@ void announceToServer() {
   http.end();
 }
 
+// איתור: הכתובות שהמתאם עונה עליהן - dtcs, live-data, status
 void startNormalMode() {
   // carstats.local — iPhones can find the scanner by name with no searching at all
   if (MDNS.begin("carstats")) MDNS.addService("http", "tcp", 80);
@@ -841,6 +854,7 @@ void applyHotspot(const String &ssid, const String &pass) {
   Serial.printf("[WiFi] New hotspot saved: %s — restarting onto it\n", ssid.c_str());
 }
 
+// איתור: קבלת פרטי הוטספוט מהאפליקציה (מתאם)
 // POST /hotspot  {"ssid":"...","pass":"..."}
 void handleHotspot() {
   setCorsHeaders();
@@ -881,6 +895,7 @@ void handleSetupStatus() {
 
 // ─── Setup mode: the "CarStats-Setup" network and its page ────────────────────
 
+// איתור: מצב התקנה - רשת CarStats-Setup
 void startSetupMode() {
   setupMode = true;
   WiFi.disconnect();

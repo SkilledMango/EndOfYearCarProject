@@ -19,6 +19,7 @@ export interface SavedPlaces {
   workLng: number | null;
 }
 
+// איתור: תזכורת ילד ברכב - אזורי הבית והעבודה
 /** העיגולים למעקב — רק המקומות שנשמרו. רשימה ריקה = אין מה לעקוב. */
 export function reminderRegions(places: SavedPlaces): LocationRegion[] {
   const regions: LocationRegion[] = [];

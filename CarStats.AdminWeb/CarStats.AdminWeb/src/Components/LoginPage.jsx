@@ -23,6 +23,7 @@ function LoginPage({ onLogin, notice }) {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState(null);
 
+  // איתור: מסך התחברות בפאנל הניהול
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);

@@ -20,6 +20,7 @@ namespace CarStats.API.Controllers
             _context = context;
         }
 
+        // איתור: רשימת הרכבים של משתמש (שרת)
         // GET: api/vehicles/user/{userId} — כל הרכבים של משתמש מסוים
         [HttpGet("user/{userId}")]
         public async Task<ActionResult<IEnumerable<Vehicle>>> GetVehiclesForUser(int userId)
@@ -34,6 +35,7 @@ namespace CarStats.API.Controllers
                 .ToListAsync();
         }
 
+        // איתור: הוספת רכב (שרת)
         // POST: api/vehicles — הוספת רכב למוסך
         [HttpPost]
         public async Task<ActionResult<Vehicle>> AddVehicle(Vehicle newVehicle)
@@ -49,6 +51,7 @@ namespace CarStats.API.Controllers
             return CreatedAtAction(nameof(GetVehiclesForUser), new { userId = newVehicle.AppUserId }, newVehicle);
         }
 
+        // איתור: עדכון רכב (שרת)
         // PUT: api/vehicles/{id} — עדכון פרטי רכב: דגם, שנה, מספר רישוי וצריכה
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateVehicle(int id, Vehicle updatedVehicle)
@@ -71,6 +74,7 @@ namespace CarStats.API.Controllers
             return NoContent();
         }
 
+        // איתור: מחיקת רכב (שרת)
         // DELETE: api/vehicles/{id} — הסרת רכב מהמוסך
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteVehicle(int id)

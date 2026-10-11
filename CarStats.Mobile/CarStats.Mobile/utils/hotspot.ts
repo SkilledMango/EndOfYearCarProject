@@ -7,6 +7,7 @@
  * עדיף לתפוס טעות הקלדה לפני שהנהג מחליף רשת.
  */
 
+// איתור: בדיקת שם וסיסמת הוטספוט
 /** null כשהכול תקין, אחרת מה לתקן. */
 export function hotspotError(ssid: string, pass: string): string | null {
   const name = ssid.trim();

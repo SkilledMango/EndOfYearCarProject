@@ -79,6 +79,7 @@ export default function RegisterScreen() {
   const firstName    = fullName.trim().split(/\s+/)[0] || 'there';
   const currentIndex = STEP_ORDER.indexOf(step);
 
+  // איתור: מסך הרשמה
   // ── שלב 1: יצירת החשבון ──────────────────────────────────────────────────
   const handleRegister = async () => {
     setError(null);
@@ -100,6 +101,7 @@ export default function RegisterScreen() {
     }
   };
 
+  // איתור: מסך הזנת קוד האימות
   // ── שלב 2: אימות הקוד שנשלח ──────────────────────────────────────────────
   const handleVerify = async () => {
     setError(null);

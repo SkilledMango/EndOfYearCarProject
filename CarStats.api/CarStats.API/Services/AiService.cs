@@ -41,6 +41,7 @@ namespace CarStats.API.Services
         private string? GeminiKey => _config["Ai:GeminiKey"];
         private string  GroqModel => _config["Ai:GroqModel"] ?? "openai/gpt-oss-120b";
 
+        // איתור: שרשרת ספקי ה-AI - קודם Groq ואז Gemini
         /// <summary>
         /// שואלת את הספקים לפי הסדר ומחזירה את התשובה הראשונה שעוברת את isUsable.
         /// תשובה שלא עוברת נחשבת כישלון של אותו ספק — וממשיכים לבא.
@@ -162,6 +163,7 @@ namespace CarStats.API.Services
 
         // ─── מטמון ────────────────────────────────────────────────────────────
 
+        // איתור: מטמון תשובות AI
         // נשמרות רק תשובות מוצלחות, ולכן אין צורך בתפוגה
         public async Task<string?> GetCachedAsync(string key)
         {

@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CarStats.API.Models
 {
+    // איתור: מודל אירוע תקלה (היסטוריה)
     // תקלה בודדת שנרשמה בסריקה. הטבלה הזו היא המקור לספירת התקלות ולמסך ההיסטוריה.
     public class VehicleEvent
     {

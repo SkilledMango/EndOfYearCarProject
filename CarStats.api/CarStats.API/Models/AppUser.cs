@@ -12,6 +12,7 @@ namespace CarStats.API.Models
         SuperAdmin = 3  // גישה מלאה, כולל ניהול משתמשים
     }
 
+    // איתור: מודל משתמש
     // טבלת המשתמשים
     public class AppUser
     {

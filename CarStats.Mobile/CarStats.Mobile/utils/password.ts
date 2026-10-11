@@ -11,6 +11,7 @@ export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_REQUIREMENTS =
   'Password must be at least 8 characters and include at least one letter and one number.';
 
+// איתור: חוקי סיסמה (אפליקציה)
 /**
  * מחזירה null אם הסיסמה תקינה, אחרת את הסיבה בניסוח שמובן למשתמש.
  *

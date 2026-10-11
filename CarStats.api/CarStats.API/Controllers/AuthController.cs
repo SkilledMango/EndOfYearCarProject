@@ -65,6 +65,7 @@ namespace CarStats.API.Controllers
             return Ok(new { token = _tokens.CreateToken(user), user });
         }
 
+        // איתור: הרשמת משתמש חדש (שרת)
         // POST: api/auth/register — יוצר משתמש חדש ושולח לו קוד אימות
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterRequest request)
@@ -87,6 +88,7 @@ namespace CarStats.API.Controllers
             if (emailTaken)
                 return Conflict("An account with that email already exists.");
 
+            // איתור: הצפנת סיסמה (BCrypt)
             // המשתמש נוצר לא מאומת, והסיסמה נשמרת מגובבת ב-BCrypt
             var newUser = new AppUser
             {
@@ -106,6 +108,7 @@ namespace CarStats.API.Controllers
             return Ok(newUser);
         }
 
+        // איתור: אימות קוד מהמייל (שרת)
         // POST: api/auth/verify-code — מאמת את הקוד שנשלח במייל ופותח סשן
         [HttpPost("verify-code")]
         public async Task<IActionResult> VerifyCode([FromBody] VerifyCodeRequest request)
@@ -176,6 +179,7 @@ namespace CarStats.API.Controllers
             return Ok(new { message = "A new code has been sent." });
         }
 
+        // איתור: התחברות - בדיקת סיסמה והנפקת טוקן (שרת)
         // POST: api/auth/login — התחברות עם מייל וסיסמה
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
@@ -226,6 +230,7 @@ namespace CarStats.API.Controllers
             await _email.SendVerificationCodeAsync(user.Email, user.FullName, user.EmailVerificationCode!);
         }
 
+        // איתור: יצירת קוד אימות בן 6 ספרות
         /// <summary>קוד אקראי בן שש ספרות, לדוגמה "048213".</summary>
         private static string GenerateCode() =>
             Random.Shared.Next(0, 1_000_000).ToString("D6");

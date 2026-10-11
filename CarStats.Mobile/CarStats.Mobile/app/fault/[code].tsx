@@ -18,6 +18,7 @@ import { AiFailureReason, AiFaultExplanation, explainFaultWithAi } from '@/servi
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { severityMeta } from '@/utils/severity';
 
+// איתור: מסך פרטי תקלה
 export default function FaultDetailScreen() {
   // הרכב אופציונלי: כשהוא ידוע, הסבר ה-AI מתאים לקודי היצרן שלו
   const { code, make, model, year } =

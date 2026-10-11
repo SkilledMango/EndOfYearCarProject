@@ -6,6 +6,7 @@ import {
     DialogActions, TextField, Typography, Alert
 } from '@mui/material';
 
+// איתור: ניהול מילון התקלות (פאנל ניהול)
 export default function Dashboard() {
     const [codes, setCodes] = useState([]);
     const [open, setOpen] = useState(false);

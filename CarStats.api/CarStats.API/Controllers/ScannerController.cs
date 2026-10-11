@@ -25,6 +25,7 @@ namespace CarStats.API.Controllers
             _registry = registry;
         }
 
+        // איתור: המתאם מדווח לשרת איפה הוא (שרת)
         // POST: api/scanner/announce — נקרא מהמתאם עצמו, שאין לו חשבון משתמש
         [HttpPost("announce")]
         [AllowAnonymous]
@@ -42,6 +43,7 @@ namespace CarStats.API.Controllers
             return Ok(new { ok = true });
         }
 
+        // איתור: האפליקציה שואלת את השרת איפה המתאם
         // GET: api/scanner/nearby — האפליקציה: "איזה מתאם דיווח מהרשת שלי?"
         [HttpGet("nearby")]
         [Authorize]

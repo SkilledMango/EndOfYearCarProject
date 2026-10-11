@@ -42,6 +42,7 @@ const MODE_OPTIONS: { mode: ThemeMode; label: string }[] = [
   { mode: 'system', label: 'System' },
 ];
 
+// איתור: מסך הגדרות
 export default function SettingsScreen() {
   const { user } = useAuth();
   const router = useRouter();
@@ -168,6 +169,7 @@ export default function SettingsScreen() {
     await update(next);
   };
 
+  // איתור: שמירת כתובת בית או עבודה
   const savePlace = async (place: ReminderPlace, lat: number, lng: number, label: string) => {
     await setPlace(place, lat, lng, label);
     Alert.alert(

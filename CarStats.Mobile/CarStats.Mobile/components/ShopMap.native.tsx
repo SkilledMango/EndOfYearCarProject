@@ -26,6 +26,7 @@ const DEFAULT_REGION = {
   longitudeDelta: 0.25,
 };
 
+// איתור: המפה עם סיכות המוסכים
 export default function ShopMap({ shops, userPos }: ShopMapProps) {
   const mapRef = useRef<MapView>(null);
   // באנדרואיד המסגור לא עובד עד שהמפה סיימה להיפרס, והוא נכשל בשקט:

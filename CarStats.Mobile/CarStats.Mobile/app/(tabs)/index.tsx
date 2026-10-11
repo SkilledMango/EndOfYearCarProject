@@ -69,6 +69,7 @@ const TRIP_PERSIST_KM = 1;
 
 // ─── מסך הבית ────────────────────────────────────────────────────────────────
 
+// איתור: מסך הבית (מוסך)
 export default function HomeScreen() {
   const { user: authUser } = useAuth();
   const { colors: c } = useTheme();
@@ -121,6 +122,7 @@ export default function HomeScreen() {
   // ── הטיימר של הדגימה ──
   const liveInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // איתור: טעינת מסך הבית - משתמש, רכבים ותקלות
   // ── טעינת המשתמש והאירועים ───────────────────────────────────────────────
   const loadData = useCallback(async () => {
     if (!authUser) return;
@@ -204,6 +206,7 @@ export default function HomeScreen() {
     }
   }, []);
 
+  // איתור: כפתור DEMO
   // החלפת מצב ההדגמה מריצה מחדש את בדיקת החיבור, כך שהשורה, השעונים
   // וכפתור הסריקה מתנהגים בדיוק כמו בחיבור או ניתוק של מתאם אמיתי.
   const toggleDemo = useCallback(async () => {
@@ -226,6 +229,7 @@ export default function HomeScreen() {
     setLiveError(false);
   }, []);
 
+  // איתור: עדכון הנתונים החיים כל שנייה
   const pollLive = useCallback(async () => {
     if (!scannerOnline) return;
     try {
@@ -246,6 +250,7 @@ export default function HomeScreen() {
     }
   }, [scannerOnline]);
 
+  // איתור: בחירת רכב במסך הבית
   // זוכרים את הבחירה, כדי שגם מוצא המוסכים יידע על איזה רכב מדובר
   useEffect(() => {
     if (selectedVehicle) saveSelectedVehicleId(selectedVehicle.id);
@@ -352,6 +357,7 @@ export default function HomeScreen() {
     else if (estimatedFuel != null) saveTankLevel(estimatedFuel, false, selectedVehicle?.id);
   }, [liveData?.fuelPercent, estimatedFuel, selectedVehicle?.id]);
 
+  // איתור: סריקת תקלות - לחיצה על Scan My Car
   // ── סריקת תקלות מהמתאם ───────────────────────────────────────────────────
   const handleScanDtcs = async () => {
     setScanError(null);

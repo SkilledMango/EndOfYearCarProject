@@ -25,6 +25,7 @@ OBD-II car diagnostics app for Israeli drivers: plain-language fault codes, fuel
 - Mobile colors come ONLY from `constants/theme.ts` tokens (`Dashboard`, `Severity`, `SeveritySoft`, `Plate`) — no hardcoded hex in screens.
 - All outbound HTTP in mobile services goes through `services/http.ts` `fetchWithTimeout`.
 - `AppUser.PasswordHash` / `EmailVerificationCode` are `[JsonIgnore]` — never expose them in API responses.
+- Navigation markers: key code is tagged with a `// איתור: <Hebrew phrase>` comment (`#` in Python), indexed in `מפת-הקוד.md`, so the presenter can jump there with Find in Files. Keep each marker with its code when moving it, and update the map when adding or renaming one.
 - Auth flow: register → emailed 6-digit code (Brevo) → verify-code → login blocked until verified.
 - Fuel lookup chain: Israeli registry (plate) → EPA → NRCan → Gemini → fuel-type default.
 

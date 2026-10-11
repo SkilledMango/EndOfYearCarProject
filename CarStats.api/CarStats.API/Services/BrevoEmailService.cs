@@ -26,6 +26,7 @@ namespace CarStats.API.Services
             _logger = logger;
         }
 
+        // איתור: שליחת מייל עם קוד אימות (Brevo)
         public async Task<bool> SendVerificationCodeAsync(string toEmail, string toName, string code)
         {
             var apiKey      = _config["Brevo:ApiKey"];

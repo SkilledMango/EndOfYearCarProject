@@ -21,6 +21,7 @@ namespace CarStats.API.Controllers
             _context = context;
         }
 
+        // איתור: ניהול משתמשים - רשימת המשתמשים (פאנל ניהול)
         // GET: api/users — כל המשתמשים והרכבים שלהם, לפאנל הניהול
         [HttpGet]
         [Authorize(Policy = "AdminOnly")]
@@ -44,6 +45,7 @@ namespace CarStats.API.Controllers
             return users;
         }
 
+        // איתור: פרטי משתמש ורכביו (מסך הבית באפליקציה)
         // GET: api/users/{id} — פרופיל משתמש בודד לאפליקציה.
         // כל אחד רשאי לקרוא את עצמו, מנהל רשאי לקרוא כל אחד.
         [HttpGet("{id}")]
@@ -68,6 +70,7 @@ namespace CarStats.API.Controllers
             return user;
         }
 
+        // איתור: יצירת משתמש על ידי מנהל
         // POST: api/users — יצירת משתמש חדש מפאנל הניהול
         [HttpPost]
         [Authorize(Policy = "AdminOnly")]
@@ -100,6 +103,7 @@ namespace CarStats.API.Controllers
             return CreatedAtAction(nameof(GetUsers), new { id = newUser.Id }, newUser);
         }
 
+        // איתור: עדכון משתמש
         // PUT: api/users/{id} — עדכון פרטי משתמש ותפקיד
         [HttpPut("{id}")]
         [Authorize(Policy = "AdminOnly")]
@@ -137,6 +141,7 @@ namespace CarStats.API.Controllers
             return NoContent();
         }
 
+        // איתור: מחיקת משתמש
         // DELETE: api/users/{id} — מחיקת משתמש. הרכבים והאירועים שלו נמחקים איתו.
         [HttpDelete("{id}")]
         [Authorize(Policy = "AdminOnly")]

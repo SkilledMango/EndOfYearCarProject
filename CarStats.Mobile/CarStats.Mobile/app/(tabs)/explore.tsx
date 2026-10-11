@@ -23,6 +23,7 @@ const formatDate = (iso: string) =>
     month: 'short', day: 'numeric', year: 'numeric',
   });
 
+// איתור: מסך היסטוריית תקלות
 export default function HistoryScreen() {
   const { user: authUser }      = useAuth();
   const { colors: c } = useTheme();

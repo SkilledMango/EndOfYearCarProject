@@ -74,6 +74,7 @@ function failureReason(err: any): AiFailureReason {
   return 'unavailable';
 }
 
+// איתור: בקשת הסבר AI לתקלה (אפליקציה)
 /**
  * מסבירה קוד תקלה בשפה פשוטה.
  *

@@ -52,6 +52,7 @@ export interface TankLevel {
 /** כמה זמן קריאה שמורה עדיין שווה הצגה. אחרי זה הרכב כנראה כבר נסע. */
 const MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
+// איתור: שמירת מפלס הדלק
 export async function saveTankLevel(
   pct: number | null,
   isReal: boolean,
