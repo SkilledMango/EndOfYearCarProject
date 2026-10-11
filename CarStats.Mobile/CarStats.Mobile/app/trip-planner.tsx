@@ -3,6 +3,7 @@ import { useAuth } from '@/context/AuthContext';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { PlaceSuggestion, usePlaceSuggestions } from '@/hooks/usePlaceSuggestions';
 import { api, FuelPrice, getFuelPrice, getUser, Vehicle } from '@/services/api';
+import { getCurrentPosition } from '@/services/currentPosition';
 import { loadSelectedVehicleId } from '@/services/selectedVehicle';
 import { loadFuelType, loadTankLevel, loadTankSize, TankLevel } from '@/services/tankState';
 import {
@@ -86,7 +87,7 @@ function calcFuelWithTraffic(
  */
 async function getOriginCoords(): Promise<{ latitude: number; longitude: number } | null> {
   try {
-    const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    const loc = await getCurrentPosition();
     return loc.coords;
   } catch (err) {
     console.warn('[trip-planner] no fresh fix, trying last known position', err);

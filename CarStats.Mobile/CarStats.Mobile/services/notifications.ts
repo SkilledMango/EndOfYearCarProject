@@ -15,6 +15,7 @@ import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
 import { ReminderPlace, placeFromRegion } from '@/utils/reminderRegions';
+import { getCurrentPosition } from '@/services/currentPosition';
 
 const PREFS_KEY = '@carstats_notif_prefs';
 const CHILD_REMINDER_TASK = 'carstats-child-reminder';
@@ -180,7 +181,7 @@ export async function captureCurrentLocation(): Promise<{ lat: number; lng: numb
     throw new Error('Location permission is required to save this location.');
   }
   try {
-    const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    const loc = await getCurrentPosition();
     return { lat: loc.coords.latitude, lng: loc.coords.longitude };
   } catch {
     // באנדרואיד הבקשה נכשלת כשהגדרת "דיוק מיקום" כבויה, גם כשהטלפון יודע

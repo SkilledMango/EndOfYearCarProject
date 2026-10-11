@@ -32,6 +32,7 @@ import {
 import { ReminderPlace, REMINDER_RADIUS_METERS, reminderRegions } from '@/utils/reminderRegions';
 import {
   findScanner,
+  isDemoMode,
   isScannerReachable,
 } from '@/services/scanner';
 
@@ -270,7 +271,10 @@ export default function SettingsScreen() {
       <View style={s.card}>
         <Text style={s.rowTitle}>Scanner</Text>
         <Text style={[s.rowSub, scannerOnline ? s.statusOk : s.statusOff]}>
-          {scannerOnline == null ? 'Looking for the scanner…' : scannerOnline ? 'Connected' : 'Not connected'}
+          {/* במצב הדגמה "מחובר" היה מטעה: אין מתאם אמיתי, רק נתונים מדומים */}
+          {scannerOnline == null ? 'Looking for the scanner…'
+            : isDemoMode() ? 'Demo mode — no real scanner'
+            : scannerOnline ? 'Connected' : 'Not connected'}
         </Text>
 
         <Button

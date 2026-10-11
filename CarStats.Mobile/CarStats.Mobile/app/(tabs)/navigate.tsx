@@ -14,6 +14,7 @@ import ShopMap from '@/components/ShopMap';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { NearbyShop, ShopKind, Vehicle, getNearbyShops, getShopPhone, getUser } from '@/services/api';
+import { getCurrentPosition } from '@/services/currentPosition';
 import { loadPrefs } from '@/services/notifications';
 import { loadSelectedVehicleId } from '@/services/selectedVehicle';
 import { hebrewMakeName } from '@/services/vehiclelookup';
@@ -100,9 +101,7 @@ export default function MechanicFinderScreen() {
           if (status === 'granted') {
             let coords = null;
             try {
-              const loc = await Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.Balanced,
-              });
+              const loc = await getCurrentPosition();
               coords = loc.coords;
             } catch {
               // במקרה והמיקום של המכשיר לא זמין(כלומר חניון או משהו בסגנון) ניגש למיקום האחרון שהיה זמין

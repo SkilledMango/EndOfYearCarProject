@@ -386,7 +386,7 @@ export default function FuelScreen() {
         : 'Enter the litres you filled (e.g. 45).');
       return;
     }
-    if (isNaN(p) || p <= 0)  { Alert.alert('Invalid price', 'Enter the total you paid in ₪ (e.g. 320).'); return; }
+    if (isNaN(p) || p <= 0)  { Alert.alert('Invalid price', `Enter the total you paid in ₪ (e.g. ${isElectric ? 30 : 320}).`); return; }
     if (k != null && (isNaN(k) || k <= 0)) {
       Alert.alert('Invalid distance', 'Km driven must be a positive number, or leave it empty.');
       return;
@@ -577,9 +577,11 @@ export default function FuelScreen() {
             <View style={styles.chartCard}>
               <View style={styles.chartHeader}>
                 <Text style={styles.chartTitle}>Recent Trend</Text>
-                <Text style={styles.chartCaption}>
-                  Last {Math.max(chartValues.length, 1)} {isElectric ? 'Charge' : 'Fill-up'}{chartValues.length > 1 ? 's' : ''}
-                </Text>
+                {chartValues.length > 0 && (
+                  <Text style={styles.chartCaption}>
+                    Last {chartValues.length} {isElectric ? 'Charge' : 'Fill-up'}{chartValues.length > 1 ? 's' : ''}
+                  </Text>
+                )}
               </View>
               {chartValues.length > 0 ? (
                 <TrendChart values={chartValues} />
@@ -716,7 +718,7 @@ export default function FuelScreen() {
             <Text style={styles.modalLabel}>Total paid (₪)</Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="e.g. 320"
+              placeholder={isElectric ? 'e.g. 30' : 'e.g. 320'}
               placeholderTextColor={c.Dashboard.textSecondary}
               keyboardType="decimal-pad"
               value={price}

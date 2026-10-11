@@ -32,7 +32,7 @@ export default function LiveGauges({
 
   return (
     <View style={gaugeStyles.card}>
-      <Text style={gaugeStyles.cardTitle}>LIVE ENGINE DATA</Text>
+      <Text style={gaugeStyles.cardTitle}>{isElectric ? 'LIVE CAR DATA' : 'LIVE ENGINE DATA'}</Text>
       <View style={gaugeStyles.grid}>
         <GaugeTile
           label={isElectric ? 'MOTOR RPM' : 'RPM'}

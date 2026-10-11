@@ -115,15 +115,17 @@ export default function ScanOverlay({
 
           {/* ── אריחי הנתונים החיים ── */}
           <View style={styles.tileGrid}>
-            <Tile icon="gauge" label="RPM"
+            {/* ברכב חשמלי אותם אריחים מתארים את המנוע החשמלי ואת הסוללה,
+                כמו בלוח הנתונים החיים במסך הבית */}
+            <Tile icon="gauge" label={isElectric ? 'MOTOR RPM' : 'RPM'}
               value={liveData ? String(liveData.rpm) : '—'} unit="rev/min" />
             <Tile icon="car.fill" label="SPEED"
               value={liveData ? String(liveData.speedKmh) : '—'} unit="km/h" />
-            <Tile icon="thermometer" label="COOLANT"
+            <Tile icon="thermometer" label={isElectric ? 'BATTERY TEMP' : 'COOLANT'}
               value={liveData ? `${liveData.coolantCelsius}°C` : '—'} />
             {/* מעדיף את הקריאה של הרכב ונופל להערכה רק בהיעדרה. ההערכה היא
                 null במכוון כשקיימת קריאה אמיתית. */}
-            <Tile icon="fuelpump.fill" label={isElectric ? 'BATTERY' : 'FUEL'}
+            <Tile icon={isElectric ? 'bolt.fill' : 'fuelpump.fill'} label={isElectric ? 'BATTERY' : 'FUEL'}
               value={fuelPct != null ? `${Math.round(fuelPct)}%` : '—'} />
           </View>
 
