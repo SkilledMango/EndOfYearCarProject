@@ -27,6 +27,13 @@ namespace CarStats.API.Controllers
         /// </summary>
         private static readonly TimeSpan DuplicateFaultWindow = TimeSpan.FromHours(24);
 
+        /// <summary>
+        /// קוד OBD-II תקני: אות המערכת (P/B/C/U) וארבע ספרות הקסדצימליות, למשל P0300.
+        /// המתאם תמיד מפיק קוד בצורה הזו; כל דבר אחר הוא זבל שהיה נכנס לסטטיסטיקה.
+        /// </summary>
+        private static readonly System.Text.RegularExpressions.Regex ObdCode =
+            new("^[PBCU][0-9A-F]{4}$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
         private readonly AppDbContext _context;
 
         public MobileController(AppDbContext context)
@@ -40,6 +47,8 @@ namespace CarStats.API.Controllers
         {
             if (string.IsNullOrWhiteSpace(request.RawCode))
                 return BadRequest("Error code cannot be empty.");
+            if (!ObdCode.IsMatch(request.RawCode.Trim()))
+                return BadRequest("Not an OBD-II fault code (expected e.g. P0300).");
 
             // האירוע נרשם תמיד על שם הקורא לפי הטוקן, כדי שלא יהיה אפשר
             // לרשום תקלות על חשבון של מישהו אחר. מנהל כן רשאי, לצורך בדיקות.
@@ -57,7 +66,7 @@ namespace CarStats.API.Controllers
                     v.Id == request.VehicleId.Value && v.AppUserId == request.UserId))
                 request.VehicleId = null;
 
-            var rawCode = request.RawCode.ToUpper();
+            var rawCode = request.RawCode.Trim().ToUpperInvariant();
 
             // 1. רישום האירוע, אלא אם אותה תקלה כבר נרשמה היום.
             //    תקלה מתמשכת היא תקלה אחת, גם אם בודקים אותה שלוש פעמים.
@@ -105,6 +114,19 @@ namespace CarStats.API.Controllers
                 status = "Logged",
                 translation
             });
+        }
+
+        // DELETE: api/mobile/events/{id} — מחיקת אירוע תקלה בודד, למנהלים בלבד
+        // (למשל אירוע בדיקה, או קוד שנרשם בטעות)
+        [HttpDelete("events/{id}")]
+        [Authorize(Policy = "AdminOnly")]
+        public async Task<IActionResult> DeleteEvent(int id)
+        {
+            var ev = await _context.VehicleEvents.FindAsync(id);
+            if (ev == null) return NotFound();
+            _context.VehicleEvents.Remove(ev);
+            await _context.SaveChangesAsync();
+            return NoContent();
         }
 
         // GET: api/mobile/events/{userId} — היסטוריית התקלות של המשתמש, כולל התרגומים

@@ -3,6 +3,7 @@ import { useAuth } from '@/context/AuthContext';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { PlaceSuggestion, usePlaceSuggestions } from '@/hooks/usePlaceSuggestions';
 import { api, FuelPrice, getFuelPrice, getUser, Vehicle } from '@/services/api';
+import { loadSelectedVehicleId } from '@/services/selectedVehicle';
 import { loadFuelType, loadTankLevel, loadTankSize, TankLevel } from '@/services/tankState';
 import {
   FALLBACK_FUEL_PRICES,
@@ -130,8 +131,11 @@ export default function TripPlannerScreen() {
 
   useEffect(() => {
     if (!authUser) return;
-    getUser(authUser.id).then(u => {
-      const v = u?.vehicles?.[0] ?? null;
+    // הרכב שנבחר במסך המוסך — אחרת כרטיס "מתכנן אנרגיה" של טסלה היה
+    // פותח את המתכנן על הרכב הראשון ברשימה, בליטרים
+    Promise.all([getUser(authUser.id), loadSelectedVehicleId()]).then(([u, selectedId]) => {
+      const list = u?.vehicles ?? [];
+      const v = list.find(x => x.id === selectedId) ?? list[0] ?? null;
       setVehicle(v);
       if (v?.averageFuelConsumption && v.averageFuelConsumption > 0)
         setFuelInput(v.averageFuelConsumption.toFixed(1));

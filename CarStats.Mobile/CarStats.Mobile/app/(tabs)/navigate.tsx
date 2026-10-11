@@ -140,7 +140,7 @@ export default function MechanicFinderScreen() {
     if (!vehicleReady) return;
     setLoading(true);
     load();
-  }, [load, vehicleReady]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [load, vehicleReady]);
 
   useFocusEffect(
     useCallback(() => {

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,6 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from 'expo-router';
 import Svg, { Circle, Defs, LinearGradient, Polyline, Stop } from 'react-native-svg';
 import { FuelPrice, Vehicle, getFuelPrice, getUser, updateVehicle } from '@/services/api';
+import { loadSelectedVehicleId } from '@/services/selectedVehicle';
 import { useAuth } from '@/context/AuthContext';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -234,12 +235,24 @@ export default function FuelScreen() {
   // ולא להציג הערכה באותה ודאות כמו עובדה.
   const priceIsOfficial = priceEntry?.isOfficial ?? fuelType === '95';
 
+  // המסך נפתח על הרכב שנבחר במסך המוסך, ועובר אליו שוב כשהבחירה שם משתנה.
+  // החלפת רכב כאן, בכפתור הרכב, לא נדרסת כל עוד הבחירה במוסך לא זזה.
+  const garageChoice = useRef<number | null | undefined>(undefined);
+  const followGarageSelection = (list: Vehicle[], selectedId: number | null) => {
+    if (selectedId === garageChoice.current) return;
+    garageChoice.current = selectedId;
+    const idx = list.findIndex(v => v.id === selectedId);
+    if (idx >= 0) setVehicleIdx(idx);
+  };
+
   const load = useCallback(async (isRefresh = false) => {
     if (!authUser) return;
     if (isRefresh) setRefreshing(true);
     try {
-      const user = await getUser(authUser.id);
-      setVehicles(user.vehicles ?? []);
+      const [user, selectedId] = await Promise.all([getUser(authUser.id), loadSelectedVehicleId()]);
+      const list = user.vehicles ?? [];
+      setVehicles(list);
+      followGarageSelection(list, selectedId);
     } catch { /* השרת לא זמין — נשארים עם מה שיש */ }
     finally {
       setLoading(false);
@@ -261,6 +274,13 @@ export default function FuelScreen() {
   // קריאה מחדש בכל כניסה למסך ולא רק בטעינה: מסך הבית כותב את המפלס
   // בזמן שהוא דוגם את המתאם, ולכן מעבר משם צריך להציג את הקריאה
   // האחרונה ולא כזו מהביקור הקודם.
+  // חזרה ללשונית אחרי שהרכב הוחלף במסך המוסך
+  useFocusEffect(
+    useCallback(() => {
+      if (vehicles.length > 0) loadSelectedVehicleId().then(id => followGarageSelection(vehicles, id));
+    }, [vehicles]),
+  );
+
   useFocusEffect(
     useCallback(() => {
       loadTankLevel(vehicle?.id).then(setTankLevel);

@@ -134,7 +134,8 @@ export default function ScannerSetupScreen() {
     })();
 
     return () => { stop = true; };
-  }, [step]);
+    // השם נלקח ברגע המעבר לשלב הזה — בזמן ההמתנה כבר אי אפשר לשנות אותו
+  }, [step]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const openWifiSettings = () => {
     // לוח ה-WiFi הצף של אנדרואיד 10 ומעלה, ואם אין — מסך ההגדרות הרגיל
