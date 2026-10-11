@@ -312,6 +312,8 @@ export interface VehicleSpecs {
   consumption: number | null;
   /** איזה ספק ענה: groq, gemini-flash-lite, gemini-flash או none. */
   source: string;
+  /** אמת כשלפחות אחד המספרים הוא הערכה לפי רכבים דומים ולא נתון רשמי. */
+  estimated?: boolean;
 }
 
 /**

@@ -739,7 +739,7 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                   {isElectric ? 'ENERGY CONSUMPTION' : 'FUEL CONSUMPTION'}
                   {fuelSource === 'epa'       && ' — EPA DATA'}
                   {fuelSource === 'nrcan'     && ' — NRCAN DATA'}
-                  {fuelSource === 'ai'        && ' — AI LOOKUP'}
+                  {fuelSource === 'ai'        && (specs?.estimated ? ' — AI ESTIMATE' : ' — AI LOOKUP')}
                   {fuelSource === 'suggested' && ' — ESTIMATED'}
                   {fuelSource === 'manual'    && ' — ENTER MANUALLY'}
                 </Text>
@@ -759,8 +759,9 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
                 )}
                 {fuelSource === 'ai' && (
                   <Text style={s.infoCardNote}>
-                    WLTP figure looked up by AI. Accurate for most models —
-                    still worth adjusting to your actual driving conditions.
+                    {specs?.estimated
+                      ? 'No official figure was found for this model, so the AI estimated it from similar cars. Adjust it to your real driving.'
+                      : 'WLTP figure looked up by AI. Accurate for most models — still worth adjusting to your actual driving conditions.'}
                   </Text>
                 )}
                 {fuelSource === 'suggested' && (
@@ -793,11 +794,13 @@ export function AddVehicleModal({ visible, userId, prefill, onAdded, onClose }: 
               <View style={[s.infoCard, tankSource === 'ai' && s.infoCardSuccess]}>
                 <Text style={s.infoCardLabel}>
                   {capacityLabel(isElectric).toUpperCase()}
-                  {tankSource === 'ai' && ' — AI LOOKUP'}
+                  {tankSource === 'ai' && (specs?.estimated ? ' — AI ESTIMATE' : ' — AI LOOKUP')}
                 </Text>
                 <Text style={s.infoCardNote}>
                   {tankSource === 'ai'
-                    ? 'Filled in from the factory spec. Check it against your manual if unsure.'
+                    ? specs?.estimated
+                      ? 'Estimated by the AI from similar cars. Check it against your manual if you can.'
+                      : 'Filled in from the factory spec. Check it against your manual if unsure.'
                     : `Optional — used for range and the cost to ${isElectric ? 'charge' : 'fill up'}.`}
                 </Text>
                 <View style={s.fuelRow}>

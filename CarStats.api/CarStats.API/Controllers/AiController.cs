@@ -48,33 +48,43 @@ namespace CarStats.API.Controllers
             var key = $"specs:{request.Year}:{request.Make}:{request.Model}:{request.FuelTypeHint}"
                 .ToLowerInvariant().Trim();
 
+            // תשובה שמורה בלי מספרים היא שארית מלפני שהיה שלב ההערכה — שואלים מחדש
             var cached = await _ai.GetCachedAsync(key);
-            if (cached != null)
+            if (cached != null && JsonSerializer.Deserialize<Specs>(cached, JsonOptions) is { IsComplete: true })
                 return Content(cached, "application/json");
 
-            var hint = string.IsNullOrWhiteSpace(request.FuelTypeHint)
-                ? ""
-                : $" (Israeli registry fuel type: {request.FuelTypeHint})";
+            var car = $"{request.Year} {request.Make} {request.Model}" +
+                      (string.IsNullOrWhiteSpace(request.FuelTypeHint) ? "" : $" (Israeli registry fuel type: {request.FuelTypeHint})");
 
-            var prompt =
-                $"Give the factory specs of a {request.Year} {request.Make} {request.Model}{hint}.\n" +
-                "Reply as strict JSON with exactly these keys and nothing else:\n" +
-                "{\"powertrain\": \"electric|plugin_hybrid|hybrid|diesel|petrol|unknown\", " +
-                "\"tank_litres\": number or null, \"battery_kwh\": number or null, \"consumption\": number or null}\n" +
-                "tank_litres: fuel tank capacity (null for fully electric cars).\n" +
-                "battery_kwh: usable battery capacity (only for electric cars, otherwise null).\n" +
+            // שלב 1: הנתונים הרשמיים. המודל מתבקש לא לנחש, כדי שמספר רשמי יהיה באמת רשמי
+            var official = await _ai.AskJsonAsync(
+                $"Give the factory specs of a {car}.\n" + SpecsFormat +
                 "consumption: official WLTP combined figure — L/100km for fuel cars, kWh/100km for electric cars.\n" +
-                "Use null for anything you do not know. Do not guess wildly.";
+                "Use null for anything you do not know. Do not guess wildly.",
+                HasPowertrain);
+            var specs = official.Ok ? BuildSpecs(official.Json!.Value, official.Provider, estimated: false) : null;
 
-            var result = await _ai.AskJsonAsync(prompt, json =>
-                json.TryGetProperty("powertrain", out var p) && p.ValueKind == JsonValueKind.String);
+            // שלב 2: דגם חדש או נדיר שהמודל לא מכיר לעומק — במקום שדה ריק, הערכה
+            // לפי רכבים דומים. רק השדות החסרים מתמלאים ממנה, והיא מסומנת כהערכה
+            if (specs is not { IsComplete: true })
+            {
+                var guess = await _ai.AskJsonAsync(
+                    $"The official specs of a {car} are not known to you exactly. Give your best realistic estimate, " +
+                    "based on this model if you know anything about it, otherwise on typical cars of the same type, size and era.\n" +
+                    SpecsFormat +
+                    "consumption: combined figure — L/100km for fuel cars, kWh/100km for electric cars.",
+                    HasPowertrain);
+                if (guess.Ok)
+                    specs = Merge(specs, BuildSpecs(guess.Json!.Value, guess.Provider, estimated: true));
+            }
 
             // כישלון לא נשמר במטמון — תקלה רגעית אצל הספק לא צריכה להיזכר כ"דגם לא מוכר"
-            if (!result.Ok)
+            if (specs == null)
                 return Ok(Unknown("none"));
 
-            var specs = BuildSpecs(result.Json!.Value, result.Provider);
-            await _ai.SetCachedAsync(key, JsonSerializer.Serialize(specs, JsonOptions));
+            // רק תשובה מלאה נשמרת לתמיד; חלקית תישאל שוב בפעם הבאה
+            if (specs.IsComplete)
+                await _ai.SetCachedAsync(key, JsonSerializer.Serialize(specs, JsonOptions));
             return Ok(specs);
         }
 
@@ -154,12 +164,46 @@ namespace CarStats.API.Controllers
 
         private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-        private static object Unknown(string source) =>
-            new { isElectric = (bool?)null, powertrain = "unknown", tankCapacity = (double?)null, consumption = (double?)null, source };
+        /// <summary>
+        /// מה שהאפליקציה מקבלת על דגם. Estimated = לפחות אחד המספרים הוא הערכה של
+        /// ה-AI לפי רכבים דומים, ולא נתון רשמי — האפליקציה אומרת זאת לנהג.
+        /// </summary>
+        private record Specs(bool? IsElectric, string Powertrain, double? TankCapacity, double? Consumption,
+                             string Source, bool Estimated = false)
+        {
+            [System.Text.Json.Serialization.JsonIgnore]
+            public bool IsComplete => IsElectric != null && TankCapacity != null && Consumption != null;
+        }
+
+        private const string SpecsFormat =
+            "Reply as strict JSON with exactly these keys and nothing else:\n" +
+            "{\"powertrain\": \"electric|plugin_hybrid|hybrid|diesel|petrol|unknown\", " +
+            "\"tank_litres\": number or null, \"battery_kwh\": number or null, \"consumption\": number or null}\n" +
+            "tank_litres: fuel tank capacity (null for fully electric cars).\n" +
+            "battery_kwh: usable battery capacity (only for electric cars, otherwise null).\n";
+
+        private static bool HasPowertrain(JsonElement json) =>
+            json.TryGetProperty("powertrain", out var p) && p.ValueKind == JsonValueKind.String;
+
+        /// <summary>
+        /// משלים את החסר בתשובה הרשמית מתוך ההערכה — רק כששתיהן מסכימות על סוג
+        /// ההנעה, אחרת גודל מיכל של רכב דלק היה נכנס כגודל סוללה.
+        /// </summary>
+        private static Specs Merge(Specs? official, Specs guess)
+        {
+            if (official == null || official.IsElectric == null) return guess;
+            if (guess.IsElectric != official.IsElectric) return official;
+            var tank = official.TankCapacity ?? guess.TankCapacity;
+            var use  = official.Consumption ?? guess.Consumption;
+            var filled = (official.TankCapacity == null && tank != null) || (official.Consumption == null && use != null);
+            return official with { TankCapacity = tank, Consumption = use, Estimated = official.Estimated || filled };
+        }
+
+        private static Specs Unknown(string source) => new(null, "unknown", null, null, source);
 
         // ממיר את תשובת המודל לערכים שהאפליקציה משתמשת בהם, עם בדיקות היגיון:
         // מספר מחוץ לטווח של רכב אמיתי נזרק במקום להיכנס למוסך של הנהג
-        private static object BuildSpecs(JsonElement json, string provider)
+        private static Specs BuildSpecs(JsonElement json, string provider, bool estimated)
         {
             var powertrain = Str(json, "powertrain").ToLowerInvariant();
             var isElectric = powertrain == "electric";
@@ -174,14 +218,13 @@ namespace CarStats.API.Controllers
 
             bool? electricFlag = powertrain is "unknown" or "" ? null : isElectric;
 
-            return new
-            {
-                isElectric = electricFlag,
+            return new Specs(
+                electricFlag,
                 powertrain,
-                tankCapacity = capacity,
-                consumption = consumption is double c ? Math.Round(c, 1) : (double?)null,
-                source = provider,
-            };
+                capacity,
+                consumption is double c ? Math.Round(c, 1) : null,
+                provider,
+                estimated && (capacity != null || consumption != null));
         }
 
         private static string Str(JsonElement json, string name) =>
