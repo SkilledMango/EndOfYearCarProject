@@ -93,6 +93,7 @@ export default function HomeScreen() {
 
   // ── מצב סריקת התקלות ──
   const [scanning, setScanning]             = useState(false);
+  const scanningRef                         = useRef(false);   // לקריאה מתוך הדגימה החיה
   const [dtcResults, setDtcResults]         = useState<ReportDtcResponse[]>([]);
   // הקודים שנסרקו, באותו סדר כמו התוצאות. תשובת השרת משמיטה את הקוד
   // הגולמי כשאין לו רשומה במילון, ולכן זו הדרך שתקלה לא מוכרת עדיין
@@ -231,7 +232,7 @@ export default function HomeScreen() {
 
   // איתור: עדכון הנתונים החיים כל שנייה
   const pollLive = useCallback(async () => {
-    if (!scannerOnline) return;
+    if (!scannerOnline || scanningRef.current) return;
     try {
       const now = Date.now();
       const data = await getLiveData();
@@ -369,20 +370,33 @@ export default function HomeScreen() {
     }
 
     setScanning(true);
+    scanningRef.current = true;   // הדגימה החיה עוצרת: המתאם עונה לבקשה אחת בכל פעם
     setScanOverlayVisible(true); // מסך סריקה מלא
     try {
-      const { codes } = await scanDtcs();
+      let codes: string[];
+      try {
+        ({ codes } = await scanDtcs());
+      } catch {
+        setScanError('The scanner did not answer in time. Keep the engine on and try again.');
+        return;
+      }
 
       if (codes.length === 0) {
         setScanError('No active fault codes detected — your car is clean!');
-        setScanning(false);
         return;
       }
 
       // במקביל: שלושה קודים לוקחים כמו האיטי ביותר, לא כמו הסכום.
-      const responses = await Promise.all(
-        codes.map(code => reportDtc(code, authUser?.id, selectedVehicle?.id))
-      );
+      let responses;
+      try {
+        responses = await Promise.all(
+          codes.map(code => reportDtc(code, authUser?.id, selectedVehicle?.id))
+        );
+      } catch {
+        // הקודים כן נקראו מהרכב; מה שנכשל הוא החיבור לשרת (למשל בלי אינטרנט)
+        setScanError(`Read ${codes.join(', ')} from the car, but could not reach the CarStats server to explain ${codes.length > 1 ? 'them' : 'it'}. Check the phone's internet and try again.`);
+        return;
+      }
       setDtcResults(responses);
       setScannedCodes(codes);
       setScannedVehicle(selectedVehicle ?? null);
@@ -394,6 +408,7 @@ export default function HomeScreen() {
     } catch {
       setScanError('Scan failed. Check that the adapter is connected to the car.');
     } finally {
+      scanningRef.current = false;
       setScanning(false);
     }
   };

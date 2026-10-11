@@ -16,6 +16,7 @@ import { getNearbyScanners } from './api';
 
 /** כמה מילישניות לחכות לפני שבקשה נחשבת ככישלון */
 const FETCH_TIMEOUT_MS = 3000;
+const DTC_TIMEOUT_MS   = 8000;
 
 // ─── כתובת המתאם ─────────────────────────────────────────────────────────────
 //
@@ -150,7 +151,9 @@ export async function getLiveData(): Promise<LiveData> {
  */
 export async function scanDtcs(): Promise<DtcScanResult> {
   if (demoMode) return demoDtcs(demoElectric);
-  const res = await fetchWithTimeout(`${await baseUrl()}/dtcs`, FETCH_TIMEOUT_MS);
+  // ארוך יותר מהשאר: המתאם אוסף תשובות מכל מחשבי הרכב, וברכב אמיתי הוא
+  // עשוי להיות באמצע שאלה אחרת לרכב כשהבקשה מגיעה
+  const res = await fetchWithTimeout(`${await baseUrl()}/dtcs`, DTC_TIMEOUT_MS);
   if (!res.ok) throw new Error(`Scanner /dtcs returned ${res.status}`);
   return res.json() as Promise<DtcScanResult>;
 }

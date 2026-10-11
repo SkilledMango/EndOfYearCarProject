@@ -99,6 +99,12 @@ const int   SIM_DTC_COUNT = 2;
 WebServer server(80);
 bool simMode = false;   // true when no real CAN response detected
 
+// A PID the car never answers costs a full timeout on every poll. After this many
+// misses in a row it is skipped until the car reconnects, so the loop stays fast
+// enough to answer the phone.
+#define PID_MAX_MISSES 3
+uint8_t pidMisses[256] = {0};
+
 // ─── WiFi / setup state ───────────────────────────────────────────────────────
 Preferences   prefs;                  // flash storage for the saved hotspot
 DNSServer     dnsServer;              // setup mode: answers every name with our own address
@@ -289,8 +295,17 @@ void loop() {
 // ─── TWAI initialisation ──────────────────────────────────────────────────────
 bool twaiInit() {
   twai_general_config_t gConfig = TWAI_GENERAL_CONFIG_DEFAULT(CAN_TX_PIN, CAN_RX_PIN, TWAI_MODE_NORMAL);
+  gConfig.rx_queue_len = 32;   // the default 5 overflows on a busy car network
   twai_timing_config_t  tConfig = TWAI_TIMING_CONFIG_500KBITS();
-  twai_filter_config_t  fConfig = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+  // Only OBD-II answers (0x7E8..0x7EF). A real car's network carries dozens of
+  // other messages a second (47 per wait on the first test car), and taking them
+  // all in buried the answers and kept the scanner too busy to reply to the phone.
+  // Mask bits set to 1 are "don't care": the low 3 ID bits, RTR and data bytes.
+  twai_filter_config_t  fConfig = {
+    .acceptance_code = (uint32_t)0x7E8 << 21,
+    .acceptance_mask = ((uint32_t)0x7 << 21) | 0x1FFFFF,
+    .single_filter   = true,
+  };
   if (twai_driver_install(&gConfig, &tConfig, &fConfig) != ESP_OK) return false;
   if (twai_start() != ESP_OK) return false;
   return true;
@@ -384,9 +399,14 @@ bool waitForObdReply(uint8_t mode, uint8_t pid, twai_message_t &out, unsigned lo
 }
 
 int readPidInt(uint8_t pid) {
+  if (pidMisses[pid] >= PID_MAX_MISSES) return -1;   // the car doesn't report this one
   if (!sendObdRequest(0x01, pid)) return -1;
   twai_message_t reply;
-  if (!waitForObdReply(0x01, pid, reply)) return -1;
+  if (!waitForObdReply(0x01, pid, reply)) {
+    if (pidMisses[pid] < 255) pidMisses[pid]++;
+    return -1;
+  }
+  pidMisses[pid] = 0;
   uint8_t A = reply.data[3];
   uint8_t B = reply.data[4];
   switch (pid) {
@@ -400,22 +420,25 @@ int readPidInt(uint8_t pid) {
 }
 
 // ─── Fuel level — longer timeout + retries because some ECUs respond slowly ───
+// One try per poll (it used to be 3 × 500 ms, 1.6 s of silence every second on
+// a car without this PID); after PID_MAX_MISSES polls it is not asked again.
 int readFuelPercent() {
-  for (int attempt = 0; attempt < 3; attempt++) {
-    if (!sendObdRequest(0x01, PID_FUEL_LEVEL)) continue;
-    twai_message_t reply;
-    if (waitForObdReply(0x01, PID_FUEL_LEVEL, reply, 500)) {
-      uint8_t A = reply.data[3];
-      return (A * 100) / 255;
-    }
-    delay(30); // brief pause before retry
+  if (pidMisses[PID_FUEL_LEVEL] >= PID_MAX_MISSES) return -1;
+  if (!sendObdRequest(0x01, PID_FUEL_LEVEL)) return -1;
+  twai_message_t reply;
+  if (waitForObdReply(0x01, PID_FUEL_LEVEL, reply, 400)) {
+    pidMisses[PID_FUEL_LEVEL] = 0;
+    uint8_t A = reply.data[3];
+    return (A * 100) / 255;
   }
+  if (pidMisses[PID_FUEL_LEVEL] < 255) pidMisses[PID_FUEL_LEVEL]++;
   return -1; // car doesn't support this PID
 }
 
 // איתור: קריאת נתונים חיים מהרכב (מתאם)
 // ─── Live data polling ────────────────────────────────────────────────────────
 void pollLiveData() {
+  pidMisses[PID_RPM] = 0;   // RPM is how a car is detected at all: always ask
   int rpm = readPidInt(PID_RPM);
 
   if (rpm >= 0) {
@@ -429,9 +452,15 @@ void pollLiveData() {
     }
     simMode = false;
     liveData.rpm            = rpm;
+    // Answer the phone between questions: each one can wait on the car, and the
+    // app gives up on a request after 3 s
+    server.handleClient();
     int speed   = readPidInt(PID_SPEED);
+    server.handleClient();
     int coolant = readPidInt(PID_COOLANT_TEMP);
-    int fuel    = readFuelPercent();  // uses longer timeout + retries
+    server.handleClient();
+    int fuel    = readFuelPercent();
+    server.handleClient();
     int load    = readPidInt(PID_ENGINE_LOAD);
     liveData.speedKmh       = (speed   >= 0) ? speed   : liveData.speedKmh;
     liveData.coolantCelsius = (coolant >= 0) ? coolant : liveData.coolantCelsius;
@@ -448,6 +477,7 @@ void pollLiveData() {
       // Car just disconnected — clear VIN cache so we re-read on next connection
       cachedVin    = "";
       vinAttempted = false;
+      memset(pidMisses, 0, sizeof(pidMisses));   // the next car may report them
     }
     simMode = true;
     liveData.rpm            = SIM_RPM;
@@ -472,17 +502,27 @@ void readDtcs(JsonArray &arr) {
     return;
   }
 
-  // Real car — Mode 03 request
+  // Real car — Mode 03 request, broadcast. Every computer in the car answers on
+  // its own (engine 0x7E8, gearbox 0x7E9 … the first test car answered from
+  // 0x7EF), so collect replies for the whole window instead of taking the first.
   if (!sendObdRequest(MODE_GET_DTCS, 0x00)) return;
-  twai_message_t reply;
-  if (!waitForObdReply(MODE_GET_DTCS, 0x00, reply, 500)) return;
+  unsigned long deadline = millis() + 500;
+  for (;;) {
+    unsigned long now = millis();
+    if (now >= deadline) break;   // checked first: the subtraction below is unsigned
+    twai_message_t reply;
+    if (!waitForObdReply(MODE_GET_DTCS, 0x00, reply, deadline - now)) break;
 
-  uint8_t numDtcs = reply.data[2];
-  for (int i = 0; i < numDtcs && i < 2; i++) {
-    uint8_t high = reply.data[3 + i * 2];
-    uint8_t low  = reply.data[4 + i * 2];
-    if (high == 0 && low == 0) continue;
-    arr.add(dtcBytesToString(high, low));
+    uint8_t numDtcs = reply.data[2];
+    for (int i = 0; i < numDtcs && i < 2; i++) {
+      uint8_t high = reply.data[3 + i * 2];
+      uint8_t low  = reply.data[4 + i * 2];
+      if (high == 0 && low == 0) continue;
+      String code = dtcBytesToString(high, low);
+      bool seen = false;
+      for (JsonVariant v : arr) if (code == v.as<const char*>()) seen = true;
+      if (!seen) arr.add(code);
+    }
   }
 }
 
