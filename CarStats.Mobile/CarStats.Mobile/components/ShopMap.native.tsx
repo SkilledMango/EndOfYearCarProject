@@ -1,15 +1,22 @@
 /**
  * המפה האמיתית של מוצא המוסכים, לאנדרואיד ול-iOS.
- * הסיכות עגולות ומתחלפות בין מלאות למתוארות, והמפה ממסגרת את עצמה
- * סביב הסיכות והמשתמש.
+ * הסיכות עגולות ומתחלפות בין מלאות למתוארות, והמוסך המורשה של היצרן
+ * מקבל סיכה ירוקה עם כוכב. המפה ממסגרת את עצמה סביב הסיכות והמשתמש.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
-import { createThemedStyles, useTheme } from '@/context/ThemeContext';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import type { ShopMapProps } from './ShopMap.types';
+
+// הסיכות הן תמונות מוכנות ולא רכיבים. באנדרואיד עם הארכיטקטורה החדשה,
+// react-native-maps מצלם סיכה שבנויה מרכיבים מתוך תיבה קטנה מהתוכן שלה,
+// והסיכה יוצאת חתוכה (באג פתוח בספרייה, react-native-maps#5877). תמונה
+// מוצגת כמו שהיא, בלי צילום, ולכן לא נחתכת — וגם לא צורכת זיכרון על כל
+// ציור מחדש. הצבעים הם של ערכת הנושא; התמונות נוצרו ב-@1x/@2x/@3x.
+const PIN_SHOP     = require('@/assets/images/pin-shop.png');
+const PIN_SHOP_ALT = require('@/assets/images/pin-shop-alt.png');
+const PIN_BRAND    = require('@/assets/images/pin-brand.png');
 
 // תל אביב, אזור ברירת מחדל סביר עד שהסיכות ידועות
 const DEFAULT_REGION = {
@@ -20,28 +27,11 @@ const DEFAULT_REGION = {
 };
 
 export default function ShopMap({ shops, userPos }: ShopMapProps) {
-  const { colors: c } = useTheme();
-  const styles = useStyles();
   const mapRef = useRef<MapView>(null);
   // באנדרואיד המסגור לא עובד עד שהמפה סיימה להיפרס, והוא נכשל בשקט:
   // המפה נשארה על תל אביב בזמן שהרשימה מתחתיה הציגה מוסכים בחדרה.
   // ההמתנה לאירוע המוכנות היא מה שגורם למסגור להיתפס.
   const [mapReady, setMapReady] = useState(false);
-
-  // A pin drawn from child views is rasterised to a bitmap, and while this is
-  // true it is re-rasterised on every render pass. Twenty of those allocate
-  // faster than the GC frees them and the app dies with an OutOfMemoryError
-  // inside the maps renderer. Turning it off outright is not the answer
-  // either — the pin then never draws once and the map comes up bare. So it
-  // stays on just long enough for the pins to appear, then stops.
-  const [trackPins, setTrackPins] = useState(true);
-
-  useEffect(() => {
-    if (!mapReady || shops.length === 0) return;
-    setTrackPins(true);
-    const timer = setTimeout(() => setTrackPins(false), 1500);
-    return () => clearTimeout(timer);
-  }, [mapReady, shops]);
 
   useEffect(() => {
     if (!mapReady || shops.length === 0) return;
@@ -70,46 +60,15 @@ export default function ShopMap({ shops, userPos }: ShopMapProps) {
           title={shop.name}
           description={shop.specialty}
           anchor={{ x: 0.5, y: 0.5 }}
-          tracksViewChanges={trackPins}
-        >
-          {/* אנדרואיד מצייר סיכה מותאמת כתמונה בגודל המדויק של הרכיב, וכל מה
-              שבולט ממנו — צל, מסגרת — נחתך. לכן הסיכה יושבת בתוך מסגרת שקופה
-              גדולה ממנה, בלי צל. העיצוב מחליף בין סיכות מלאות למתוארות. */}
-          <View style={styles.pinFrame} collapsable={false}>
-            <View style={[
-              styles.pin,
-              !shop.highlighted && i % 2 === 1 && styles.pinOutlined,
-              shop.highlighted && styles.pinBrand,
-            ]}>
-              <IconSymbol
-                name={shop.highlighted ? 'star.fill' : 'wrench.fill'}
-                size={18}
-                color={!shop.highlighted && i % 2 === 1 ? c.Dashboard.accentDeep : c.Dashboard.onAccent}
-              />
-            </View>
-          </View>
-        </Marker>
+          image={shop.highlighted ? PIN_BRAND : i % 2 === 1 ? PIN_SHOP_ALT : PIN_SHOP}
+          // המוסך המורשה מעל שאר הסיכות כשהן חופפות
+          zIndex={shop.highlighted ? 1 : 0}
+        />
       ))}
     </MapView>
   );
 }
 
-const useStyles = createThemedStyles((c) => StyleSheet.create({
+const styles = StyleSheet.create({
   map: { flex: 1 },
-
-  // מרווח שקוף סביב הסיכה, כדי שהקצוות שלה לא ייחתכו
-  pinFrame: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
-  // עיגולים בקוטר 40, בגרסה מלאה ובגרסה מתוארת
-  pin: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: c.Dashboard.accentDeep,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: c.Dashboard.card,
-  },
-  pinOutlined: {
-    backgroundColor: c.Dashboard.card,
-    borderColor: c.Dashboard.accentDeep,
-  },
-  // המוסך המורשה של היצרן
-  pinBrand: { backgroundColor: c.Severity.green },
-}));
+});
