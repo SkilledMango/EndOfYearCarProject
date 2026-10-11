@@ -35,9 +35,9 @@ export default function LiveGauges({
       <Text style={gaugeStyles.cardTitle}>LIVE ENGINE DATA</Text>
       <View style={gaugeStyles.grid}>
         <GaugeTile
-          label="RPM"
+          label={isElectric ? 'MOTOR RPM' : 'RPM'}
           value={data.rpm.toLocaleString()}
-          subValue={`${data.engineLoadPct}% load`}
+          subValue={`${data.engineLoadPct}% ${isElectric ? 'power' : 'load'}`}
           barPct={rpmPct}
           barColor={rpmPct > 0.8 ? c.Severity.red : rpmPct > 0.6 ? c.Severity.yellow : c.Severity.green}
         />
@@ -49,11 +49,13 @@ export default function LiveGauges({
           barColor={c.Dashboard.accent}
         />
         <GaugeTile
-          label="COOLANT"
+          label={isElectric ? 'BATTERY TEMP' : 'COOLANT'}
           value={`${data.coolantCelsius}°`}
           subValue="Celsius"
           barPct={Math.min((data.coolantCelsius + 40) / 160, 1)}
-          barColor={data.coolantCelsius > 110 ? c.Severity.red : data.coolantCelsius > 95 ? c.Severity.yellow : c.Severity.green}
+          // סוללה מתחממת יתר על המידה הרבה לפני מנוע: 45° חם, 55° מסוכן
+          barColor={data.coolantCelsius > (isElectric ? 55 : 110) ? c.Severity.red
+            : data.coolantCelsius > (isElectric ? 45 : 95) ? c.Severity.yellow : c.Severity.green}
         />
         {/* ── אריח הדלק: לחיצה מגדירה מפלס כשהרכב לא מדווח ── */}
         <Pressable

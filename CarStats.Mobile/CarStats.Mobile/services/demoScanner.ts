@@ -21,6 +21,13 @@ import { DtcScanResult, LiveData, ScannerStatus, VinResult } from './scanner';
  */
 const DEMO_CODES = ['P0300', 'P0420', 'P1450'];
 
+/**
+ * לרכב חשמלי אין צילינדרים, ממיר קטליטי או מיכל דלק — הקודים שלמעלה לא
+ * יכולים לצאת ממנו. במקומם: קודי סוללה ומתח גבוה מהתקן, אחד מכל חומרה —
+ * תקלת בידוד (אדום), בלאי סוללה (צהוב) וחיישן טמפרטורה (ירוק).
+ */
+const DEMO_EV_CODES = ['P0AA6', 'P0A80', 'P0A9C'];
+
 const START = Date.now();
 
 /** תנודה חלקה בין 0 ל-1, כדי שהשעונים יזוזו כמו מנוע שעובד. */
@@ -46,10 +53,25 @@ export function demoStatus(): ScannerStatus {
   };
 }
 
-export function demoLiveData(): LiveData {
+export function demoLiveData(electric = false): LiveData {
   // טווח מסרק ועד נסיעה, במחזור איטי, כשהמהירות והסל"ד מתואמים
   // כדי שהמספרים ייראו כמו מנוע אחד ולא כארבעה שעונים אקראיים.
   const engine = wave(14_000);
+
+  if (electric) {
+    // מנוע חשמלי לא עובד בסרק: הסל"ד צמוד למהירות ונעצר איתה. במקום
+    // נוזל קירור — טמפרטורת הסוללה, שנשארת סביב טמפרטורת החדר
+    const speed = between(0, 90, engine);
+    return {
+      rpm:            speed * 85,
+      speedKmh:       speed,
+      coolantCelsius: between(26, 34, wave(40_000, 3_000)),
+      fuelPercent:    Math.max(8, 18 - Math.floor((Date.now() - START) / 120_000)),
+      engineLoadPct:  between(5, 60, engine),
+      valid:          true,
+      ageMs:          0,
+    };
+  }
 
   return {
     rpm:            between(750, 3200, engine),
@@ -63,8 +85,8 @@ export function demoLiveData(): LiveData {
   };
 }
 
-export function demoDtcs(): DtcScanResult {
-  return { codes: [...DEMO_CODES] };
+export function demoDtcs(electric = false): DtcScanResult {
+  return { codes: [...(electric ? DEMO_EV_CODES : DEMO_CODES)] };
 }
 
 export function demoVin(): VinResult {

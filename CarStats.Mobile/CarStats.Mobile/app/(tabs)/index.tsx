@@ -33,6 +33,7 @@ import {
   getVehicleVin,
   isScannerReachable,
   scanDtcs,
+  setDemoElectric,
   setDemoMode,
 } from '@/services/scanner';
 import { decodeVin, VinDecodeResult, vinMatchesVehicle } from '@/services/vindecode';
@@ -249,6 +250,11 @@ export default function HomeScreen() {
   useEffect(() => {
     if (selectedVehicle) saveSelectedVehicleId(selectedVehicle.id);
   }, [selectedVehicle?.id]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ההדגמה מדמה את סוג הרכב שנבחר: קודי סוללה לחשמלי, קודי מנוע לדלק
+  useEffect(() => {
+    setDemoElectric(!!selectedVehicle?.isElectric);
+  }, [selectedVehicle?.isElectric]);
 
   useEffect(() => {
     loadData();

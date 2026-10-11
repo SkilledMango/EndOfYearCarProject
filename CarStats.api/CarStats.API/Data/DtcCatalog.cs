@@ -297,6 +297,58 @@ namespace CarStats.API.Data
                 Severity         = SeverityLevel.Yellow,
                 EstimatedCostMin = 300, EstimatedCostMax = 3500,
             },
+
+            // ── רכב חשמלי והיברידי: הסוללה ומערכת המתח הגבוה (P0Axx) ──────────
+            // קודים גנריים של התקן, משותפים לכל היצרנים. עבודה על מתח גבוה
+            // דורשת מוסך מוסמך לרכב חשמלי, ולכן המחירים גבוהים יותר.
+            new() {
+                ErrorCode        = "P0AA6",
+                HumanTitle       = "High-Voltage Insulation Fault",
+                Description      = "The high-voltage battery system is leaking current to the car's body — the insulation between them has broken down somewhere, often in a cable, connector or the A/C compressor. The car usually limits power or refuses to start.",
+                ActionRequired   = "Stop driving and have it checked by an EV-certified garage — this is a safety fault.",
+                Severity         = SeverityLevel.Red,
+                EstimatedCostMin = 500, EstimatedCostMax = 8000,
+            },
+            new() {
+                ErrorCode        = "P0A0D",
+                HumanTitle       = "High-Voltage Safety Interlock Open",
+                Description      = "The safety loop that confirms every high-voltage cover and connector is in place has been broken. The car shuts down the high-voltage battery to protect anyone working on it, so it may not drive.",
+                ActionRequired   = "Have an EV-certified garage check the high-voltage connectors and covers before driving.",
+                Severity         = SeverityLevel.Red,
+                EstimatedCostMin = 300, EstimatedCostMax = 3000,
+            },
+            new() {
+                ErrorCode        = "P0A80",
+                HumanTitle       = "Battery Pack Needs Replacing",
+                Description      = "Some cells in the high-voltage battery have worn out and are holding much less charge than the rest. You will notice a shorter range and the battery level dropping faster than usual.",
+                ActionRequired   = "Book a battery health check — often only a module needs replacing, not the whole pack. Check if it is still under warranty.",
+                Severity         = SeverityLevel.Yellow,
+                EstimatedCostMin = 5000, EstimatedCostMax = 60000,
+            },
+            new() {
+                ErrorCode        = "P0A7F",
+                HumanTitle       = "Battery Pack Wearing Out",
+                Description      = "The high-voltage battery is losing capacity faster than expected for its age. Range is shorter than it used to be, especially in hot or cold weather.",
+                ActionRequired   = "Have the battery's health measured at your next service, and check the battery warranty.",
+                Severity         = SeverityLevel.Yellow,
+                EstimatedCostMin = 300, EstimatedCostMax = 30000,
+            },
+            new() {
+                ErrorCode        = "P0AFA",
+                HumanTitle       = "Battery System Voltage Low",
+                Description      = "The high-voltage battery's voltage has dropped below the normal range. It can be a weak cell, a failing cell monitor, or simply a battery left almost empty for too long.",
+                ActionRequired   = "Charge the car fully. If the warning comes back, have the battery checked within a few days.",
+                Severity         = SeverityLevel.Yellow,
+                EstimatedCostMin = 0,   EstimatedCostMax = 6000,
+            },
+            new() {
+                ErrorCode        = "P0A9C",
+                HumanTitle       = "Battery Temperature Sensor Fault",
+                Description      = "One of the sensors that watches the battery's temperature is giving readings that don't make sense. The car protects itself by charging and accelerating more gently until it is fixed.",
+                ActionRequired   = "Not urgent, but book it in — fast charging may be slower until the sensor is replaced.",
+                Severity         = SeverityLevel.Green,
+                EstimatedCostMin = 300, EstimatedCostMax = 1500,
+            },
         };
     }
 }

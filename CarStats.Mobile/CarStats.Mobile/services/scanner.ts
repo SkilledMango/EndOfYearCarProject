@@ -97,10 +97,17 @@ export interface VinResult {
 // מכמה מסכים, והעברת ספק דרך כולן בשביל בוליאני אחד הייתה גרועה יותר.
 
 let demoMode = false;
+// הרכב שנבחר חשמלי? ההדגמה מחזירה אז קודים ושעונים של רכב חשמלי
+let demoElectric = false;
 
 /** מדליק או מכבה את מצב ההדגמה. */
 export function setDemoMode(on: boolean): void {
   demoMode = on;
+}
+
+/** מעדכן אם ההדגמה מדמה רכב חשמלי — לפי הרכב שנבחר במסך המוסך. */
+export function setDemoElectric(electric: boolean): void {
+  demoElectric = electric;
 }
 
 /** אמת כל עוד ההדגמה מחליפה את המתאם. */
@@ -127,7 +134,7 @@ export async function getScannerStatus(): Promise<ScannerStatus> {
  * זורקת שגיאה אם אי אפשר להגיע אליו.
  */
 export async function getLiveData(): Promise<LiveData> {
-  if (demoMode) return demoLiveData();
+  if (demoMode) return demoLiveData(demoElectric);
   const res = await fetchWithTimeout(`${await baseUrl()}/live-data`, FETCH_TIMEOUT_MS);
   if (!res.ok) throw new Error(`Scanner /live-data returned ${res.status}`);
   return res.json() as Promise<LiveData>;
@@ -139,7 +146,7 @@ export async function getLiveData(): Promise<LiveData> {
  * זורקת שגיאה אם אי אפשר להגיע למתאם.
  */
 export async function scanDtcs(): Promise<DtcScanResult> {
-  if (demoMode) return demoDtcs();
+  if (demoMode) return demoDtcs(demoElectric);
   const res = await fetchWithTimeout(`${await baseUrl()}/dtcs`, FETCH_TIMEOUT_MS);
   if (!res.ok) throw new Error(`Scanner /dtcs returned ${res.status}`);
   return res.json() as Promise<DtcScanResult>;
