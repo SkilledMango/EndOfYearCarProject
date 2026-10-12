@@ -5,7 +5,6 @@ using CarStats.API.Data;
 
 namespace CarStats.API.Controllers
 {
-    // הסטטיסטיקות של דאשבורד הניהול. פתוח למנהלים בלבד.
     [Route("api/[controller]")]
     [ApiController]
     [Authorize(Policy = "AdminOnly")]
@@ -19,25 +18,20 @@ namespace CarStats.API.Controllers
         }
 
         // איתור: סטטיסטיקות לפאנל הניהול (שרת)
-        // GET: api/stats — כל נתוני הדאשבורד בקריאה אחת
         [HttpGet]
         public async Task<IActionResult> GetStats()
         {
-            // ── סך הכול ───────────────────────────────────────────────────────
             var totalUsers    = await _context.Users.CountAsync();
             var totalVehicles = await _context.Vehicles.CountAsync();
             var totalFaults   = await _context.VehicleEvents.CountAsync();
 
-            // ── מילון התקלות נטען לזיכרון, כי הטבלה קטנה ──────────────────────
             var allDtcs = await _context.DiagnosticCodes
                 .Select(d => new { d.ErrorCode, d.HumanTitle, d.Severity })
                 .ToListAsync();
-            // הגנה מפני קוד שמופיע פעמיים במילון
             var dtcMap = allDtcs
                 .DistinctBy(d => d.ErrorCode)
                 .ToDictionary(d => d.ErrorCode);
 
-            // ── ששת הקודים הנפוצים ביותר ──────────────────────────────────────
             var topCodes = await _context.VehicleEvents
                 .GroupBy(e => e.RawErrorCode)
                 .Select(g => new { code = g.Key, count = g.Count() })
@@ -45,7 +39,6 @@ namespace CarStats.API.Controllers
                 .Take(6)
                 .ToListAsync();
 
-            // חיבור כל קוד לכותרת ולחומרה מהמילון
             var topCodesEnriched = topCodes.Select(tc =>
             {
                 dtcMap.TryGetValue(tc.code, out var dtc);
@@ -58,7 +51,6 @@ namespace CarStats.API.Controllers
                 };
             }).ToList();
 
-            // ── תקלות ליום ב-14 הימים האחרונים ────────────────────────────────
             var twoWeeksAgo = DateTime.UtcNow.AddDays(-14);
             var recentTimestamps = await _context.VehicleEvents
                 .Where(e => e.Timestamp >= twoWeeksAgo)
@@ -71,7 +63,6 @@ namespace CarStats.API.Controllers
                 .OrderBy(x => x.date)
                 .ToList();
 
-            // ── שמונת האירועים האחרונים ───────────────────────────────────────
             var recentEvents = await _context.VehicleEvents
                 .OrderByDescending(e => e.Timestamp)
                 .Take(8)
@@ -84,7 +75,6 @@ namespace CarStats.API.Controllers
                 })
                 .ToListAsync();
 
-            // שמות המשתמשים של אותם אירועים, בשאילתה אחת
             var userIds = recentEvents
                 .Where(e => e.AppUserId.HasValue)
                 .Select(e => e.AppUserId!.Value)
@@ -113,9 +103,7 @@ namespace CarStats.API.Controllers
                 };
             }).ToList();
 
-            // ── התפלגות לפי חומרה ─────────────────────────────────────────────
-            // הקיבוץ נעשה בשרת הנתונים ולא בזיכרון: משיכת כל האירועים
-            // הייתה מעבירה שורה לכל תקלה שנרשמה אי פעם, בלי גבול עליון.
+            // הקיבוץ נעשה במסד הנתונים, לא בזיכרון
             var countsByCode = await _context.VehicleEvents
                 .GroupBy(e => e.RawErrorCode)
                 .Select(g => new { code = g.Key, count = g.Count() })

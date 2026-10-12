@@ -7,7 +7,6 @@ using CarStats.API.Services;
 
 namespace CarStats.API.Controllers
 {
-    // בקשת דיווח על קוד תקלה מהאפליקציה
     public class ReportDtcRequest
     {
         public string RawCode { get; set; } = string.Empty;
@@ -15,24 +14,15 @@ namespace CarStats.API.Controllers
         public int? VehicleId { get; set; }
     }
 
-    // המסלול המרכזי של האפליקציה: דיווח תקלות ושליפת ההיסטוריה
     [Route("api/[controller]")]
     [ApiController]
     [Authorize]
     public class MobileController : ControllerBase
     {
         // איתור: מניעת רישום כפול של אותה תקלה (24 שעות)
-        /// <summary>
-        /// כמה זמן אותו קוד נחשב אותה תקלה מתמשכת ולא תקלה חדשה.
-        /// רכב מדווח על תקלה פעילה מחדש בכל סריקה.
-        /// </summary>
         private static readonly TimeSpan DuplicateFaultWindow = TimeSpan.FromHours(24);
 
         // איתור: בדיקת תקינות קוד תקלה (P0300)
-        /// <summary>
-        /// קוד OBD-II תקני: אות המערכת (P/B/C/U) וארבע ספרות הקסדצימליות, למשל P0300.
-        /// המתאם תמיד מפיק קוד בצורה הזו; כל דבר אחר הוא זבל שהיה נכנס לסטטיסטיקה.
-        /// </summary>
         private static readonly System.Text.RegularExpressions.Regex ObdCode =
             new("^[PBCU][0-9A-F]{4}$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
@@ -44,7 +34,6 @@ namespace CarStats.API.Controllers
         }
 
         // איתור: תרגום קוד תקלה - קבלת תקלה מהאפליקציה, שמירה ותרגום (שרת)
-        // POST: api/mobile/report-dtc — מקבל קוד מהסריקה, רושם אותו ומחזיר את התרגום
         [HttpPost("report-dtc")]
         public async Task<IActionResult> ReportDtc([FromBody] ReportDtcRequest request)
         {
@@ -53,17 +42,15 @@ namespace CarStats.API.Controllers
             if (!ObdCode.IsMatch(request.RawCode.Trim()))
                 return BadRequest("Not an OBD-II fault code (expected e.g. P0300).");
 
-            // האירוע נרשם תמיד על שם הקורא לפי הטוקן, כדי שלא יהיה אפשר
-            // לרשום תקלות על חשבון של מישהו אחר. מנהל כן רשאי, לצורך בדיקות.
+            // האירוע נרשם על שם בעל הטוקן (מנהל רשאי לבחור, לבדיקות)
             if (!User.IsAdmin())
                 request.UserId = User.GetUserId();
 
-            // אימות המפתחות הזרים: מזהה שלא קיים מנוקה בשקט, כדי שלא ייפול השרת
             if (request.UserId.HasValue &&
                 !await _context.Users.AnyAsync(u => u.Id == request.UserId.Value))
                 request.UserId = null;
 
-            // הרכב חייב להתקיים וגם להיות שייך לאותו משתמש
+            // הרכב חייב להיות של אותו משתמש
             if (request.VehicleId.HasValue &&
                 !await _context.Vehicles.AnyAsync(v =>
                     v.Id == request.VehicleId.Value && v.AppUserId == request.UserId))
@@ -71,8 +58,7 @@ namespace CarStats.API.Controllers
 
             var rawCode = request.RawCode.Trim().ToUpperInvariant();
 
-            // 1. רישום האירוע, אלא אם אותה תקלה כבר נרשמה היום.
-            //    תקלה מתמשכת היא תקלה אחת, גם אם בודקים אותה שלוש פעמים.
+            // 1. רישום האירוע, אם לא נרשם כבר ב-24 השעות האחרונות
             var since = DateTime.UtcNow - DuplicateFaultWindow;
             var alreadyLogged = await _context.VehicleEvents.AnyAsync(e =>
                 e.RawErrorCode == rawCode &&
@@ -91,16 +77,13 @@ namespace CarStats.API.Controllers
                 });
 
                 await _context.SaveChangesAsync();
-
-                // אין כאן מונה לעדכן: ספירת התקלות מחושבת מהשורות האלה
-                // בזמן קריאת הפרופיל, ולכן שורת האירוע היא המקור היחיד לאמת.
             }
 
             // 2. שליפת התרגום מהמילון
             var translation = await _context.DiagnosticCodes
                 .FirstOrDefaultAsync(d => d.ErrorCode == rawCode);
 
-            // 3. קוד שאינו במילון מוחזר כאזהרה כללית, והאפליקציה תבקש הסבר מ-AI
+            // 3. קוד שלא במילון: האפליקציה תבקש הסבר מ-AI
             if (translation == null)
             {
                 return Ok(new
@@ -111,7 +94,7 @@ namespace CarStats.API.Controllers
                 });
             }
 
-            // 4. החזרת התרגום המלא לאפליקציה
+            // 4. החזרת התרגום לאפליקציה
             return Ok(new
             {
                 status = "Logged",
@@ -120,8 +103,6 @@ namespace CarStats.API.Controllers
         }
 
         // איתור: מחיקת אירוע תקלה (מנהל)
-        // DELETE: api/mobile/events/{id} — מחיקת אירוע תקלה בודד, למנהלים בלבד
-        // (למשל אירוע בדיקה, או קוד שנרשם בטעות)
         [HttpDelete("events/{id}")]
         [Authorize(Policy = "AdminOnly")]
         public async Task<IActionResult> DeleteEvent(int id)
@@ -134,7 +115,6 @@ namespace CarStats.API.Controllers
         }
 
         // איתור: היסטוריית התקלות של משתמש (שרת)
-        // GET: api/mobile/events/{userId} — היסטוריית התקלות של המשתמש, כולל התרגומים
         [HttpGet("events/{userId}")]
         public async Task<IActionResult> GetUserEvents(int userId)
         {
@@ -148,24 +128,20 @@ namespace CarStats.API.Controllers
                 .OrderByDescending(e => e.Timestamp)
                 .ToListAsync();
 
-            // כל התרגומים נשלפים בשאילתה אחת ומחוברים בזיכרון,
-            // במקום שאילתה נפרדת לכל אירוע
+            // כל התרגומים בשאילתה אחת
             var codes = events.Select(e => e.RawErrorCode).Distinct().ToList();
             var dtcRows = await _context.DiagnosticCodes
                 .Where(d => codes.Contains(d.ErrorCode))
                 .ToListAsync();
-            // הגנה מפני קוד שמופיע פעמיים במילון: נלקחת ההופעה הראשונה
             var dtcMap = dtcRows
                 .DistinctBy(d => d.ErrorCode)
                 .ToDictionary(d => d.ErrorCode);
 
-            // הרכב שעליו נסרקה כל תקלה: קודים ייחודיים ליצרן (P1xxx) משנים
-            // משמעות בין יצרנים, ולכן הסבר ה-AI צריך לדעת על איזה רכב מדובר
+            // הרכב של כל תקלה, כדי שהסבר ה-AI יתאים ליצרן
             var vehicleMap = await _context.Vehicles
                 .Where(v => v.AppUserId == userId)
                 .ToDictionaryAsync(v => v.Id);
 
-            // חיבור כל אירוע לתרגום שלו, אם קיים
             var enriched = events.Select(ev =>
             {
                 dtcMap.TryGetValue(ev.RawErrorCode, out var dtc);

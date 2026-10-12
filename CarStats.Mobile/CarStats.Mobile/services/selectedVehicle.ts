@@ -1,8 +1,3 @@
-/**
- * הרכב שנבחר במסך המוסך, כדי שגם מסכים אחרים ידעו על איזה רכב מדובר —
- * למשל מוצא המוסכים, שמעלה לראש הרשימה את המוסך המורשה של היצרן.
- */
-
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const KEY = '@carstats_selected_vehicle';

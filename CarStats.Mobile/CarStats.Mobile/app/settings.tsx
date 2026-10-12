@@ -1,8 +1,3 @@
-/**
- * מסך ההגדרות: מצב תצוגה, התראות סריקה, תזכורת בטיחות הילדים,
- * כתובות הבית והעבודה, מתאם ה-OBD, החשבון ופרטי הגרסה. כל מתג כאן מחובר לתכונה אמיתית.
- */
-
 import React, { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
@@ -12,8 +7,6 @@ import {
   Text,
   View,
 } from 'react-native';
-// רכיבי הספרייה יורשים את הצבעים מערכת הנושא שהוגדרה בפריסה הראשית,
-// ולכן אין צורך להעביר להם צבעים במפורש.
 import { Button, Divider, ProgressBar, SegmentedButtons, Switch } from 'react-native-paper';
 import Constants from 'expo-constants';
 import { useAuth } from '@/context/AuthContext';
@@ -46,7 +39,6 @@ const MODE_OPTIONS: { mode: ThemeMode; label: string }[] = [
 export default function SettingsScreen() {
   const { user } = useAuth();
   const router = useRouter();
-  // אין צורך בצבעים מפורשים: כל פקד במסך הזה מקבל אותם מערכת הנושא.
   const { mode, setMode } = useTheme();
   const s = useStyles();
 
@@ -55,18 +47,15 @@ export default function SettingsScreen() {
 
   useEffect(() => { loadPrefs().then(setPrefs); }, []);
 
-  // ── מתאם ה-OBD ───────────────────────────────────────────────────────────
   const [scannerOnline, setScannerOnline]   = useState<boolean | null>(null);   // null = בודק
   const [finding, setFinding]               = useState(false);
   const [findProgress, setFindProgress]     = useState(0);
 
-  // הכתובת לא מוצגת: האפליקציה מוצאת את המתאם לבד (ראו isScannerReachable)
   const refreshScanner = async () => {
     setScannerOnline(null);
     setScannerOnline(await isScannerReachable());
   };
 
-  // גם בחזרה מאשף החיבור, שבו הכתובת והמצב משתנים
   useFocusEffect(useCallback(() => { refreshScanner(); }, []));
 
   const onFindScanner = async () => {
@@ -94,7 +83,6 @@ export default function SettingsScreen() {
     await savePrefs(next);
   };
 
-  // ── מתג התראות הסריקה ────────────────────────────────────────────────────
   const toggleFaultAlerts = async (value: boolean) => {
     if (value && !(await ensureNotifPermission())) {
       Alert.alert('Permission needed', 'Allow notifications for CarStats to get scan alerts.');
@@ -103,7 +91,6 @@ export default function SettingsScreen() {
     await update({ ...prefs, faultAlerts: value });
   };
 
-  // ── מתג תזכורת הילדים ────────────────────────────────────────────────────
   const toggleChildReminder = async (value: boolean) => {
     if (!value) {
       setBusy(true);
@@ -131,9 +118,7 @@ export default function SettingsScreen() {
     }
   };
 
-  // מפעיל את התזכורת ישירות, בלי לחכות להגעה הביתה.
-  // הגדר הגיאוגרפית דורשת הרשאת מיקום ברקע ש-Expo Go לא נותן, ולכן זו
-  // הדרך היחידה להראות את ההתראה בהדגמה.
+  // מציג את התזכורת מיד, להדגמה: Expo Go לא נותן מיקום ברקע
   const previewChildReminder = async () => {
     if (!(await ensureNotifPermission())) {
       Alert.alert('Permission needed', 'Allow notifications for CarStats to see the reminder.');
@@ -142,11 +127,7 @@ export default function SettingsScreen() {
     await showChildReminderNotification();
   };
 
-  // ── הבית והעבודה ─────────────────────────────────────────────────────────
-  /**
-   * שומר או מוחק מקום (lat = null מוחק), ומעדכן גדר פעילה כך שתעקוב בדיוק
-   * אחרי המקומות שנשארו. אם לא נשאר אף מקום — התזכורת נכבית.
-   */
+  // שומר או מוחק מקום, ומעדכן את אזורי התזכורת
   const setPlace = async (place: ReminderPlace, lat: number | null, lng: number | null, label: string | null) => {
     const next: NotifPrefs = place === 'home'
       ? { ...prefs, homeLat: lat, homeLng: lng, homeLabel: label }
@@ -180,7 +161,6 @@ export default function SettingsScreen() {
 
   const removePlace = (place: ReminderPlace) => setPlace(place, null, null, null);
 
-  // מקומות שנשמרו לפני שהתווית נוספה מוצגים לפי הקואורדינטות
   const placeLabel = (lat: number | null, lng: number | null, label: string | null) =>
     lat == null ? null : label ?? `${lat.toFixed(4)}, ${lng?.toFixed(4)}`;
 
@@ -189,7 +169,6 @@ export default function SettingsScreen() {
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
 
-      {/* ── מצב תצוגה ── */}
       <Text style={s.sectionLabel}>APPEARANCE</Text>
       <View style={s.card}>
         <Text style={s.rowTitle}>Theme</Text>
@@ -202,7 +181,6 @@ export default function SettingsScreen() {
         />
       </View>
 
-      {/* ── התראות ── */}
       <Text style={s.sectionLabel}>NOTIFICATIONS</Text>
       <View style={s.card}>
         <View style={s.switchRow}>
@@ -268,12 +246,11 @@ export default function SettingsScreen() {
         />
       </View>
 
-      {/* ── מתאם ה-OBD ── */}
       <Text style={s.sectionLabel}>OBD SCANNER</Text>
       <View style={s.card}>
         <Text style={s.rowTitle}>Scanner</Text>
         <Text style={[s.rowSub, scannerOnline ? s.statusOk : s.statusOff]}>
-          {/* במצב הדגמה "מחובר" היה מטעה: אין מתאם אמיתי, רק נתונים מדומים */}
+          {/* במצב הדגמה אין מתאם אמיתי */}
           {scannerOnline == null ? 'Looking for the scanner…'
             : isDemoMode() ? 'Demo mode — no real scanner'
             : scannerOnline ? 'Connected' : 'Not connected'}
@@ -310,7 +287,6 @@ export default function SettingsScreen() {
         </Button>
       </View>
 
-      {/* ── חשבון ── */}
       <Text style={s.sectionLabel}>ACCOUNT</Text>
       <View style={s.card}>
         <Text style={s.rowTitle}>{user?.fullName ?? '—'}</Text>
@@ -320,7 +296,6 @@ export default function SettingsScreen() {
         </Text>
       </View>
 
-      {/* ── אודות ── */}
       <Text style={s.sectionLabel}>ABOUT</Text>
       <View style={s.card}>
         <View style={s.aboutRow}>
@@ -333,7 +308,6 @@ export default function SettingsScreen() {
           End-of-year project.
         </Text>
       </View>
-
     </ScrollView>
   );
 }
@@ -361,10 +335,8 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   rowTitle: { fontSize: 15, fontWeight: '700', color: c.Dashboard.textPrimary },
   rowSub:   { fontSize: 13, color: c.Dashboard.textSecondary, marginTop: 2, lineHeight: 18 },
 
-  // בורר מצב התצוגה
   segmentRow: { flexDirection: 'row', gap: 8, marginTop: 14 },
   switchRow: { flexDirection: 'row', alignItems: 'center' },
-  // הקו עצמו מגיע מהספרייה; כאן רק המרווח סביבו
   divider:   { marginVertical: 14 },
 
   homeBtn:        { marginTop: 10 },
@@ -372,7 +344,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
 
   aboutRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 
-  // מצב המתאם
   statusOk:  { color: c.Severity.green, fontWeight: '700' },
   statusOff: { color: c.Dashboard.textSecondary, fontWeight: '700' },
   findBar:   { marginTop: 8, borderRadius: 2 },

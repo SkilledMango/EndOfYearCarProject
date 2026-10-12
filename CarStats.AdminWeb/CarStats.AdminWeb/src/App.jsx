@@ -10,9 +10,7 @@ import { logout as clearToken, hasToken, onSessionExpired } from './Services/api
 
 const SESSION_KEY = 'carstats_admin_user';
 
-// Restore a saved session (survives page refresh).
-// Both halves must exist: the user object (for display) AND the JWT
-// (api.js attaches it to every request) — one without the other is stale.
+// Session restore needs both the saved user and the JWT
 function loadSession() {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
@@ -43,7 +41,6 @@ function App() {
     setTabValue(0);
   };
 
-  // The saved login ran out (tokens last 30 days) — back to the login page, with a reason
   useEffect(() => {
     onSessionExpired(() => {
       handleLogout();
@@ -51,7 +48,6 @@ function App() {
     });
   }, []);
 
-  // Not signed in → show the login gate instead of the panel
   if (!admin) {
     return <LoginPage onLogin={handleLogin} notice={expired ? 'Your session expired — please log in again.' : null} />;
   }
@@ -60,7 +56,6 @@ function App() {
     <Box sx={{ flexGrow: 1, minHeight: '100vh', bgcolor: 'background.default' }}>
       <AppBar position="sticky">
         <Toolbar sx={{ gap: 1.5 }}>
-          {/* The app's rounded-square logo tile, in the same deep accent. */}
           <Box
             sx={{
               width: 36, height: 36, borderRadius: 2.5,

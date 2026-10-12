@@ -1,11 +1,3 @@
-/**
- * Password rules.
- *
- * These must stay in step with the server's PasswordPolicy.cs — if the client
- * accepts something the API rejects, the user gets a confusing failure after
- * filling in the whole form.
- */
-
 import {
   PASSWORD_MIN_LENGTH,
   isPasswordAcceptable,
@@ -23,8 +15,6 @@ describe('validatePassword', () => {
   });
 
   it('rejects anything shorter than the minimum', () => {
-    // One below the limit must fail and exactly the limit must pass — an
-    // off-by-one here would disagree with the server.
     expect(validatePassword('a1b2c3d')).toMatch(/8 characters/);
     expect(validatePassword('a1b2c3d4')).toBeNull();
     expect('a1b2c3d4'.length).toBe(PASSWORD_MIN_LENGTH);
@@ -40,7 +30,6 @@ describe('validatePassword', () => {
 
   it('accepts symbols but never requires them', () => {
     expect(validatePassword('carstats1!')).toBeNull();
-    // No symbol, still fine — length and a digit are what matter.
     expect(validatePassword('carstats1')).toBeNull();
   });
 
@@ -57,7 +46,6 @@ describe('validatePassword', () => {
   });
 
   it('gives a specific reason rather than a generic failure', () => {
-    // The user should be told which rule they missed, not just "invalid".
     expect(validatePassword('short1')).not.toBe(validatePassword('abcdefghij'));
   });
 });

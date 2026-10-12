@@ -1,15 +1,3 @@
-/**
- * אשף חיבור המתאם לנקודת הגישה של הטלפון — כל התהליך מתוך האפליקציה.
- *
- * הבעיה שהוא פותר: כדי למסור למתאם את הסיסמה צריך לדבר איתו, אבל הוא עוד
- * לא ברשת של הטלפון. לכן:
- *  1. הנהג מקליד כאן את שם נקודת הגישה והסיסמה.
- *  2. אם המתאם כבר נגיש — הפרטים נשלחים אליו ישר. אחרת הטלפון מצטרף לרשת
- *     "CarStats-Setup" שהמתאם פותח, והאפליקציה שולחת את הפרטים בעצמה.
- *     לא צריך אינטרנט: זו הודעה ישירה בין הטלפון למתאם.
- *  3. הנהג מדליק את נקודת הגישה, והאפליקציה מחפשת את המתאם עליה.
- */
-
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, ProgressBar, TextInput } from 'react-native-paper';
@@ -26,13 +14,10 @@ import { hotspotError } from '@/utils/hotspot';
 
 type Step = 'details' | 'join' | 'waiting' | 'done' | 'notFound';
 
-/** כל כמה זמן בודקים אם הטלפון כבר ברשת של המתאם */
 const JOIN_POLL_MS = 2500;
-/** אחרי כמה זמן בלי הצלחה מציגים את הטיפ על נתונים סלולריים */
 const MOBILE_DATA_TIP_MS = 20000;
-/** כמה זמן מחכים שהמתאם יצטרף לנקודת הגישה: אתחול, ניסיון חיבור, ועוד סבב */
 const WAIT_FOR_SCANNER_MS = 3 * 60 * 1000;
-/** המתאם מאתחל 1.5 שניות אחרי שקיבל את הפרטים; מחכים שיסיים לפני שמחפשים */
+// המתאם מאתחל 1.5 שניות אחרי שקיבל את הפרטים
 const RESTART_GRACE_MS = 5000;
 
 // איתור: אשף חיבור המתאם להוטספוט
@@ -50,19 +35,17 @@ export default function ScannerSetupScreen() {
   const [showDataTip, setShowDataTip] = useState(false);
   const [searchProgress, setSearchProgress] = useState(0);
 
-  // כל שלב מתחיל לולאה משלו; הדגל עוצר אותה כשעוברים שלב או יוצאים מהמסך
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
 
-  // ── שלב 1: שם וסיסמה ───────────────────────────────────────────────────────
+  // שלב 1: שם וסיסמה
   const onNext = async () => {
     const problem = hotspotError(ssid, pass);
     if (problem) { setError(problem); return; }
     setError(null);
     setChecking(true);
     try {
-      // המתאם כבר נגיש — דרך נקודת הגישה הנוכחית שלו, או שהטלפון כבר
-      // הצטרף לרשת ההגדרה — ואז אין צורך להחליף רשת בכלל
+      // המתאם כבר נגיש: אין צורך להחליף רשת
       const saved = await getScannerAddress();
       const [onHotspot, onSetup] = await Promise.all([
         checkScannerAt(saved),
@@ -82,7 +65,7 @@ export default function ScannerSetupScreen() {
     }
   };
 
-  // ── שלב 2: מחכים שהטלפון יצטרף ל-CarStats-Setup, ואז שולחים ──────────────
+  // שלב 2: מחכים שהטלפון יצטרף לרשת ההגדרה, ואז שולחים
   useEffect(() => {
     if (step !== 'join') return;
     let stop = false;
@@ -110,7 +93,7 @@ export default function ScannerSetupScreen() {
     return () => { stop = true; clearInterval(poll); clearTimeout(tipTimer); };
   }, [step]);   // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── שלב 3: מחפשים את המתאם על נקודת הגישה ─────────────────────────────────
+  // שלב 3: מחפשים את המתאם על ההוטספוט
   useEffect(() => {
     if (step !== 'waiting') return;
     let stop = false;
@@ -119,13 +102,12 @@ export default function ScannerSetupScreen() {
     const target = ssid.trim();
     (async () => {
       const deadline = Date.now() + WAIT_FOR_SCANNER_MS;
-      // המתאם מאתחל את עצמו שנייה וחצי אחרי שקיבל את הפרטים. בלי ההמתנה
-      // החיפוש היה תופס אותו עוד על נקודת הגישה הישנה ומכריז על הצלחה
+      // מחכים שהמתאם יאתחל, אחרת נמצא אותו עוד על הרשת הישנה
       await new Promise(r => setTimeout(r, RESTART_GRACE_MS));
       while (!stop && alive.current && Date.now() < deadline) {
         const address = await findScanner((checked, total) => { if (!stop) setSearchProgress(checked / total); });
         if (stop) return;
-        // מצליח רק כשהמתאם מדווח שהוא באמת על נקודת הגישה שנשלחה
+        // הצלחה רק כשהמתאם מדווח שהוא על ההוטספוט שנשלח
         const status = address ? await checkScannerAt(address) : null;
         if (stop) return;
         if (address && status?.ssid === target) { setStep('done'); return; }
@@ -135,11 +117,9 @@ export default function ScannerSetupScreen() {
     })();
 
     return () => { stop = true; };
-    // השם נלקח ברגע המעבר לשלב הזה — בזמן ההמתנה כבר אי אפשר לשנות אותו
   }, [step]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const openWifiSettings = () => {
-    // לוח ה-WiFi הצף של אנדרואיד 10 ומעלה, ואם אין — מסך ההגדרות הרגיל
     Linking.sendIntent('android.settings.panel.action.WIFI')
       .catch(() => Linking.sendIntent('android.settings.WIFI_SETTINGS'))
       .catch(() => { /* אין מסך הגדרות — ההוראות בטקסט מספיקות */ });

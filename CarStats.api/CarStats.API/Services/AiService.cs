@@ -7,13 +7,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CarStats.API.Services
 {
-    /// <summary>
-    /// כל השאלות למודלי שפה עוברות דרך כאן, בצד השרת.
-    ///
-    /// הספקים מנוסים לפי הסדר: Groq ואז שני מודלים של Gemini. לכל אחד מכסה
-    /// חינמית נפרדת, ולכן כשאחד נגמר או קורס — הבא עונה, והמשתמש לא מרגיש.
-    /// המפתחות יושבים רק בקונפיגורציה של השרת ולא בתוך האפליקציה.
-    /// </summary>
     public class AiService
     {
         private readonly IHttpClientFactory _httpFactory;
@@ -42,10 +35,6 @@ namespace CarStats.API.Services
         private string  GroqModel => _config["Ai:GroqModel"] ?? "openai/gpt-oss-120b";
 
         // איתור: שרשרת ספקי ה-AI - קודם Groq ואז Gemini
-        /// <summary>
-        /// שואלת את הספקים לפי הסדר ומחזירה את התשובה הראשונה שעוברת את isUsable.
-        /// תשובה שלא עוברת נחשבת כישלון של אותו ספק — וממשיכים לבא.
-        /// </summary>
         public async Task<AiResult> AskJsonAsync(string prompt, Func<JsonElement, bool> isUsable)
         {
             var providers = new List<(string Name, Func<string, Task<(string? Text, bool RateLimited)>> Ask)>();
@@ -85,9 +74,6 @@ namespace CarStats.API.Services
             return new AiResult(null, "none", allRateLimited ? Failure.RateLimited : Failure.Unavailable);
         }
 
-        // ─── הספקים ────────────────────────────────────────────────────────────
-
-        // Groq מדבר באותו פורמט כמו OpenAI
         private async Task<(string? Text, bool RateLimited)> AskGroqAsync(string prompt)
         {
             var client = _httpFactory.CreateClient();
@@ -104,8 +90,7 @@ namespace CarStats.API.Services
                 ["max_tokens"]      = 600,
                 ["response_format"] = new { type = "json_object" },
             };
-            // מודלי gpt-oss "חושבים" לפני התשובה. חשיבה קצרה מספיקה לשאלה עובדתית,
-            // ועולה רבע מהטוקנים — וכך המכסה היומית מחזיקה פי ארבעה
+            // חשיבה קצרה חוסכת טוקנים
             if (GroqModel.StartsWith("openai/gpt-oss"))
                 body["reasoning_effort"] = "low";
             request.Content = JsonContent(body);
@@ -129,7 +114,7 @@ namespace CarStats.API.Services
             var client = _httpFactory.CreateClient();
             client.Timeout = TimeSpan.FromSeconds(15);
 
-            // המפתח בכותרת ולא בכתובת, כדי שלא יופיע בשום לוג של בקשות
+            // המפתח בכותרת ולא בכתובת, כדי שלא יופיע בלוגים
             using var request = new HttpRequestMessage(HttpMethod.Post,
                 $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent");
             request.Headers.Add("x-goog-api-key", GeminiKey);
@@ -140,7 +125,6 @@ namespace CarStats.API.Services
                 {
                     temperature = 0,
                     responseMimeType = "application/json",
-                    // מרווח בכוונה: חלק מהתקציב נשרף על חשיבה פנימית של המודל
                     maxOutputTokens = 800,
                 },
             });
@@ -161,18 +145,14 @@ namespace CarStats.API.Services
             return (text, false);
         }
 
-        // ─── מטמון ────────────────────────────────────────────────────────────
-
         // איתור: מטמון תשובות AI
-        // נשמרות רק תשובות מוצלחות, ולכן אין צורך בתפוגה
         public async Task<string?> GetCachedAsync(string key)
         {
             var entry = await _db.AiCache.FindAsync(key);
             return entry?.Value;
         }
 
-        // שמירה במטמון היא בונוס: אם היא נכשלת (למשל שתי בקשות זהות באותו רגע),
-        // המשתמש עדיין מקבל את התשובה ולא שגיאת שרת
+        // כישלון בשמירה במטמון לא מפיל את הבקשה
         public async Task SetCachedAsync(string key, string json)
         {
             var entry = await _db.AiCache.FindAsync(key);
@@ -198,12 +178,10 @@ namespace CarStats.API.Services
             }
         }
 
-        // ─── עזרים ────────────────────────────────────────────────────────────
-
         private static StringContent JsonContent(object body) =>
             new(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
-        // מודלים לפעמים עוטפים את ה-JSON בטקסט — לוקחים רק את האובייקט עצמו
+        // לוקחים רק את אובייקט ה-JSON מתוך התשובה
         private static JsonElement? ExtractJson(string text)
         {
             var open  = text.IndexOf('{');

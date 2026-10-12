@@ -1,7 +1,3 @@
-/**
- * מסך הפרופיל: פרטי המשתמש, נתוני החשבון, המוסך שלו ופעולות החשבון.
- */
-
 import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -29,13 +25,6 @@ export default function ProfileScreen() {
   const [loggingOut, setLoggingOut]   = useState(false);
   const [deletingId, setDeletingId]   = useState<number | null>(null);
 
-  // רענון בכל כניסה למסך. בלעדיו הוצג הצילום שנלקח בזמן ההתחברות,
-  // וכל תקלה או עדכון צריכה שקרו מאז יצרו סתירה בין הפרופיל למוסך —
-  // דווקא במסך שהמשתמש נוטה להאמין לו.
-  //
-  // נשמר ב-ref כי פונקציית הרענון נבנית מחדש בכל רינדור של ההקשר, ותלות
-  // ישירה בה הייתה יוצרת לולאה אינסופית. חייב לשבת מעל היציאה המוקדמת
-  // שלמטה, כי אי אפשר להפעיל הוקים באופן מותנה.
   const refreshRef = useRef(refreshUser);
   refreshRef.current = refreshUser;
   useFocusEffect(
@@ -44,7 +33,7 @@ export default function ProfileScreen() {
     }, []),
   );
 
-  if (!user) return null; // הפריסה הראשית מפנה למסך ההתחברות כשאין משתמש
+  if (!user) return null;
 
   const initials = user.fullName
     .split(/\s+/)
@@ -65,12 +54,6 @@ export default function ProfileScreen() {
     setRefreshing(false);
   };
 
-  /**
-   * מוחק רכב מהמוסך, אחרי אישור מפורש.
-   *
-   * ההודעה מזכירה את הרכב בשמו ואת מה שנמחק איתו — יומן התדלוקים וההיסטוריה
-   * מקומיים לרכב, ואי אפשר להחזיר אותם.
-   */
   const confirmDeleteVehicle = (v: Vehicle) => {
     confirmDestructive(
       'Remove vehicle?',
@@ -81,12 +64,10 @@ export default function ProfileScreen() {
         setDeletingId(v.id);
         try {
           await deleteVehicle(v.id);
-          // רק אחרי שהשרת אישר — אחרת היינו מוחקים נתונים של רכב שעדיין קיים.
+          // מוחקים נתונים מקומיים רק אחרי שהשרת אישר
           await clearVehicleData(v.id);
           await refreshUser();
         } catch (err: any) {
-          // מודפס כדי שכשל כאן יהיה ניתן לאבחון — בלי זה השגיאה נבלעה
-          // וההודעה האשימה את החיבור גם כשהשרת החזיר שגיאה.
           console.warn('[profile] delete vehicle failed', err?.response?.status, err?.message);
           notify(
             'Could not remove the vehicle',
@@ -104,7 +85,7 @@ export default function ProfileScreen() {
   const confirmLogout = () => {
     confirmDestructive('Log out', 'Are you sure you want to log out?', 'Log out', async () => {
       setLoggingOut(true);
-      await logout(); // _layout auto-redirects to /login
+      await logout();
     });
   };
 
@@ -118,7 +99,6 @@ export default function ProfileScreen() {
     >
       <Text style={s.pageTitle}>PROFILE</Text>
 
-      {/* כרטיס הזהות */}
       <View style={s.card}>
         <View style={s.identityRow}>
           <View style={s.avatar}>
@@ -136,7 +116,6 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* נתוני החשבון */}
       <View style={s.statsRow}>
         <View style={s.statCard}>
           <Text style={s.statValue}>{user.vehicles?.length ?? 0}</Text>
@@ -148,7 +127,6 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* המוסך */}
       <Text style={s.sectionLabel}>MY GARAGE</Text>
       {(user.vehicles ?? []).length === 0 ? (
         <View style={s.card}>
@@ -178,7 +156,6 @@ export default function ProfileScreen() {
         ))
       )}
 
-      {/* פעולות החשבון */}
       <Text style={s.sectionLabel}>ACCOUNT</Text>
       <Pressable style={s.settingsRow} onPress={() => router.push('/settings')}>
         <Text style={s.settingsIcon}>⚙️</Text>

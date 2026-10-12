@@ -1,40 +1,5 @@
-/*
- * CarStats OBD-II Scanner Firmware
- * Hardware : Waveshare ESP32-S3-RS485S-CAN (CAN transceiver built-in)
- * Protocol : OBD-II over CAN (ISO 15765-4, 500 kbps)
- *
- * The device joins a phone's mobile hotspot, so the phone keeps its internet.
- * Which hotspot is saved in flash, not in this file — so it works with any
- * phone without reflashing:
- *   - At boot it tries the saved hotspot for 20 seconds.
- *   - If it can't find it — or loses it for 45 seconds later on — it opens its
- *     own open WiFi network "CarStats-Setup" (the scanner is 192.168.4.1 there).
- *     The app's "Connect scanner" wizard joins it and sends the new hotspot's
- *     name and password; a phone without the app gets a setup page instead.
- *     Either way the scanner restarts and joins that hotspot.
- *   - On any hotspot it takes the same spot: address .100 of that network
- *     (or the last address on small networks, like an iPhone's 172.20.10.14),
- *     so the app's "Find scanner" button only has to check one address per network.
- *
- * Endpoints:
- *   GET  /status      — health check, uptime, simulation mode flag (also in setup mode)
- *   GET  /live-data   — RPM, speed, coolant temp, fuel level, engine load
- *   GET  /dtcs        — array of active DTC strings (e.g. ["P0300","P0420"])
- *   POST /hotspot     — {"ssid","pass"}: save a new hotspot and restart onto it (also in setup mode)
- *   POST /forget-wifi — forget the saved hotspot and reopen the setup network
- *
- * Once a minute on a hotspot it also tells the CarStats server its local address
- * (POST api/scanner/announce), so the app finds it with nothing to type.
- *
- * SIMULATION MODE:
- *   When no real car is connected (no CAN bus response), the firmware
- *   automatically falls back to returning realistic fake data so the app
- *   works perfectly for demos and presentations without a real vehicle.
- *
- *   To customise the demo data, edit the SIM_ constants below.
- */
+// CarStats OBD-II scanner firmware (ESP32-S3 + CAN). Serves /status, /live-data, /dtcs, /vin, /debug and POST /hotspot
 
-// ─── Includes ────────────────────────────────────────────────────────────────
 #include <WiFi.h>
 #include <WebServer.h>
 #include <DNSServer.h>
@@ -45,8 +10,7 @@
 #include <WiFiClientSecure.h>
 #include "driver/twai.h"
 
-// ─── WiFi config ──────────────────────────────────────────────────────────────
-// First-boot defaults only — used until a hotspot is saved from the setup page.
+// First-boot defaults only; the app's wizard saves the real hotspot
 #define DEFAULT_HOTSPOT_SSID  "OrWifi"
 #define DEFAULT_HOTSPOT_PASS  "24681357"
 
@@ -56,19 +20,15 @@
 #define HOTSPOT_LOST_MS     45000              // hotspot gone this long → restart, which opens setup mode
 #define SCANNER_HOST_OCTET  100                // the .100 spot taken on every hotspot
 
-// The scanner tells the CarStats server where it is on the hotspot, so the app
-// finds it with no address to type (hotspot networks change between phones).
+// Tell the CarStats server where we are, so the app finds the scanner by itself
 #define ANNOUNCE_URL        "https://carproject.somee.com/api/scanner/announce"
 #define ANNOUNCE_EVERY_MS   60000
 
 
-// ─── CAN pin config (Waveshare ESP32-S3-RS485S-CAN) ──────────────────────────
-// Verified from Waveshare schematic: CAN transceiver (SN65HVD230) is wired
-// to GPIO15 (TX) and GPIO16 (RX) on this board.
+// CAN pins (Waveshare ESP32-S3-RS485S-CAN, SN65HVD230 transceiver)
 #define CAN_TX_PIN  GPIO_NUM_15
 #define CAN_RX_PIN  GPIO_NUM_16
 
-// ─── OBD-II constants ────────────────────────────────────────────────────────
 #define OBD_ECU_ID      0x7DF
 #define PID_ENGINE_LOAD 0x04
 #define PID_COOLANT_TEMP 0x05
@@ -80,42 +40,33 @@
 #define POLL_INTERVAL_MS 1000
 
 // איתור: מצב סימולציה במתאם (בלי רכב)
-// ─── SIMULATION MODE — edit these for your presentation ──────────────────────
-// These values are shown when no real car is connected.
-// Change them to whatever makes your demo look best.
+// Simulation values, shown when no car answers
 
-#define SIM_RPM         2400        // engine revs (realistic idle-ish)
-#define SIM_SPEED       0           // km/h (parked on a table)
-#define SIM_COOLANT     92          // °C   (warmed up engine)
-#define SIM_FUEL        34          // %    (low-ish, looks interesting)
-#define SIM_LOAD        18          // %    (light load at idle)
+#define SIM_RPM         2400
+#define SIM_SPEED       0
+#define SIM_COOLANT     92
+#define SIM_FUEL        34
+#define SIM_LOAD        18
 
-// DTCs to show in simulation — add or remove codes here
-// These must exist in your CarStats API's DiagnosticCodes table
+// DTCs shown in simulation; they must exist in the API's dictionary
 const char* SIM_DTCS[] = { "P0300", "P0420" };
 const int   SIM_DTC_COUNT = 2;
 
-// ─── Global state ─────────────────────────────────────────────────────────────
 WebServer server(80);
 bool simMode = false;   // true when no real CAN response detected
 
-// A PID the car never answers costs a full timeout on every poll. After this many
-// misses in a row it is only asked every PID_RETRY_MS, so the loop stays fast
-// enough to answer the phone — but a slow PID is never given up on for good.
+// A PID that keeps missing is asked only every PID_RETRY_MS, so the loop keeps answering the phone
 #define PID_MAX_MISSES 3
 #define PID_RETRY_MS   10000
 uint8_t       pidMisses[256]  = {0};
 unsigned long pidLastTry[256] = {0};
 
-// What the car says it supports (OBD mode 01 PIDs 0x00 and 0x20, PIDs 0x01–0x40).
-// Asked once per car, so "this car doesn't report fuel" is the car's own answer
-// and not a guess from a missing reply.
+// Supported-PID bitmap (PIDs 0x01-0x40), asked once per car
 bool    carSession   = false;   // a car has answered since the last disconnect
 bool    supportKnown = false;
 uint8_t supportBits[8] = {0};
 
-// ─── WiFi / setup state ───────────────────────────────────────────────────────
-Preferences   prefs;                  // flash storage for the saved hotspot
+Preferences   prefs;
 DNSServer     dnsServer;              // setup mode: answers every name with our own address
 String        hotspotSsid;
 String        hotspotPass;
@@ -123,24 +74,22 @@ bool          setupMode        = false;
 unsigned long lastSetupRetryMs = 0;
 unsigned long restartAtMs      = 0;   // non-zero = restart then (lets the HTTP reply go out first)
 unsigned long wifiLostSinceMs  = 0;   // non-zero = the hotspot dropped at this time
-unsigned long lastAnnounceMs   = 0;   // last time the server was told our address
-String        setupNetworksHtml;      // nearby networks, listed as buttons on the setup page
+unsigned long lastAnnounceMs   = 0;
+String        setupNetworksHtml;
 
-// ─── VIN cache ────────────────────────────────────────────────────────────────
-// VIN is read once per real-car session and cached.  Cleared when car disconnects.
+// VIN is read once per car and cached
 String  cachedVin       = "";
 bool    vinAttempted    = false;
 
-// ─── CAN diagnostics (readable via GET /debug) ────────────────────────────────
 struct CanDiag {
-  int  lastTxErr        = 0;   // esp_err_t from last twai_transmit
-  int  twaiState        = -1;  // TWAI_STATE_* from last status check
-  int  txErrCounter     = 0;   // hardware TX error counter
-  int  rxErrCounter     = 0;   // hardware RX error counter
-  int  framesLastPoll   = 0;   // raw CAN frames received in last poll
-  int  obdFramesTotal   = 0;   // total frames that matched OBD-II filter
-  unsigned long lastRxMs = 0;  // millis() when last frame arrived
-  char lastRxFrame[48]  = "none"; // hex dump of last received frame
+  int  lastTxErr        = 0;
+  int  twaiState        = -1;
+  int  txErrCounter     = 0;
+  int  rxErrCounter     = 0;
+  int  framesLastPoll   = 0;
+  int  obdFramesTotal   = 0;
+  unsigned long lastRxMs = 0;
+  char lastRxFrame[48]  = "none";
 } canDiag;
 
 struct LiveData {
@@ -156,7 +105,6 @@ struct LiveData {
 LiveData liveData;
 unsigned long lastPollMs = 0;
 
-// ─── Forward declarations ──────────────────────────────────────────────────────
 bool   twaiInit();
 bool   sendObdRequest(uint8_t mode, uint8_t pid);
 bool   waitForObdReply(uint8_t mode, uint8_t pid, twai_message_t &out, unsigned long timeoutMs = OBD_TIMEOUT_MS);
@@ -189,10 +137,9 @@ void      handleSetupSave();
 String    htmlEscape(const String &s);
 
 // איתור: הפעלת המתאם
-// ─── Setup ────────────────────────────────────────────────────────────────────
 void setup() {
   Serial.begin(115200);
-  delay(3000);   // wait for Serial Monitor to connect
+  delay(3000);
   Serial.println("\n[CarStats] Booting...");
 
   // 1. Join the saved hotspot — or open the setup network if it isn't around
@@ -201,7 +148,7 @@ void setup() {
   if (!connectToHotspot(HOTSPOT_CONNECT_MS)) {
     Serial.println("[CarStats] Saved hotspot not found — opening the setup network");
     startSetupMode();
-    return;   // no OBD in setup mode; the scanner restarts once a hotspot is saved
+    return;
   }
 
   // 2. Initialise TWAI (CAN) driver
@@ -215,11 +162,9 @@ void setup() {
   startNormalMode();
 }
 
-// ─── Loop ─────────────────────────────────────────────────────────────────────
 void loop() {
   server.handleClient();
 
-  // A handler asked for a restart (hotspot saved or forgotten) — the reply has gone out
   if (restartAtMs != 0 && millis() >= restartAtMs) {
     Serial.println("[CarStats] Restarting...");
     delay(100);
@@ -229,18 +174,15 @@ void loop() {
   if (setupMode) {
     dnsServer.processNextRequest();
 
-    // Keep trying the saved hotspot in the background, so turning the hotspot on
-    // later is enough. Only while nobody is on the setup page: a connection
-    // attempt makes the setup network drop for a moment.
+    // Retry the saved hotspot in the background, only while nobody is on the setup page
     if (!hotspotSsid.isEmpty()
         && WiFi.softAPgetStationNum() == 0
         && millis() - lastSetupRetryMs >= SETUP_RETRY_MS) {
       lastSetupRetryMs = millis();
-      WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);   // DHCP
+      WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
       WiFi.begin(hotspotSsid.c_str(), hotspotPass.c_str());
     }
     if (WiFi.status() == WL_CONNECTED) {
-      // Found it — restart into normal mode, which also claims the .100 address
       Serial.println("[Setup] Saved hotspot is back — restarting into normal mode");
       delay(200);
       ESP.restart();
@@ -249,10 +191,6 @@ void loop() {
   }
 
   // איתור: אתחול המתאם כשההוטספוט נעלם
-  // Hotspot gone for a while (phone switched it off, or the scanner moved to a
-  // new car/phone) — restart. If the hotspot is still missing after the restart,
-  // the scanner opens the setup network, so a new phone can take it over
-  // without anyone unplugging it.
   if (WiFi.status() == WL_CONNECTED) {
     wifiLostSinceMs = 0;
   } else if (wifiLostSinceMs == 0) {
@@ -270,7 +208,6 @@ void loop() {
     announceToServer();
   }
 
-  // Print WiFi status every 5 seconds
   static unsigned long lastStatusMs = 0;
   if (millis() - lastStatusMs >= 5000) {
     lastStatusMs = millis();
@@ -280,12 +217,10 @@ void loop() {
       WiFi.localIP().toString().c_str(),
       WiFi.SSID().c_str()
     );
-    // status codes: 3=CONNECTED, 1=NO_SSID, 4=WRONG_PASSWORD, 6=DISCONNECTED
   }
 
-  // Respond to any message typed in Serial Monitor
   if (Serial.available()) {
-    Serial.readStringUntil('\n'); // consume input
+    Serial.readStringUntil('\n');
     Serial.printf("[STATUS] WiFi=%d  IP=%s  SSID=%s  uptime=%lus\n",
       WiFi.status(),
       WiFi.localIP().toString().c_str(),
@@ -301,15 +236,11 @@ void loop() {
 }
 
 // איתור: חיבור לרשת ה-CAN של הרכב
-// ─── TWAI initialisation ──────────────────────────────────────────────────────
 bool twaiInit() {
   twai_general_config_t gConfig = TWAI_GENERAL_CONFIG_DEFAULT(CAN_TX_PIN, CAN_RX_PIN, TWAI_MODE_NORMAL);
   gConfig.rx_queue_len = 32;   // the default 5 overflows on a busy car network
   twai_timing_config_t  tConfig = TWAI_TIMING_CONFIG_500KBITS();
-  // Only OBD-II answers (0x7E8..0x7EF). A real car's network carries dozens of
-  // other messages a second (47 per wait on the first test car), and taking them
-  // all in buried the answers and kept the scanner too busy to reply to the phone.
-  // Mask bits set to 1 are "don't care": the low 3 ID bits, RTR and data bytes.
+  // Accept only OBD-II answers (0x7E8-0x7EF): a busy car network flooded the receive queue
   twai_filter_config_t  fConfig = {
     .acceptance_code = (uint32_t)0x7E8 << 21,
     .acceptance_mask = ((uint32_t)0x7 << 21) | 0x1FFFFF,
@@ -321,7 +252,6 @@ bool twaiInit() {
 }
 
 // איתור: שליחת בקשת OBD לרכב
-// ─── OBD-II helpers ───────────────────────────────────────────────────────────
 bool sendObdRequest(uint8_t mode, uint8_t pid) {
   twai_message_t msg = {};
   msg.identifier       = OBD_ECU_ID;
@@ -370,14 +300,12 @@ bool waitForObdReply(uint8_t mode, uint8_t pid, twai_message_t &out, unsigned lo
     if (twai_receive(&rx, pdMS_TO_TICKS(10)) != ESP_OK) continue;
 
     framesReceived++;
-    // Save the last received frame for /debug endpoint
     canDiag.lastRxMs = millis();
     snprintf(canDiag.lastRxFrame, sizeof(canDiag.lastRxFrame),
       "0x%03lX: %02X %02X %02X %02X %02X %02X %02X %02X",
       (unsigned long)rx.identifier,
       rx.data[0], rx.data[1], rx.data[2], rx.data[3],
       rx.data[4], rx.data[5], rx.data[6], rx.data[7]);
-    // Log the first 4 frames received each call so we can see what the car is sending
     if (framesReceived <= 4) {
       Serial.printf("[CAN] RX %s\n", canDiag.lastRxFrame);
     }
@@ -394,7 +322,6 @@ bool waitForObdReply(uint8_t mode, uint8_t pid, twai_message_t &out, unsigned lo
 
   canDiag.framesLastPoll = framesReceived;
 
-  // Help diagnose: did we get *any* frames from the car?
   static unsigned long lastDiagMs = 0;
   if (millis() - lastDiagMs >= 5000) {
     lastDiagMs = millis();
@@ -473,24 +400,18 @@ int readPidInt(uint8_t pid, unsigned long timeoutMs) {
   }
 }
 
-// ─── Fuel level — a longer wait, because some cars answer it slowly ───────────
-// One try per poll (it used to be 3 × 500 ms, 1.6 s of silence every second on
-// a car without this PID). Not asked at all when the car says it doesn't have it.
+// Fuel level: one try per poll, never asked when the car says it has no fuel PID
 int readFuelPercent() {
   return readPidInt(PID_FUEL_LEVEL, 500);
 }
 
 // איתור: קריאת נתונים חיים מהרכב (מתאם)
-// ─── Live data polling ────────────────────────────────────────────────────────
 void pollLiveData() {
   pidMisses[PID_RPM] = 0;   // RPM is how a car is detected at all: always ask
   int rpm = readPidInt(PID_RPM);
 
   if (rpm >= 0) {
-    // ── Real car responding ──
-    // A new car: clear simulation (or boot-time) values and ask what it supports.
-    // Keyed on carSession, not simMode, because the scanner usually boots already
-    // plugged into the car — simMode starts false, and the old check never ran.
+    // New car: reset the values and ask what it supports (keyed on carSession: the scanner usually boots already plugged in)
     if (!carSession) {
       carSession = true;
       liveData.fuelPercent    = -1;  // -1 = "not yet read from car"
@@ -503,8 +424,7 @@ void pollLiveData() {
     }
     simMode = false;
     liveData.rpm            = rpm;
-    // Answer the phone between questions: each one can wait on the car, and the
-    // app gives up on a request after 3 s
+    // Answer the phone between questions to the car
     server.handleClient();
     int speed   = readPidInt(PID_SPEED);
     server.handleClient();
@@ -523,9 +443,7 @@ void pollLiveData() {
                   liveData.rpm, liveData.speedKmh, liveData.coolantCelsius,
                   liveData.fuelPercent, liveData.engineLoadPct);
   } else {
-    // ── No car — use simulation values ──
     if (!simMode) {
-      // Car just disconnected — clear VIN cache so we re-read on next connection
       cachedVin    = "";
       vinAttempted = false;
     }
@@ -544,19 +462,15 @@ void pollLiveData() {
 }
 
 // איתור: קריאת קודי תקלה מהרכב (מתאם)
-// ─── DTC reading ──────────────────────────────────────────────────────────────
 void readDtcs(JsonArray &arr) {
   if (simMode) {
-    // Return the pre-defined simulation DTCs
     for (int i = 0; i < SIM_DTC_COUNT; i++) {
       arr.add(SIM_DTCS[i]);
     }
     return;
   }
 
-  // Real car — Mode 03 request, broadcast. Every computer in the car answers on
-  // its own (engine 0x7E8, gearbox 0x7E9 … the first test car answered from
-  // 0x7EF), so collect replies for the whole window instead of taking the first.
+  // Mode 03 broadcast: collect answers from every computer in the car for 500 ms
   if (!sendObdRequest(MODE_GET_DTCS, 0x00)) return;
   unsigned long deadline = millis() + 500;
   for (;;) {
@@ -592,30 +506,19 @@ String dtcBytesToString(uint8_t high, uint8_t low) {
   return String(buf);
 }
 
-// ─── VIN reading — Service 09 PID 02, ISO-TP multi-frame ─────────────────────
-//
-// OBD VIN request uses multi-frame ISO 15765-2 transport:
-//   TX  →  02 09 02 [padding]       (broadcast to 0x7DF)
-//   RX  ←  First Frame  10 14 49 02 01 V0 V1 V2    (3 VIN bytes)
-//   TX  →  Flow Control 30 00 00 [padding]          (to 0x7E0)
-//   RX  ←  Consec. 1    21 V3..V9                   (7 VIN bytes)
-//   RX  ←  Consec. 2    22 V10..V16                 (7 VIN bytes)
-//                                             total: 3+7+7 = 17 bytes
-//
-// Returns the 17-char VIN string, or "" if unsupported / timed out.
+// VIN: Service 09 PID 02, multi-frame ISO-TP
 
 // איתור: קריאת מספר שלדה מהרכב (מתאם)
 String readVin() {
   if (simMode) return "";
 
-  // Send Service 09 PID 02 request
   twai_message_t req = {};
-  req.identifier       = OBD_ECU_ID;   // 0x7DF
+  req.identifier       = OBD_ECU_ID;
   req.data_length_code = 8;
   req.extd             = 0;
-  req.data[0] = 0x02;  // 2 bytes follow
-  req.data[1] = 0x09;  // Service 09
-  req.data[2] = 0x02;  // PID: VIN
+  req.data[0] = 0x02;
+  req.data[1] = 0x09;
+  req.data[2] = 0x02;
   for (int i = 3; i < 8; i++) req.data[i] = 0x55;
 
   if (twai_transmit(&req, pdMS_TO_TICKS(100)) != ESP_OK) return "";
@@ -623,27 +526,25 @@ String readVin() {
   uint8_t vinBuf[17];
   int     vinLen      = 0;
   bool    gotFF       = false;
-  unsigned long deadline = millis() + 2000;   // 2 s total timeout
+  unsigned long deadline = millis() + 2000;
 
   while (millis() < deadline) {
     twai_message_t rx = {};
     if (twai_receive(&rx, pdMS_TO_TICKS(50)) != ESP_OK) continue;
 
-    // Only accept ECU response range 0x7E8..0x7EF
     if (rx.identifier < 0x7E8 || rx.identifier > 0x7EF) continue;
 
     uint8_t frameType = (rx.data[0] & 0xF0) >> 4;
 
     if (!gotFF && frameType == 0x1) {
-      // ── First Frame ──
-      // Byte layout: [10][14][49][02][01][V0][V1][V2]
-      if (rx.data[2] != 0x49 || rx.data[3] != 0x02) continue;  // not VIN response
+      // First frame: [10][14][49][02][01][V0][V1][V2]
+      if (rx.data[2] != 0x49 || rx.data[3] != 0x02) continue;
       for (int i = 0; i < 3 && vinLen < 17; i++) vinBuf[vinLen++] = rx.data[5 + i];
       gotFF = true;
 
       // Send Flow Control: ContinueToSend, no block limit, 0 ms separation
       twai_message_t fc = {};
-      fc.identifier       = 0x7E0;   // direct to ECU 1
+      fc.identifier       = 0x7E0;
       fc.data_length_code = 8;
       fc.extd             = 0;
       fc.data[0] = 0x30;
@@ -661,7 +562,6 @@ String readVin() {
 
   if (vinLen < 17) return "";
 
-  // Validate: 17 printable ASCII alphanumeric chars (VIN standard)
   String vin = "";
   for (int i = 0; i < 17; i++) {
     char c = (char)vinBuf[i];
@@ -673,14 +573,12 @@ String readVin() {
   return vin;
 }
 
-// ─── HTTP helpers ─────────────────────────────────────────────────────────────
 void setCorsHeaders() {
   server.sendHeader("Access-Control-Allow-Origin",  "*");
   server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
-// ─── HTTP handlers ─────────────────────────────────────────────────────────────
 
 void handleStatus() {
   setCorsHeaders();
@@ -703,8 +601,7 @@ void handleLiveData() {
   doc["rpm"]            = liveData.rpm;
   doc["speedKmh"]       = liveData.speedKmh;
   doc["coolantCelsius"] = liveData.coolantCelsius;
-  // fuelPercent = -1 means no reading yet — send null. fuelSupported says why:
-  // false = the car itself said it has no fuel level, null = not known (yet)
+  // fuelPercent -1 = no reading yet (sent as null); fuelSupported says why
   if (liveData.fuelPercent >= 0) {
     doc["fuelPercent"]  = liveData.fuelPercent;
   } else {
@@ -736,7 +633,6 @@ void handleDtcs() {
 void handleVin() {
   setCorsHeaders();
 
-  // Try to read VIN once per real-car session; cache the result
   if (!simMode && !vinAttempted) {
     vinAttempted = true;
     cachedVin    = readVin();
@@ -752,7 +648,6 @@ void handleVin() {
 
 void handleDebug() {
   setCorsHeaders();
-  // Grab live TWAI state
   twai_status_info_t info;
   bool gotInfo = (twai_get_status_info(&info) == ESP_OK);
 
@@ -768,7 +663,6 @@ void handleDebug() {
   doc["lastRxFrame"]      = canDiag.lastRxFrame;
   doc["lastRxAgoMs"]      = canDiag.lastRxMs > 0 ? (long)(millis() - canDiag.lastRxMs) : -1;
   doc["uptimeSeconds"]    = millis() / 1000;
-  // Plain-English diagnosis
   const char* diag = "unknown";
   if (canDiag.lastTxErr != 0) {
     int st = gotInfo ? (int)info.state : canDiag.twaiState;
@@ -783,7 +677,6 @@ void handleDebug() {
   }
   doc["diagnosis"] = diag;
 
-  // What the car said it supports, and how the fuel level is doing
   char bits[20];
   snprintf(bits, sizeof(bits), "%02X%02X%02X%02X %02X%02X%02X%02X",
     supportBits[0], supportBits[1], supportBits[2], supportBits[3],
@@ -798,12 +691,10 @@ void handleDebug() {
   server.send(200, "application/json", body);
 }
 
-// ─── Saved hotspot (flash) ────────────────────────────────────────────────────
-// "configured" separates "nothing saved yet" (use the defaults above) from
-// "hotspot deliberately forgotten" (empty name — go straight to setup mode).
+// "configured" separates "nothing saved yet" from "hotspot forgotten"
 
 void loadHotspotCreds() {
-  prefs.begin("carstats", true);   // read-only
+  prefs.begin("carstats", true);
   bool configured = prefs.getBool("configured", false);
   hotspotSsid = configured ? prefs.getString("ssid", "") : String(DEFAULT_HOTSPOT_SSID);
   hotspotPass = configured ? prefs.getString("pass", "") : String(DEFAULT_HOTSPOT_PASS);
@@ -818,7 +709,6 @@ void saveHotspotCreds(const String &ssid, const String &pass) {
   prefs.end();
 }
 
-// ─── Joining a hotspot ────────────────────────────────────────────────────────
 
 bool waitForWifi(unsigned long timeoutMs) {
   unsigned long deadline = millis() + timeoutMs;
@@ -831,9 +721,6 @@ bool waitForWifi(unsigned long timeoutMs) {
 }
 
 // איתור: הכתובת הקבועה של המתאם (100)
-// The address this scanner takes on a network: host .100 on normal networks
-// (Android hotspots are /24), or the last usable address on small ones —
-// an iPhone hotspot is 172.20.10.0/28, which gives 172.20.10.14.
 IPAddress scannerAddressFor(IPAddress ip, IPAddress mask) {
   if (mask[3] == 0) {
     return IPAddress(ip[0], ip[1], ip[2], SCANNER_HOST_OCTET);
@@ -843,8 +730,6 @@ IPAddress scannerAddressFor(IPAddress ip, IPAddress mask) {
 }
 
 // איתור: המתאם מתחבר להוטספוט
-// Joins the saved hotspot, then moves to the fixed scanner address on it.
-// Returns false if the hotspot can't be reached in time.
 bool connectToHotspot(unsigned long timeoutMs) {
   if (hotspotSsid.isEmpty()) return false;
 
@@ -864,8 +749,7 @@ bool connectToHotspot(unsigned long timeoutMs) {
     WiFi.begin(hotspotSsid.c_str(), hotspotPass.c_str());
 
     if (!waitForWifi(10000)) {
-      // The hotspot refused the fixed address — keep whatever DHCP hands out.
-      // "Find scanner" won't see it, but the address can still be typed in the app.
+      // The hotspot refused the fixed address: keep the one DHCP gave
       Serial.println("[WiFi] Fixed address refused — falling back to DHCP");
       WiFi.disconnect();
       WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
@@ -879,12 +763,8 @@ bool connectToHotspot(unsigned long timeoutMs) {
   return true;
 }
 
-// ─── Normal mode: the OBD-II API ──────────────────────────────────────────────
 
 // איתור: המתאם מדווח לשרת איפה הוא (מתאם)
-// POST {deviceId, localIp} to the server. The server sees the phone's public
-// address on this request and on the app's — that is how it pairs them.
-// Best effort: no internet just means the app falls back to searching.
 void announceToServer() {
   WiFiClientSecure client;
   client.setInsecure();   // only our own local address is sent; nothing secret
@@ -929,8 +809,7 @@ void startNormalMode() {
   Serial.println("[CarStats] HTTP server started — ready");
 }
 
-// The app's "Change hotspot" button: forget the saved hotspot and restart,
-// which lands in setup mode because there is nothing left to join.
+// The app's "Change hotspot": forget it and restart into setup mode
 void handleForgetWifi() {
   setCorsHeaders();
   saveHotspotCreds("", "");
@@ -938,11 +817,8 @@ void handleForgetWifi() {
   restartAtMs = millis() + 1000;
 }
 
-// ─── New hotspot from the app (normal and setup mode) ─────────────────────────
 
-// "" when the name and password are usable, otherwise what is wrong with them.
-// The limits are WiFi's own: a network name is at most 32 bytes, a WPA2
-// password 8–63 characters (empty = an open hotspot).
+// Same limits as WiFi: name up to 32 bytes, password 8-63 characters or empty
 String hotspotError(const String &ssid, const String &pass) {
   if (ssid.isEmpty())                       return "Hotspot name is required.";
   if (ssid.length() > 32)                   return "Hotspot name is too long (max 32).";
@@ -951,7 +827,6 @@ String hotspotError(const String &ssid, const String &pass) {
   return "";
 }
 
-// Saves the hotspot and restarts onto it once the reply has gone out
 void applyHotspot(const String &ssid, const String &pass) {
   saveHotspotCreds(ssid, pass);
   hotspotSsid = ssid;
@@ -985,8 +860,6 @@ void handleHotspot() {
   if (error.isEmpty()) applyHotspot(ssid, pass);
 }
 
-// GET /status in setup mode — same "device" field as normal mode, so the app
-// knows it found the scanner, plus setupMode so it knows to send a hotspot
 void handleSetupStatus() {
   setCorsHeaders();
   JsonDocument doc;
@@ -999,7 +872,6 @@ void handleSetupStatus() {
   server.send(200, "application/json", body);
 }
 
-// ─── Setup mode: the "CarStats-Setup" network and its page ────────────────────
 
 // איתור: מצב התקנה - רשת CarStats-Setup
 void startSetupMode() {
@@ -1007,7 +879,6 @@ void startSetupMode() {
   WiFi.disconnect();
   WiFi.mode(WIFI_AP_STA);   // AP for the setup page; STA keeps retrying the saved hotspot
 
-  // Scan once now, before anyone joins — the page lists these as tap-to-fill buttons
   int found = WiFi.scanNetworks();
   setupNetworksHtml = "";
   for (int i = 0; i < found && i < 15; i++) {

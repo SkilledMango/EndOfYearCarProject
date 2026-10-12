@@ -1,11 +1,3 @@
-/**
- * VIN-to-garage matching.
- *
- * This decides whether the app offers "add this car" after reading a VIN off
- * the OBD adapter. A false negative nags the user to add a car they already
- * have; a false positive silently skips a genuinely new vehicle.
- */
-
 import { vinMatchesVehicle, VinDecodeResult } from '@/services/vindecode';
 import { Vehicle } from '@/services/api';
 
@@ -24,7 +16,6 @@ describe('vinMatchesVehicle', () => {
   });
 
   it('ignores case differences', () => {
-    // NHTSA returns "KIA" where the user typed "Kia".
     expect(vinMatchesVehicle(decoded('KIA', 'SPORTAGE', 2020), garage('Kia', 'Sportage', 2020)))
       .toBe(true);
   });
@@ -35,13 +26,11 @@ describe('vinMatchesVehicle', () => {
   });
 
   it('matches when one name contains the other', () => {
-    // "Corolla Cross" in the garage should still match a decoded "Corolla".
     expect(vinMatchesVehicle(decoded('Toyota', 'Corolla', 2021), garage('Toyota', 'Corolla Cross', 2021)))
       .toBe(true);
   });
 
   it('rejects a different year even when make and model agree', () => {
-    // Year is the strongest signal that this is a genuinely different car.
     expect(vinMatchesVehicle(decoded('Toyota', 'Corolla', 2019), garage('Toyota', 'Corolla', 2020)))
       .toBe(false);
   });
@@ -52,7 +41,6 @@ describe('vinMatchesVehicle', () => {
   });
 
   it('skips the model check when the VIN decode returned no model', () => {
-    // NHTSA often omits the model; make + year alone should still match.
     expect(vinMatchesVehicle(decoded('Toyota', '', 2019), garage('Toyota', 'Corolla', 2019)))
       .toBe(true);
   });

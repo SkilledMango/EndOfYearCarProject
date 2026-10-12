@@ -1,23 +1,9 @@
-/**
- * איתור פרטי רכב לפי מספר רישוי ישראלי.
- *
- * מבוסס על מאגר הנתונים הפתוח של הממשלה — חינמי ובלי מפתח.
- *
- * השדות החשובים בתשובה:
- *   mispar_rechev   — מספר הרישוי
- *   tozeret_nm      — שם היצרן בעברית
- *   kinuy_mishari   — השם המסחרי של הדגם, לרוב באנגלית
- *   shnat_yitzur    — שנת הייצור
- *   sug_delek_nm    — סוג הדלק
- */
-
 import { fetchWithTimeout } from './http';
 
 const IL_API   = 'https://data.gov.il/api/3/action/datastore_search';
 const IL_RES   = '053cea08-09bc-40ec-8f7a-156f0677aff3';
 
-// ─── שמות המדינות שהמרשם מוסיף לשם היצרן ─────────────────────────────────────
-// לדוגמה "מרצדס בנץ גרמניה", שממנו מסירים את "גרמניה"
+// שמות המדינות שהמרשם מוסיף לשם היצרן
 const COUNTRY_SUFFIXES = [
   'גרמניה', 'יפן', 'קוריאה', 'ד.קור', 'צרפת', 'איטליה', 'ארהב"', 'ארהב', 'ארה"ב',
   'אנגליה', 'בריטניה', 'שבדיה', "צ'כיה", 'ספרד', 'רומניה', 'הולנד',
@@ -31,13 +17,7 @@ function stripCountrySuffix(name: string): string {
   return name;
 }
 
-// ─── מיפוי שמות יצרנים מעברית לאנגלית ────────────────────────────────────────
-// המותגים הנפוצים בשוק הישראלי. אפשר להוסיף לפי הצורך.
-//
-// IMPORTANT: The government registry truncates tozeret_nm to ~14 characters.
-// "מרצדס בנץ גרמניה" (17 chars) becomes "מרצדס בנץ גרמנ" (14 chars).
-// translateMake() handles this via prefix matching — always add the SHORTEST
-// המפתח הוא תחילית מזוהה של השם בעברית, ולא המחרוזת המלאה עם המדינה.
+// מפתח = תחילית קצרה של השם בעברית (המרשם חותך שמות ארוכים)
 const MAKE_MAP: Record<string, string> = {
   'טויוטה':          'Toyota',
   'קיה':             'Kia',
@@ -54,7 +34,7 @@ const MAKE_MAP: Record<string, string> = {
   'ב.מ.וו':          'BMW',
   'מרצדס בנץ':       'Mercedes-Benz',   // חייב לבוא לפני 'מרצדס': תחילית ארוכה יותר גוברת
   'מרצדס':           'Mercedes-Benz',
-  'דימלרקריזלר':     'Mercedes-Benz',   // רשומות ישנות מתקופת דיימלר-קרייזלר
+  'דימלרקריזלר':     'Mercedes-Benz',
   'פולקסוואגן':      'Volkswagen',
   'פולקסווגן':       'Volkswagen',
   'הונדה':           'Honda',
@@ -84,7 +64,7 @@ const MAKE_MAP: Record<string, string> = {
   'למבורגיני':       'Lamborghini',
   'רולס רויס':       'Rolls-Royce',
   "ג'אגואר":         'Jaguar',
-  'וולט':            'Bolt',   // שברולט בולט החשמלית
+  'וולט':            'Bolt',
   'טסלה':            'Tesla',
   'ביאר':            'BYD',
   "ב.יי.די":         'BYD',
@@ -94,7 +74,6 @@ const MAKE_MAP: Record<string, string> = {
   'גילי':            'Geely',           // המרשם כותב בלי גרש: "גילי סין"
   'MG':              'MG',
   'מ.ג':             'MG',
-  // מותגים חדשים יותר, רובם חשמליים מסין — האיות כפי שהוא במרשם
   "צ'רי":            'Chery',
   'אומודה':          'Omoda',
   'אורה':            'ORA',
@@ -122,23 +101,14 @@ const MAKE_MAP: Record<string, string> = {
   'סאנגיונג':        'SsangYong',
 };
 
-/**
- * השם בעברית של יצרן, למשל "Kia" ← "קיה" — כך הוא כתוב בשמות המוסכים
- * המורשים. null כשהיצרן לא בטבלה.
- */
 export function hebrewMakeName(englishMake: string): string | null {
   const wanted = englishMake.trim().toLowerCase();
-  // מדלגים על מפתחות שהם קיצורים באותיות לועזיות (כמו "MG") — הם לא עברית
   const entry = Object.entries(MAKE_MAP).find(([he, en]) => en.toLowerCase() === wanted && /[א-ת]/.test(he));
   return entry ? entry[0] : null;
 }
 
 // איתור: תרגום שם יצרן מעברית לאנגלית
-// ─── תרגום שם היצרן, כולל טיפול בשמות חתוכים ─────────────────────────────────
-//
-// המרשם חותך את שם היצרן סביב 14 תווים, ולכן שם המדינה נקטע באמצע.
-// לדוגמה "מרצדס בנץ גרמניה" נשמר כ-"מרצדס בנץ גרמנ".
-// הפתרון: קודם התאמה מדויקת, ואז התאמה לפי תחילית, מהארוכה לקצרה.
+// המרשם חותך את שם היצרן ל-14 תווים: התאמה מדויקת, ואז לפי תחילית
 export function translateMake(hebrewMake: string): string {
   // 1. התאמה מדויקת
   if (MAKE_MAP[hebrewMake]) return MAKE_MAP[hebrewMake];
@@ -160,31 +130,20 @@ export function translateMake(hebrewMake: string): string {
   return stripped;
 }
 
-// ─── טיפוסים ─────────────────────────────────────────────────────────────────
-
 export interface VehicleLookupResult {
-  make: string;        // שם היצרן באנגלית, אחרי תרגום
-  model: string;       // השם המסחרי, לרוב באנגלית
+  make: string;
+  model: string;
   year: number;
-  fuelType: string;    // סוג הדלק כפי שהוא במרשם
-  originalMake: string; // הערך המקורי בעברית, לתצוגה ולבדיקות
+  fuelType: string;
+  originalMake: string;
 }
 
-// ─── הפונקציה הראשית ─────────────────────────────────────────────────────────
-
 // איתור: חיפוש רכב במאגר משרד התחבורה
-/**
- * מאתרת רכב לפי מספר רישוי, בכל פורמט של מקפים או בלעדיהם.
- * מחזירה null כשאין רשומה — זו לא שגיאה, פשוט רכב שאינו רשום.
- * זורקת שגיאה רק בתקלת רשת.
- */
 export async function lookupByPlate(plate: string): Promise<VehicleLookupResult | null> {
-  // הסרת מקפים ורווחים כדי לקבל ספרות בלבד
   const normalized = plate.replace(/[\-\s]/g, '');
   if (!normalized || normalized.length < 5) return null;
 
-  // המאגר שומר את מספר הרישוי כמספר שלם, ולכן הסינון נעשה לפי ערך מספרי,
-  // ובמקביל נשלח גם חיפוש טקסט חופשי כגיבוי.
+  // המאגר שומר את המספר כמספר שלם: מסננים לפי ערך, וחיפוש טקסט כגיבוי
   const plateNum = parseInt(normalized, 10);
   const filters  = encodeURIComponent(JSON.stringify({ mispar_rechev: plateNum }));
   const url      = `${IL_API}?resource_id=${IL_RES}&filters=${filters}&limit=1`;
@@ -206,7 +165,6 @@ export async function lookupByPlate(plate: string): Promise<VehicleLookupResult 
     throw new Error('Government API returned a non-JSON response');
   }
 
-  // התשובה עטופה בשדות success ו-result
   if (!json.success) {
     const errMsg = (json as any)?.error?.message ?? 'Unknown CKAN error';
     throw new Error(`CKAN error: ${errMsg}`);
@@ -215,7 +173,6 @@ export async function lookupByPlate(plate: string): Promise<VehicleLookupResult 
   const records: Record<string, unknown>[] =
     (json as any)?.result?.records ?? [];
 
-  // אם הסינון המדויק לא החזיר כלום, מנסים חיפוש רחב יותר
   if (records.length === 0) {
     const fallbackUrl = `${IL_API}?resource_id=${IL_RES}&q=${encodeURIComponent(normalized)}&limit=5`;
     let fb: Response;
@@ -223,7 +180,6 @@ export async function lookupByPlate(plate: string): Promise<VehicleLookupResult 
       fb = await fetchWithTimeout(fallbackUrl, 8000);
       const fbJson = await fb.json();
       const fbRecords: Record<string, unknown>[] = fbJson?.result?.records ?? [];
-      // איתור רשומה שמספר הרישוי בה תואם
       const match = fbRecords.find(
         r => String(r.mispar_rechev).replace(/\D/g, '') === normalized
       );
@@ -243,10 +199,8 @@ export async function lookupByPlate(plate: string): Promise<VehicleLookupResult 
 
   if (!year) return null;
 
-  // תרגום שם היצרן לאנגלית, כולל טיפול בשמות חתוכים
   const englishMake = translateMake(hebrewMake);
 
-  // המרת הדגם לאותיות רישיות בתחילת מילה, לצורך החיפוש במאגר האמריקאי
   const titleModel = commercialModel.split(' ')
     .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(' ');

@@ -15,7 +15,6 @@ const mockSpecs  = getVehicleSpecs as jest.MockedFunction<typeof getVehicleSpecs
 const mockUpdate = updateVehicle as jest.MockedFunction<typeof updateVehicle>;
 const mockLoad   = loadTankSize as jest.MockedFunction<typeof loadTankSize>;
 
-// every test uses its own id: the service only asks once per car per app session
 const car = (id: number, extra: Partial<Vehicle> = {}): Vehicle => ({
   id, make: 'Tesla', model: 'Model 3', year: 2023, licensePlate: '1',
   averageFuelConsumption: 14, isElectric: false, tankCapacity: 0, appUserId: 1,
@@ -50,11 +49,10 @@ describe('ensureVehicleSpecs', () => {
   });
 
   it('never turns an electric car back into a fuel car', async () => {
-    // the registry said electric; a wrong AI answer must not undo that
     mockSpecs.mockResolvedValue(specs({ isElectric: false, powertrain: 'petrol', tankCapacity: 50 }));
     const result = await ensureVehicleSpecs(car(3, { isElectric: true }));
     expect(result.isElectric).toBe(true);
-    expect(result.tankCapacity).toBe(0);          // a litres figure is not a battery size
+    expect(result.tankCapacity).toBe(0);
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 

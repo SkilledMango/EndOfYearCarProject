@@ -1,18 +1,9 @@
-/**
- * המיקום הנוכחי של הטלפון, לכל המסכים שצריכים אותו.
- *
- * באנדרואיד, כשהגדרת "דיוק מיקום" של גוגל כבויה, הבקשה מקפיצה חלון שמבקש
- * להדליק אותה. מי שעונה "לא תודה" מקבל שגיאה, גם כשה-GPS עצמו עובד מצוין.
- * לכן אחרי סירוב מנסים שוב דרך ה-GPS בלבד, בלי החלון, ולא מציקים שוב
- * באותה הפעלה של האפליקציה.
- */
+// אחרי 'לא תודה' לחלון דיוק המיקום: GPS בלבד, בלי לשאול שוב
 
 import * as Location from 'expo-location';
 
-/** GPS בלבד יכול לחכות הרבה בתוך מבנה; אחרי זה עדיף המיקום האחרון הידוע. */
 const GPS_ONLY_TIMEOUT_MS = 10_000;
 
-/** מיקום שנקלט בשתי הדקות האחרונות נחשב עדכני. */
 const RECENT_FIX_MS = 2 * 60 * 1000;
 
 let accuracyPromptDeclined = false;
@@ -27,8 +18,7 @@ export async function getCurrentPosition(): Promise<Location.LocationObject> {
     }
   }
 
-  // GPS בלבד איטי. מיקום מהדקות האחרונות טוב באותה מידה לחיפוש מוסך או
-  // לתכנון נסיעה, ולכן אין סיבה לחכות לקליטה חדשה בכל לחיצה.
+  // מיקום מהדקות האחרונות מספיק, בלי לחכות ל-GPS
   const recent = await Location.getLastKnownPositionAsync({ maxAge: RECENT_FIX_MS }).catch(() => null);
   if (recent) return recent;
 
@@ -48,7 +38,6 @@ export async function getCurrentPosition(): Promise<Location.LocationObject> {
   }
 }
 
-/** לבדיקות בלבד: מחזיר את המצב של "המשתמש עוד לא סירב". */
 export function resetAccuracyPromptForTests(): void {
   accuracyPromptDeclined = false;
 }

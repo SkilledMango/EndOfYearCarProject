@@ -5,19 +5,12 @@ namespace CarStats.API.Data
     public static class DbSeeder
     {
         // איתור: טעינת מילון התקלות למסד הנתונים
-        /// <summary>
-        /// טוען את מילון קודי התקלה לבסיס הנתונים.
-        /// בטוח לקרוא בכל עלייה של השרת: קוד שכבר קיים לא נוסף שוב.
-        /// </summary>
         public static async Task SeedDiagnosticCodesAsync(AppDbContext context)
         {
-            // אין כאן יציאה מוקדמת כשהטבלה כבר מלאה: בגרסה כזו בסיס נתונים
-            // שנטען פעם אחת היה מדלג לנצח על כל קוד שנוסיף בעתיד.
-            // במקום זה כל קוד נבדק בנפרד ונוסף רק אם הוא חסר.
+            // כל קוד נבדק בנפרד, כך שקודים חדשים נוספים גם למסד קיים
 
             var codes = new List<DiagnosticCode>
             {
-                // ── ירוק: תקלות קלות או לידיעה בלבד ─────────────────────────────────
 
                 new() {
                     ErrorCode        = "P0128",
@@ -46,8 +39,6 @@ namespace CarStats.API.Data
                     EstimatedCostMin = 200,
                     EstimatedCostMax = 1200,
                 },
-
-                // ── צהוב: אזהרה, כדאי לטפל בקרוב ────────────────────────────────────
 
                 new() {
                     ErrorCode        = "P0101",
@@ -140,8 +131,6 @@ namespace CarStats.API.Data
                     EstimatedCostMax = 1200,
                 },
 
-                // ── אדום: קריטי, יש לעצור בבטחה ─────────────────────────────────────
-
                 new() {
                     ErrorCode        = "P0300",
                     HumanTitle       = "Engine Misfiring on Multiple Cylinders",
@@ -207,8 +196,6 @@ namespace CarStats.API.Data
                 },
             };
 
-            // הקודים שנכתבו כאן ידנית, בתוספת הקטלוג הגנרי הרחב.
-            // אחר כך נוספים רק הקודים שעדיין לא קיימים בבסיס הנתונים.
             codes.AddRange(DtcCatalog.Codes);
 
             var existing = context.DiagnosticCodes

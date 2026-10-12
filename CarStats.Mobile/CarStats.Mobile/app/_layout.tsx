@@ -9,15 +9,13 @@ import 'react-native-reanimated';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ThemeProvider, useTheme } from '@/context/ThemeContext';
 import { PaperDarkTheme, PaperLightTheme } from '@/constants/paperTheme';
-// ייבוא לצורך תופעת הלוואי: רושם את הגדר הגיאוגרפית של תזכורת הילדים
-// ואת מטפל ההתראות בכל הפעלה, כולל הפעלה ברקע.
+// ייבוא בשביל תופעת הלוואי: רושם את משימת תזכורת הילד
 import '@/services/notifications';
 
 export const unstable_settings = {
   anchor: '(tabs)',
 };
 
-// ─── הניווט הפנימי, זה שיש לו גישה למשתמש המחובר ─────────────────────────────
 function RootNavigator() {
   const { user, isLoading } = useAuth();
   const { colors: c, isDark } = useTheme();
@@ -32,17 +30,14 @@ function RootNavigator() {
     const inAuthFlow       = onLoginScreen || onRegisterScreen;
 
     if (!user && !inAuthFlow) {
-      // לא מחובר ולא במסך התחברות: מפנים למסך ההתחברות
+      // לא מחובר: למסך ההתחברות
       router.replace('/login');
     } else if (user && onLoginScreen) {
-      // כבר מחובר ונמצא במסך ההתחברות: מפנים לאפליקציה.
-      // במכוון לא מפנים ממסך ההרשמה, כדי ששלב "הוסף את הרכב הראשון"
-      // שאחרי ההרשמה יוכל להופיע.
+      // מחובר: לאפליקציה (חוץ ממסך ההרשמה, שבו מוסיפים את הרכב הראשון)
       router.replace('/(tabs)');
     }
   }, [user, isLoading, segments]);
 
-  // מסך פתיחה בזמן שחזור הסשן מהאחסון
   if (isLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: c.Dashboard.bg, justifyContent: 'center', alignItems: 'center' }}>
@@ -51,7 +46,6 @@ function RootNavigator() {
     );
   }
 
-  // התאמת צבעי הניווט לערכה הפעילה, כדי שמעברים לא יהבהבו בצבע לא נכון.
   const navTheme = {
     ...(isDark ? DarkTheme : DefaultTheme),
     colors: {
@@ -83,7 +77,6 @@ function RootNavigator() {
 }
 
 // איתור: ניווט בין המסכים (Router)
-// ─── הפריסה הראשית: מספקת את ערכת הצבעים ואת המשתמש לכל האפליקציה ────────────
 export default function RootLayout() {
   return (
     <ThemeProvider>

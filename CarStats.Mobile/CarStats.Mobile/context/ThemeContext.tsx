@@ -1,8 +1,3 @@
-/**
- * מנהל את ערכת הצבעים הפעילה לפי הבחירה של המשתמש
- * (בהיר / כהה / לפי המערכת), שומר את הבחירה, ומספק את הערכה למסכים.
- */
-
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -31,7 +26,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemScheme = useColorScheme();
   const [mode, setModeState] = useState<ThemeMode>('system');
 
-  // טעינת ההעדפה השמורה בהפעלה
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
       .then(stored => {
@@ -61,14 +55,6 @@ export function useTheme() {
   return useContext(ThemeContext);
 }
 
-/**
- * עוטף יצירת סגנונות כך שכל רכיב מקבל סגנונות לפי הערכה הפעילה,
- * ובונה אותם מחדש רק כשהערכה מתחלפת:
- *
- *   const useStyles = createThemedStyles((c) => StyleSheet.create({ ... }));
- *   // בתוך הרכיב:
- *   const styles = useStyles();
- */
 export function createThemedStyles<T>(factory: (c: ThemeColors) => T) {
   return function useStyles(): T {
     const { colors } = useTheme();

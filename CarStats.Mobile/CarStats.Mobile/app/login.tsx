@@ -1,10 +1,3 @@
-/**
- * מסך ההתחברות.
- *
- * בנוי מרכיבי react-native-paper שנצבעו בערכת הצבעים שלנו, וכך מתקבלות
- * נגישות, מצבי מיקוד ותוויות צפות בלי לאמץ את המראה הסטנדרטי של הספרייה.
- */
-
 import React, { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -42,10 +35,8 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(email.trim(), password);
-      // ההקשר מעדכן את המשתמש, והפריסה הראשית מנווטת מכאן אוטומטית
     } catch (err: any) {
-      // חשבון לא מאומת: השרת בדיוק שלח קוד חדש, ולכן מעבירים לשלב האימות
-      // כשכתובת המייל כבר מולאה.
+      // חשבון לא מאומת: עוברים לשלב האימות
       if (err?.code === 'EMAIL_NOT_VERIFIED') {
         router.push({ pathname: '/register', params: { verifyEmail: err.email ?? email.trim() } });
         return;
@@ -65,7 +56,6 @@ export default function LoginScreen() {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
-        {/* הלוגו */}
         <View style={styles.brand}>
           <View style={styles.logoSquare}>
             <MaterialIcons name="directions-car" size={40} color={c.Dashboard.onAccent} />
@@ -106,14 +96,11 @@ export default function LoginScreen() {
                 <TextInput.Icon
                   icon={showPass ? 'eye-off' : 'eye'}
                   onPress={() => setShowPass(s => !s)}
-                  // בלי זה קורא מסך היה מכריז על כפתור בלי שם
                   accessibilityLabel={showPass ? 'Hide password' : 'Show password'}
                 />
               }
             />
 
-            {/* השורה שומרת על גובהה גם כשאין שגיאה, כדי שהכפתור לא יקפוץ
-                למטה ברגע שמופיעה הודעה. */}
             <HelperText type="error" visible={!!error}>
               {error ?? ' '}
             </HelperText>
@@ -151,7 +138,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
     paddingBottom: 48,
   },
 
-  // הלוגו והכותרת
   brand:      { alignItems: 'center', marginBottom: 32 },
   logoSquare: {
     width: 84,
@@ -175,7 +161,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
   tagline: { fontSize: 16, color: c.Dashboard.textSecondary, marginTop: 8 },
 
-  // הכרטיס: הספרייה מטפלת בצבע וברמת ההגבהה, והעיגול הגדול הוא שלנו.
   card:        { borderRadius: 24 },
   cardContent: { paddingVertical: 8, gap: 10 },
 

@@ -5,13 +5,9 @@ const DTC_URL = `${BASE_URL}/dtc`;
 const USERS_URL = `${BASE_URL}/users`;
 const VEHICLES_URL = `${BASE_URL}/vehicles`;
 
-// --- AUTH (admin panel login + JWT session token) ---
-
 const TOKEN_KEY = 'carstats_admin_token';
 
 // איתור: כתובת השרת בפאנל הניהול
-// All panel requests go through this instance, which attaches the JWT the
-// API handed out at login. Without it every endpoint returns 401.
 const http = axios.create({ baseURL: BASE_URL });
 http.interceptors.request.use((config) => {
     const token = localStorage.getItem(TOKEN_KEY);
@@ -19,9 +15,7 @@ http.interceptors.request.use((config) => {
     return config;
 });
 
-// A token lasts 30 days. When it runs out every request comes back 401, and
-// the panel used to sit there showing "Could not load…" errors with the old
-// session still on screen. Instead, App is told so it can sign out.
+// Expired token (401) → back to the login page
 let sessionExpiredHandler = null;
 export const onSessionExpired = (handler) => { sessionExpiredHandler = handler; };
 // איתור: יציאה אוטומטית כשהחיבור פג (פאנל ניהול)
@@ -38,22 +32,12 @@ export const ROLE_ADMIN = 2;
 export const ROLE_SUPERADMIN = 3;
 
 // איתור: התחברות לפאנל הניהול
-/**
- * Logs in against the shared /auth/login endpoint and stores the session
- * token for all subsequent panel requests.
- * Throws an Error with a user-readable message on failure.
- * Only Admin / SuperAdmin accounts are allowed into the panel.
- */
 export const login = async (email, password) => {
     let response;
     try {
         // Plain axios - no stale token should ride along on a login attempt
         response = await axios.post(`${BASE_URL}/auth/login`, { email, password });
     } catch (error) {
-        // Keep the original axios error as `cause` — without it the real
-        // status, URL and network detail are lost, and a failed login looks
-        // identical in the console whether the server said 401 or was simply
-        // unreachable.
         const status = error?.response?.status;
         if (status === 401) throw new Error('Incorrect email or password.', { cause: error });
         if (status === 403) throw new Error('This account has not verified its email yet.', { cause: error });
@@ -67,15 +51,11 @@ export const login = async (email, password) => {
     return user;
 };
 
-/** Clears the stored session token (App calls this on logout). */
 export const logout = () => {
     localStorage.removeItem(TOKEN_KEY);
 };
 
-/** True if a session token exists - used to restore the session on refresh. */
 export const hasToken = () => Boolean(localStorage.getItem(TOKEN_KEY));
-
-// --- ANALYTICS STATS ---
 
 export const getStats = async () => {
     try {
@@ -86,8 +66,6 @@ export const getStats = async () => {
         return null;
     }
 };
-
-// --- DIAGNOSTIC CODES (DTC) SERVICES ---
 
 export const getDiagnosticCodes = async () => {
     try {
@@ -108,8 +86,6 @@ export const addDiagnosticCode = async (dtcData) => {
         throw error;
     }
 };
-
-// --- USER MANAGEMENT SERVICES ---
 
 export const getUsers = async () => {
     try {
@@ -140,7 +116,6 @@ export const addUser = async (userData) => {
         throw error;
     }
 };
-// --- DELETE SERVICES ---
 
 export const deleteDiagnosticCode = async (id) => {
     try {
@@ -159,8 +134,6 @@ export const deleteUser = async (id) => {
         throw error;
     }
 };
-
-// --- VEHICLE SERVICES ---
 
 export const getVehiclesForUser = async (userId) => {
     try {

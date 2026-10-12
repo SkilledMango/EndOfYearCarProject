@@ -11,12 +11,6 @@ import {
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import { login } from '../Services/api';
 
-/**
- * Admin panel login gate.
- * Calls the shared /auth/login endpoint and only lets Admin / SuperAdmin
- * accounts through (enforced in api.login). On success, hands the user
- * object up to App so it can persist the session.
- */
 function LoginPage({ onLogin, notice }) {
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
@@ -56,8 +50,6 @@ function LoginPage({ onLogin, notice }) {
       }}
     >
       <Paper sx={{ p: 4, width: 380, maxWidth: '100%', borderRadius: 4 }}>
-        {/* Mirrors the mobile app's login header: the same rounded-square
-            logo tile, name and tagline, so the two read as one product. */}
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3 }}>
           <Box
             sx={{

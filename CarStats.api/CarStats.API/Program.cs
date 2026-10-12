@@ -8,8 +8,6 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── בסיס הנתונים ──────────────────────────────────────────────────────────────
-// LocalDB בפיתוח, ה-SQL Server המתארח ב-Somee בייצור.
 var connectionString = builder.Environment.IsDevelopment()
     ? builder.Configuration.GetConnectionString("DefaultConnection")
     : builder.Configuration.GetConnectionString("ProductionConnection");
@@ -17,16 +15,13 @@ var connectionString = builder.Environment.IsDevelopment()
 // איתור: חיבור למסד הנתונים
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(connectionString, sql =>
-        // ניסיונות חוזרים על תקלות זמניות: בסיס נתונים באחסון חינמי משותף
-        // יכול להיות לא זמין לרגע בזמן שהוא מתעורר ממצב חוסר פעילות
+        // ניסיונות חוזרים: מסד נתונים חינמי מתעורר לאט
         sql.EnableRetryOnFailure(
             maxRetryCount: 5,
             maxRetryDelay: TimeSpan.FromSeconds(10),
             errorNumbersToAdd: null)));
 
 // איתור: הגדרת CORS - מי רשאי לפנות לשרת
-// ── CORS ──────────────────────────────────────────────────────────────────────
-// בפיתוח מותר רק localhost, בייצור פתוח לאפליקציה ולפאנל הניהול
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp",
@@ -48,20 +43,14 @@ builder.Services.AddCors(options =>
         });
 });
 
-// ספק המיילים לשליחת קודי אימות
 builder.Services.AddHttpClient<IEmailService, BrevoEmailService>();
 
-// לקוח HTTP כללי, משמש את הפרוקסי ל-Google ואת ספקי ה-AI
 builder.Services.AddHttpClient();
 
-// שאלות AI (Groq ואז Gemini), עם מטמון בבסיס הנתונים
 builder.Services.AddScoped<AiService>();
-// איפה כל מתאם נמצא ברשת המקומית שלו — בזיכרון, משותף לכל הבקשות
 builder.Services.AddSingleton<ScannerRegistry>();
 
 // איתור: אימות טוקן JWT בשרת
-// ── אימות JWT ─────────────────────────────────────────────────────────────────
-// login ו-verify-code מנפיקים טוקן; כל שאר הנקודות דורשות אותו.
 builder.Services.AddSingleton<ITokenService, TokenService>();
 
 builder.Services
@@ -83,14 +72,12 @@ builder.Services
 
 builder.Services.AddAuthorization(options =>
 {
-    // מאובטח כברירת מחדל: כל נקודת קצה דורשת טוקן אלא אם סומנה AllowAnonymous,
-    // כולל בקרים שיתווספו בעתיד
+    // כל נקודה דורשת טוקן, אלא אם סומנה AllowAnonymous
     options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .Build();
 
     // איתור: הרשאת מנהל (AdminOnly)
-    // פעולות פאנל הניהול: משתמשים, מילון התקלות וסטטיסטיקות
     options.AddPolicy("AdminOnly", policy =>
         policy.RequireRole(nameof(CarStats.API.Models.UserRole.Admin),
                            nameof(CarStats.API.Models.UserRole.SuperAdmin)));
@@ -104,9 +91,7 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// ── עלייה: מיגרציות וטעינת המילון ─────────────────────────────────────────────
-// בסיס נתונים באחסון חינמי לרוב ישן בבקשה הראשונה, ולכן מנסים שוב ושוב
-// במקום לתת לשרת כולו ליפול בהפעלה.
+// מנסים שוב: מסד הנתונים ישן בבקשה הראשונה
 using (var scope = app.Services.CreateScope())
 {
     var db     = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -121,10 +106,7 @@ using (var scope = app.Services.CreateScope())
             db.Database.Migrate();
             await DbSeeder.SeedDiagnosticCodesAsync(db);
 
-            // ── מנהל ראשוני ────────────────────────────────────────────────
-            // אי אפשר להתחבר לבסיס הנתונים בייצור מבחוץ, ולכן אי אפשר לקדם
-            // משתמש למנהל ידנית. במקום זה, הקונפיגורציה יכולה לציין חשבון
-            // אחד שיהיה מנהל-על אחרי כל עלייה של השרת.
+            // מנהל ראשוני מהקונפיגורציה
             var bootstrapEmail = app.Configuration["Bootstrap:AdminEmail"]?.ToLower().Trim();
             if (!string.IsNullOrWhiteSpace(bootstrapEmail))
             {
@@ -149,7 +131,6 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-// Swagger רק בפיתוח
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -158,9 +139,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors("AllowReactApp");
 
-// אין הפניה כפויה ל-HTTPS: ב-Somee ה-SSL מסתיים בשרת חזית משותף
-// שמעביר פנימה HTTP רגיל, ולכן הפניה כפויה הייתה יוצרת לולאה.
-// הכתובת הציבורית עדיין מוגשת מעל HTTPS.
+// בלי הפניה ל-HTTPS: ב-Somee זה יוצר לולאה
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

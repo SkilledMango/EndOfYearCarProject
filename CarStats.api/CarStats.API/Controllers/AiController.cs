@@ -10,7 +10,6 @@ namespace CarStats.API.Controllers
         public string Make { get; set; } = string.Empty;
         public string Model { get; set; } = string.Empty;
         public int Year { get; set; }
-        // סוג הדלק מהמרשם הישראלי, אם ידוע. עוזר להבדיל בין גרסת בנזין לדיזל.
         public string? FuelTypeHint { get; set; }
     }
 
@@ -22,7 +21,6 @@ namespace CarStats.API.Controllers
         public int? Year { get; set; }
     }
 
-    // שאלות AI על רכבים ותקלות. כל תשובה נשמרת במטמון בבסיס הנתונים.
     [Route("api/[controller]")]
     [ApiController]
     [Authorize]
@@ -36,20 +34,18 @@ namespace CarStats.API.Controllers
         }
 
         // איתור: AI משלים מפרט רכב - מיכל או סוללה, צריכה, חשמלי
-        // POST: api/ai/vehicle-specs — חשמלי או דלק, גודל מיכל/סוללה וצריכה, בשאלה אחת
         [HttpPost("vehicle-specs")]
         public async Task<IActionResult> VehicleSpecs([FromBody] VehicleSpecsRequest request)
         {
             if (string.IsNullOrWhiteSpace(request.Make) || string.IsNullOrWhiteSpace(request.Model) || request.Year <= 0)
                 return BadRequest("make, model and year are required.");
-            // אותם גבולות כמו בטבלת הרכבים, וכך גם מפתח המטמון לא חורג מ-200 תווים
             if (request.Make.Length > 50 || request.Model.Length > 50 || (request.FuelTypeHint?.Length ?? 0) > 30)
                 return BadRequest("make, model or fuel type is too long.");
 
             var key = $"specs:{request.Year}:{request.Make}:{request.Model}:{request.FuelTypeHint}"
                 .ToLowerInvariant().Trim();
 
-            // תשובה שמורה בלי מספרים היא שארית מלפני שהיה שלב ההערכה — שואלים מחדש
+            // תשובה שמורה בלי מספרים: שואלים מחדש
             var cached = await _ai.GetCachedAsync(key);
             if (cached != null && JsonSerializer.Deserialize<Specs>(cached, JsonOptions) is { IsComplete: true })
                 return Content(cached, "application/json");
@@ -57,7 +53,7 @@ namespace CarStats.API.Controllers
             var car = $"{request.Year} {request.Make} {request.Model}" +
                       (string.IsNullOrWhiteSpace(request.FuelTypeHint) ? "" : $" (Israeli registry fuel type: {request.FuelTypeHint})");
 
-            // שלב 1: הנתונים הרשמיים. המודל מתבקש לא לנחש, כדי שמספר רשמי יהיה באמת רשמי
+            // שלב 1: נתונים רשמיים בלבד, בלי ניחושים
             var official = await _ai.AskJsonAsync(
                 $"Give the factory specs of a {car}.\n" + SpecsFormat +
                 "consumption: official WLTP combined figure — L/100km for fuel cars, kWh/100km for electric cars.\n" +
@@ -65,8 +61,7 @@ namespace CarStats.API.Controllers
                 HasPowertrain);
             var specs = official.Ok ? BuildSpecs(official.Json!.Value, official.Provider, estimated: false) : null;
 
-            // שלב 2: דגם חדש או נדיר שהמודל לא מכיר לעומק — במקום שדה ריק, הערכה
-            // לפי רכבים דומים. רק השדות החסרים מתמלאים ממנה, והיא מסומנת כהערכה
+            // שלב 2: דגם לא מוכר - הערכה לפי רכבים דומים, רק לשדות החסרים
             if (specs is not { IsComplete: true })
             {
                 var guess = await _ai.AskJsonAsync(
@@ -79,18 +74,17 @@ namespace CarStats.API.Controllers
                     specs = Merge(specs, BuildSpecs(guess.Json!.Value, guess.Provider, estimated: true));
             }
 
-            // כישלון לא נשמר במטמון — תקלה רגעית אצל הספק לא צריכה להיזכר כ"דגם לא מוכר"
+            // כישלון לא נשמר במטמון
             if (specs == null)
                 return Ok(Unknown("none"));
 
-            // רק תשובה מלאה נשמרת לתמיד; חלקית תישאל שוב בפעם הבאה
+            // רק תשובה מלאה נשמרת במטמון
             if (specs.IsComplete)
                 await _ai.SetCachedAsync(key, JsonSerializer.Serialize(specs, JsonOptions));
             return Ok(specs);
         }
 
         // איתור: הסבר AI לקוד תקלה שלא במילון (שרת)
-        // POST: api/ai/explain-fault — הסבר בשפה פשוטה לקוד שאינו במילון שלנו
         [HttpPost("explain-fault")]
         public async Task<IActionResult> ExplainFault([FromBody] ExplainFaultRequest request)
         {
@@ -100,8 +94,7 @@ namespace CarStats.API.Controllers
             if ((request.Make?.Length ?? 0) > 50 || (request.Model?.Length ?? 0) > 50)
                 return BadRequest("make or model is too long.");
 
-            // כל מה שנכנס לשאלה חייב להיות גם במפתח. אחרת משתמש אחד יכול להכניס
-            // הוראות לשדה הדגם, והתשובה המזויפת הייתה נשמרת לכל בעלי אותו יצרן.
+            // כל מה שנכנס לשאלה נכנס גם למפתח המטמון
             var key = $"dtc:{code}:{request.Make}:{request.Model}:{request.Year}".ToLowerInvariant().Trim();
 
             var cached = await _ai.GetCachedAsync(key);
@@ -122,7 +115,7 @@ namespace CarStats.API.Controllers
                 "action: 1 sentence on what they should do and how urgently.\n" +
                 "severity: low if it can wait, medium if it should be booked in, high if " +
                 "driving on could be unsafe or cause damage.\n" +
-                // P1/B1/C1/U1 ו-P3 הם קודי יצרן: אותו קוד אומר דברים שונים אצל יצרנים שונים
+                // קודי יצרן (P1/B1/C1/U1, P3) משנים משמעות בין יצרנים
                 (car.Length > 0
                     ? "Codes whose second character is 1 or 3 are manufacturer-specific: give the meaning this " +
                       "manufacturer uses, not a generic one.\n"
@@ -162,14 +155,9 @@ namespace CarStats.API.Controllers
             return Content(serialized, "application/json");
         }
 
-        // ─── עזרים ────────────────────────────────────────────────────────────
-
         private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-        /// <summary>
-        /// מה שהאפליקציה מקבלת על דגם. Estimated = לפחות אחד המספרים הוא הערכה של
-        /// ה-AI לפי רכבים דומים, ולא נתון רשמי — האפליקציה אומרת זאת לנהג.
-        /// </summary>
+        // Estimated = לפחות מספר אחד הוא הערכה של ה-AI
         private record Specs(bool? IsElectric, string Powertrain, double? TankCapacity, double? Consumption,
                              string Source, bool Estimated = false)
         {
@@ -187,10 +175,7 @@ namespace CarStats.API.Controllers
         private static bool HasPowertrain(JsonElement json) =>
             json.TryGetProperty("powertrain", out var p) && p.ValueKind == JsonValueKind.String;
 
-        /// <summary>
-        /// משלים את החסר בתשובה הרשמית מתוך ההערכה — רק כששתיהן מסכימות על סוג
-        /// ההנעה, אחרת גודל מיכל של רכב דלק היה נכנס כגודל סוללה.
-        /// </summary>
+        // משלים רק שדות חסרים, ורק כשסוג ההנעה זהה
         private static Specs Merge(Specs? official, Specs guess)
         {
             if (official == null || official.IsElectric == null) return guess;
@@ -203,8 +188,7 @@ namespace CarStats.API.Controllers
 
         private static Specs Unknown(string source) => new(null, "unknown", null, null, source);
 
-        // ממיר את תשובת המודל לערכים שהאפליקציה משתמשת בהם, עם בדיקות היגיון:
-        // מספר מחוץ לטווח של רכב אמיתי נזרק במקום להיכנס למוסך של הנהג
+        // מספר מחוץ לטווח של רכב אמיתי נזרק
         private static Specs BuildSpecs(JsonElement json, string provider, bool estimated)
         {
             var powertrain = Str(json, "powertrain").ToLowerInvariant();

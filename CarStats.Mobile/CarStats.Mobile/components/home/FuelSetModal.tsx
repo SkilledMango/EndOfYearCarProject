@@ -1,10 +1,3 @@
-/**
- * הזנה ידנית של מפלס הדלק (או הסוללה) וגודל המיכל, שהופכת לנקודת ההתחלה
- * שממנה ההערכה יורדת. נגיש רק ברכבים שלא מדווחים מפלס בעצמם.
- *
- * גודל המיכל מגיע ממולא מראש — מה-AI או ממה שהנהג הקליד בפעם הקודמת.
- */
-
 import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
@@ -28,15 +21,12 @@ export default function FuelSetModal({
   visible: boolean;
   currentEstimate: number | null;
   isElectric?: boolean;
-  /** הגודל הידוע של המיכל/הסוללה, אם יש — ממלא את השדה מראש. */
   tankSize?: number | null;
-  /** tankL: ליטרים, או קוט"ש ברכב חשמלי. */
   onSave: (pct: number, tankL: number) => void;
   onCancel: () => void;
 }) {
   const { colors: c } = useTheme();
   const modalStyles = useModalStyles();
-  // ערך ברירת מחדל רק כשאין שום דבר ידוע על הרכב
   const fallbackSize = isElectric ? 60 : 55;
   const [pctText,  setPctText]  = useState(String(currentEstimate ?? 100));
   const [tankText, setTankText] = useState(String(tankSize || fallbackSize));
@@ -65,7 +55,6 @@ export default function FuelSetModal({
             Set your current level and the app will track usage automatically.
           </Text>
 
-          {/* ── כפתורי מילוי מהיר ── */}
           <View style={modalStyles.quickRow}>
             {QUICK_FILL.map(q => (
               <Pressable
@@ -86,7 +75,6 @@ export default function FuelSetModal({
             ))}
           </View>
 
-          {/* ── הזנת אחוז ידנית ── */}
           <View style={modalStyles.inputRow}>
             <Text style={modalStyles.inputLabel}>Custom %</Text>
             <TextInput
@@ -100,7 +88,6 @@ export default function FuelSetModal({
             />
           </View>
 
-          {/* ── גודל המיכל או הסוללה ── */}
           <View style={modalStyles.inputRow}>
             <Text style={modalStyles.inputLabel}>
               {capacityLabel(isElectric)} ({energyUnit(isElectric)})
@@ -123,7 +110,6 @@ export default function FuelSetModal({
                 : 'Kia Sportage ≈ 55 L  ·  Most sedans 50–65 L'}
           </Text>
 
-          {/* ── כפתורים ── */}
           <View style={modalStyles.btnRow}>
             <Pressable style={modalStyles.cancelBtn} onPress={onCancel}>
               <Text style={modalStyles.cancelText}>CANCEL</Text>

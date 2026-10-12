@@ -40,13 +40,10 @@ export default function HistoryScreen() {
       const data = await getUserEvents(authUser.id);
       setEvents(data);
     } catch {
-      // השרת לא זמין — מוצג מצב ריק
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-    // תלוי במזהה המשתמש בלבד: כניסה של חשבון אחר טוענת היסטוריה מחדש,
-    // בלי לטעון שוב בכל פעם שאובייקט המשתמש נבנה מחדש.
   }, [authUser?.id]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load(); }, [load]);
@@ -106,8 +103,6 @@ export default function HistoryScreen() {
                   {ev.translation.description}
                 </Text>
               ) : (
-                // אותה הבטחה שכרטיס הסריקה נותן: יש הסבר מאחורי השורה,
-                // הוא פשוט לא מגיע מהמילון.
                 <Text style={[styles.description, { color: sev.color }]} numberOfLines={2}>
                   ✨ Tap for an AI explanation of this code.
                 </Text>

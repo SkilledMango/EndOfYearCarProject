@@ -1,47 +1,21 @@
-/**
- * מנהל את המשתמש המחובר בכל האפליקציה.
- * שומר את הסשן במכשיר, כך שהמשתמש נשאר מחובר גם אחרי סגירת האפליקציה.
- */
-
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppUser, AuthSession, api, getUser, setAuthToken } from '@/services/api';
 import { clearPrefs, disableChildReminder } from '@/services/notifications';
 
-// שם המפתח הוחלף כשהסשן קיבל טוקן: רשומה ישנה בלי טוקן כבר לא יכולה
-// לפנות לשרת, ולכן היא נזרקת והמשתמש מתחבר פעם אחת מחדש.
 const STORAGE_KEY = '@carstats_session';
 const LEGACY_STORAGE_KEY = '@carstats_user';
 
-// ─── טיפוסים ─────────────────────────────────────────────────────────────────
-
 interface AuthContextValue {
-  /** המשתמש המחובר, או null אם אין חיבור */
   user: AppUser | null;
-  /** אמת בזמן שהאפליקציה בודקת אם קיים סשן שמור */
   isLoading: boolean;
-  /**
-   * התחברות עם מייל וסיסמה. זורקת הודעת שגיאה בכישלון.
-   * אם החשבון קיים אך לא מאומת, נזרקת שגיאה עם הקוד EMAIL_NOT_VERIFIED
-   * ונשלח קוד אימות חדש.
-   */
   login: (email: string, password: string) => Promise<void>;
-  /**
-   * יוצרת חשבון חדש לא מאומת ושולחת מייל עם קוד.
-   * לא פותחת סשן: קודם צריך לאמת את הקוד.
-   */
   register: (fullName: string, email: string, password: string) => Promise<AppUser>;
-  /** מאמתת את הקוד בן שש הספרות, ובהצלחה פותחת סשן. */
   verifyCode: (email: string, code: string) => Promise<AppUser>;
-  /** שולחת קוד אימות חדש לכתובת שנמסרה. */
   resendCode: (email: string) => Promise<void>;
-  /** מושכת מחדש את המשתמש מהשרת ומעדכנת את הסשן */
   refreshUser: () => Promise<void>;
-  /** מנקה את הסשן ומחזירה למסך ההתחברות */
   logout: () => Promise<void>;
 }
-
-// ─── ההקשר ───────────────────────────────────────────────────────────────────
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
@@ -54,12 +28,9 @@ const AuthContext = createContext<AuthContextValue>({
   logout: async () => {},
 });
 
-// ─── הספק ────────────────────────────────────────────────────────────────────
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser]         = useState<AppUser | null>(null);
   const [isLoading, setLoading] = useState(true);
-  // משקף אם יש טוקן פעיל, כדי שאפשר יהיה לקרוא אותו בתוך מיירט השגיאות
   const hasSession = useRef(false);
 
   const startSession = async (session: AuthSession) => {
@@ -77,11 +48,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // איתור: שמירת ושחזור החיבור (סשן) באפליקציה
-  // בטעינה הראשונה: שחזור הסשן מהאחסון
   useEffect(() => {
     (async () => {
       try {
-        await AsyncStorage.removeItem(LEGACY_STORAGE_KEY); // סשנים ישנים מלפני הטוקנים
+        await AsyncStorage.removeItem(LEGACY_STORAGE_KEY);
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
         if (stored) {
           const session: AuthSession = JSON.parse(stored);
@@ -94,7 +64,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } catch {
-        // אחסון פגום — מתחילים מחדש
         await AsyncStorage.removeItem(STORAGE_KEY);
       } finally {
         setLoading(false);
@@ -102,9 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  // טוקן שפג או בוטל גורם לכל קריאה לחזור עם 401, ואז חוזרים למסך
-  // ההתחברות. נקודות ההתחברות עצמן פטורות: סיסמה שגויה צריכה להופיע
-  // כשגיאה בטופס ולא כהתנתקות.
+  // 401 מטוקן שפג: חוזרים למסך ההתחברות (לא בנקודות ההתחברות עצמן)
   useEffect(() => {
     const id = api.interceptors.response.use(
       (res) => res,
@@ -119,7 +86,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // איתור: התחברות באפליקציה
-  // ── התחברות ──────────────────────────────────────────────────────────────
   const login = async (email: string, password: string) => {
     try {
       const { data } = await api.post<AuthSession>('/auth/login', { email, password });
@@ -127,8 +93,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err: any) {
       const status = err?.response?.status;
 
-      // החשבון קיים אך לא מאומת, והשרת בדיוק שלח קוד חדש.
-      // מסמנים למסך ההתחברות לעבור לשלב האימות.
       if (status === 403 && err?.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
         const notVerified: any = new Error('EMAIL_NOT_VERIFIED');
         notVerified.code  = 'EMAIL_NOT_VERIFIED';
@@ -145,11 +109,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // איתור: הרשמה באפליקציה
-  // ── הרשמה ────────────────────────────────────────────────────────────────
   const register = async (fullName: string, email: string, password: string) => {
     try {
-      // יוצר חשבון לא מאומת ושולח את מייל האימות.
-      // במכוון לא נפתח כאן סשן; זה קורה רק אחרי אימות הקוד.
       const { data } = await api.post<AppUser>('/auth/register', { fullName, email, password });
       return data;
     } catch (err: any) {
@@ -163,11 +124,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // איתור: אימות קוד מהמייל (אפליקציה)
-  // ── אימות הקוד ───────────────────────────────────────────────────────────
   const verifyCode = async (email: string, code: string): Promise<AppUser> => {
     try {
       const { data } = await api.post<AuthSession>('/auth/verify-code', { email, code });
-      await startSession(data);   // אומת — פותחים סשן
+      await startSession(data);
       return data.user;
     } catch (err: any) {
       const status = err?.response?.status;
@@ -179,7 +139,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // ── שליחת קוד חוזרת ──────────────────────────────────────────────────────
   const resendCode = async (email: string): Promise<void> => {
     try {
       await api.post('/auth/resend-code', { email });
@@ -192,14 +151,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // ── רענון המשתמש ─────────────────────────────────────────────────────────
-  // מושך מחדש את המשתמש, למשל אחרי הוספת רכב, כדי שהסשן בזיכרון
-  // ישקף את המצב העדכני בשרת.
   const refreshUser = async () => {
     if (!user) return;
     try {
       const fresh = await getUser(user.id);
-      // הטוקן נשאר; רק תמונת המשתמש מתעדכנת
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       const token  = stored ? (JSON.parse(stored) as AuthSession).token : null;
       if (token) {
@@ -207,16 +162,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setUser(fresh);
     } catch {
-      // תקלת רשת — משאירים את הסשן כמו שהוא
     }
   };
 
   // איתור: התנתקות
-  // ── התנתקות ──────────────────────────────────────────────────────────────
   const logout = async () => {
-    // הגדר הגיאוגרפית רשומה אצל מערכת ההפעלה ולא באחסון, ולכן היא שורדת
-    // התנתקות והייתה מתריעה למשתמש הבא על הבית של מישהו אחר.
-    // ניסיון בלבד: כישלון ניקוי לא יעצור את ההתנתקות.
+    // מבטלים את תזכורת המיקום בהתנתקות
     try {
       await disableChildReminder();
       await clearPrefs();
@@ -231,8 +182,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     </AuthContext.Provider>
   );
 }
-
-// ─── הוק ─────────────────────────────────────────────────────────────────────
 
 export function useAuth() {
   return useContext(AuthContext);

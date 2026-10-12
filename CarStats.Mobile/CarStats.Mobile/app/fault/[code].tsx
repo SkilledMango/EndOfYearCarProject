@@ -1,14 +1,3 @@
-/**
- * מסך פירוט התקלה.
- *
- * נפתח בלחיצה על תקלה בכל מקום שהיא מופיעה — תוצאת סריקה או שורה
- * בהיסטוריה. מציג את ההסבר בשפה פשוטה, מה לעשות, והערכת המחיר.
- * זו כל מטרת האפליקציה: קוד תקלה בפני עצמו לא אומר לנהג דבר.
- *
- * המסך מקבל רק את הקוד בכתובת, ומושך את שאר המידע בעצמו. כך הוא נשאר
- * ניתן לקישור ישיר, ושורה מההיסטוריה מציגה בדיוק אותו פירוט כמו סריקה טרייה.
- */
-
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Divider } from 'react-native-paper';
@@ -20,7 +9,6 @@ import { severityMeta } from '@/utils/severity';
 
 // איתור: מסך פרטי תקלה
 export default function FaultDetailScreen() {
-  // הרכב אופציונלי: כשהוא ידוע, הסבר ה-AI מתאים לקודי היצרן שלו
   const { code, make, model, year } =
     useLocalSearchParams<{ code: string; make?: string; model?: string; year?: string }>();
   const car = make && model && Number(year) > 0 ? { make, model, year: Number(year) } : undefined;
@@ -30,8 +18,6 @@ export default function FaultDetailScreen() {
 
   const [dtc, setDtc]         = useState<DiagnosticCode | null>(null);
   const [ai, setAi]           = useState<AiFaultExplanation | null>(null);
-  // למה ה-AI לא החזיר הסבר, כדי שהמסך יאמר משהו מדויק ולא ירמוז
-  // שהקוד פשוט לא מכוסה.
   const [aiFailure, setAiFailure] = useState<AiFailureReason | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed]   = useState(false);
@@ -47,8 +33,7 @@ export default function FaultDetailScreen() {
         if (match) {
           setDtc(match);
         } else {
-          // לא נמצא במילון. קודים ייחודיים ליצרן מגיעים לאלפים, ולכן שואלים
-          // את המודל במקום להציג קוד עירום.
+          // קוד שלא במילון: מבקשים הסבר מ-AI
           const explained = await explainFaultWithAi(code ?? '', car);
           if (!cancelled) {
             if (explained.ok) setAi(explained.explanation);
@@ -72,16 +57,12 @@ export default function FaultDetailScreen() {
     );
   }
 
-  // המקור שסיפק את ההסבר הוא גם זה שקובע את התג, כדי שהכותרת
-  // לא תסתור את הטקסט שמתחתיה.
   const meta = severityMeta(c, dtc?.severity ?? ai?.severity);
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
       <Stack.Screen options={{ title: code ?? 'Fault code' }} />
 
-      {/* Header: the raw code plus its severity, so the seriousness is the
-          first thing read rather than something inferred from the text. */}
       <View style={[s.hero, { borderColor: meta.color }]}>
         <Text style={s.code}>{code}</Text>
         <Text style={[s.badge, { color: meta.color }]}>{meta.label}</Text>
@@ -98,8 +79,6 @@ export default function FaultDetailScreen() {
         </Card>
       ) : !dtc && ai ? (
         <>
-          {/* Labelled before the content, not after: the reader should know
-              what they are looking at before they read it. */}
           <View style={s.aiNotice}>
             <Text style={s.aiNoticeText}>
               ✨ Not in our dictionary — explained by AI
@@ -124,7 +103,7 @@ export default function FaultDetailScreen() {
             </Card>
           )}
 
-          {/* Deliberately no cost estimate: a made-up price is worse than none. */}
+          {/* בכוונה בלי הערכת מחיר להסבר AI */}
           <Card mode="elevated" style={s.card}>
             <Card.Content>
               <Text style={s.sectionLabel}>ESTIMATED REPAIR COST</Text>

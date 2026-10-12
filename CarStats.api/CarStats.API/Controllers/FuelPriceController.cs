@@ -3,8 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace CarStats.API.Controllers
 {
-    // מחירי הדלק. מגיעים מהקונפיגורציה ולא מהקוד, כי מחיר ה-95 מתעדכן
-    // כל חודש וקבוע בקוד היה מחייב העלאת גרסה חדשה של השרת.
+    // המחירים בקונפיגורציה, כדי לעדכן אותם בלי גרסה חדשה של השרת
     [Route("api/[controller]")]
     [ApiController]
     [Authorize]
@@ -12,10 +11,8 @@ namespace CarStats.API.Controllers
     {
         private readonly IConfiguration _config;
 
-        /// <summary>סוג הדלק המפוקח. רק המחיר שלו הוא עובדה רשמית.</summary>
         private const string RegulatedFuelType = "95";
 
-        // ערכי גיבוי, למקרה שהקונפיגורציה חסרה או שגויה
         private static readonly (string Type, decimal Price)[] Fallbacks =
         {
             (RegulatedFuelType, 8.27m),
@@ -25,8 +22,6 @@ namespace CarStats.API.Controllers
 
         private const string FallbackEffectiveFrom = "2026-10-01";
 
-        // תעריף החשמל הביתי לקוט"ש כולל מע"מ — לרכב חשמלי. עמדות טעינה ציבוריות
-        // יקרות בהרבה, אבל רוב הטעינות נעשות בבית.
         private const decimal FallbackElectricityPerKwh = 0.65m;
 
         public FuelPriceController(IConfiguration config)
@@ -35,7 +30,6 @@ namespace CarStats.API.Controllers
         }
 
         // איתור: מחיר דלק וחשמל (שרת)
-        // GET: api/fuelprice — מחזיר את שלושת סוגי הדלק, כל אחד מסומן אם הוא רשמי
         [HttpGet]
         public ActionResult<FuelPriceResponse> GetFuelPrice()
         {
@@ -69,8 +63,6 @@ namespace CarStats.API.Controllers
 
             return Ok(new FuelPriceResponse
             {
-                // המחיר המפוקח מוחזר גם ברמה העליונה, כדי שקורא שצריך
-                // רק "מחיר בנזין" — כמו מתכנן הנסיעה — לא יצטרך את הרשימה
                 PricePerLitreILS     = regulated.PricePerLitreILS,
                 FuelType             = RegulatedFuelType,
                 EffectiveFrom        = effectiveFrom,
@@ -79,10 +71,7 @@ namespace CarStats.API.Controllers
             });
         }
 
-        /// <summary>
-        /// קורא מחיר אחד מהקונפיגורציה, עם נפילה לערך הגיבוי בכל מקרה חריג.
-        /// שגיאת הקלדה בקובץ ההגדרות לא תפיל את הנקודה, ואפס היה הופך את הדלק לחינם.
-        /// </summary>
+        // נפילה לערך גיבוי כשההגדרה חסרה או שגויה
         private static decimal ReadPrice(IConfigurationSection section, string fuelType, decimal fallback)
         {
             decimal value;
@@ -98,22 +87,16 @@ namespace CarStats.API.Controllers
             return value > 0 ? value : fallback;
         }
 
-        // מבנה התשובה שהאפליקציה מקבלת
         public class FuelPriceResponse
         {
-            /// <summary>מחיר ה-95 המפוקח — ברירת המחדל לכל מי שלא מבדיל בין סוגי דלק.</summary>
             public decimal PricePerLitreILS { get; set; }
 
-            /// <summary>לאיזה סוג המחיר העליון מתייחס. תמיד 95.</summary>
             public string FuelType { get; set; } = string.Empty;
 
-            /// <summary>התאריך שממנו המחיר המפוקח בתוקף, כדי שהאפליקציה תוכל להציג מקור.</summary>
             public string EffectiveFrom { get; set; } = string.Empty;
 
-            /// <summary>כל סוגי הדלק שהאפליקציה מציעה, מפוקחים או לא.</summary>
             public List<FuelPriceEntry> Prices { get; set; } = new();
 
-            /// <summary>תעריף החשמל הביתי לקוט"ש, לתמחור נסיעה ברכב חשמלי.</summary>
             public decimal ElectricityPerKwhILS { get; set; }
         }
 
@@ -121,13 +104,8 @@ namespace CarStats.API.Controllers
         {
             public string FuelType { get; set; } = string.Empty;
 
-            /// <summary>מחיר לליטר בשקלים, כולל מע"מ.</summary>
             public decimal PricePerLitreILS { get; set; }
 
-            /// <summary>
-            /// אמת רק עבור 95. שקר משמעו מחיר שוק חופשי: נתון אופייני
-            /// שהנהג אמור לאמת מול הקבלה, ולא עובדה.
-            /// </summary>
             public bool IsOfficial { get; set; }
         }
     }

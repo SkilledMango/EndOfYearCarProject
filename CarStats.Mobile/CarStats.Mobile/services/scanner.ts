@@ -1,38 +1,20 @@
-/**
- * התקשורת מול מתאם ה-OBD-II מבוסס ESP32.
- *
- * נקודות הקצה של המתאם:
- *   GET  /status      → מצב החיבור (עונה גם במצב הגדרה, עם setupMode)
- *   GET  /live-data   → נתוני מנוע חיים
- *   GET  /dtcs        → מערך קודי התקלה
- *   POST /hotspot     → שם וסיסמה של נקודת גישה חדשה; המתאם עובר אליה
- */
-
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchWithTimeout } from './http';
 import { demoDtcs, demoLiveData, demoStatus, demoVin } from './demoScanner';
 import { candidateAddresses, firstHit } from '@/utils/scannerDiscovery';
 import { getNearbyScanners } from './api';
 
-/** כמה מילישניות לחכות לפני שבקשה נחשבת ככישלון */
 const FETCH_TIMEOUT_MS = 3000;
 const DTC_TIMEOUT_MS   = 8000;
 
-// ─── כתובת המתאם ─────────────────────────────────────────────────────────────
-//
-// המתאם מתחבר לנקודת הגישה של הטלפון ותופס בה את הכתובת 100. של הרשת.
-// הרשת עצמה משתנה בין טלפונים — ובאנדרואיד חדש גם בין הפעלות — ולכן
-// הכתובת לא מוצגת לנהג בכלל: המתאם מדווח לשרת איפה הוא, והאפליקציה
-// שואלת את השרת כשהכתובת השמורה מפסיקה לענות (ראו isScannerReachable).
+// המתאם תופס את הכתובת 100. בהוטספוט של הטלפון
 
 const ADDRESS_KEY = '@carstats_scanner_address';
 
-/** הכתובת שהמתאם תופס על נקודת הגישה של הטלפון המקורי. */
 export const DEFAULT_SCANNER_ADDRESS = '192.168.148.100';
 
 let scannerAddress = DEFAULT_SCANNER_ADDRESS;
 
-// נטענת פעם אחת בטעינת המודול; כל פנייה למתאם מחכה לה
 const addressLoaded: Promise<void> = AsyncStorage.getItem(ADDRESS_KEY)
   .then(saved => { if (saved) scannerAddress = saved; })
   .catch(() => { /* אין כתובת שמורה — נשארים עם ברירת המחדל */ });
@@ -54,23 +36,15 @@ export async function setScannerAddress(address: string): Promise<void> {
   } catch { /* הכתובת תעבוד עד סגירת האפליקציה */ }
 }
 
-// ─── טיפוסים ─────────────────────────────────────────────────────────────────
-
 export interface LiveData {
   rpm: number;
   speedKmh: number;
   coolantCelsius: number;
-  /** null כשאין קריאה מהרכב (עדיין, או בכלל) */
   fuelPercent: number | null;
-  /**
-   * מה הרכב עצמו אמר כששאלנו אילו נתונים הוא מדווח: false = אין לו מפלס דלק,
-   * true = יש, null או חסר = לא ידוע (מתאם ישן, או שהרכב לא ענה על השאלה)
-   */
+  // מה הרכב אמר: false = אין לו מפלס דלק, null = לא ידוע
   fuelSupported?: boolean | null;
   engineLoadPct: number;
-  /** אמת כשהמתאם מקבל הודעות CAN אמיתיות */
   valid: boolean;
-  /** גיל הקריאה במילישניות */
   ageMs: number;
 }
 
@@ -79,10 +53,8 @@ export interface ScannerStatus {
   ssid: string;
   ip: string;
   uptimeSeconds: number;
-  /** אמת כשלא זוהה רכב אמיתי והנתונים מדומים */
   simMode: boolean;
   connectedClients: number;
-  /** אמת כשהמתאם פתח את רשת ההגדרה וממתין לנקודת גישה */
   setupMode?: boolean;
 }
 
@@ -91,43 +63,26 @@ export interface DtcScanResult {
 }
 
 export interface VinResult {
-  /** מספר שלדה בן 17 תווים, או null אם אינו נתמך או שהרכב לא מחובר */
   vin: string | null;
   simMode: boolean;
 }
 
-// ─── מצב הדגמה ───────────────────────────────────────────────────────────────
-//
-// כשהוא דלוק, כל הפונקציות כאן מחזירות נתונים מדומים במקום לפנות למתאם.
-// נשמר כמשתנה במודול ולא בהקשר של React, כי אלה פונקציות רגילות שנקראות
-// מכמה מסכים, והעברת ספק דרך כולן בשביל בוליאני אחד הייתה גרועה יותר.
-
 let demoMode = false;
-// הרכב שנבחר חשמלי? ההדגמה מחזירה אז קודים ושעונים של רכב חשמלי
 let demoElectric = false;
 
 // איתור: הפעלת מצב הדגמה
-/** מדליק או מכבה את מצב ההדגמה. */
 export function setDemoMode(on: boolean): void {
   demoMode = on;
 }
 
-/** מעדכן אם ההדגמה מדמה רכב חשמלי — לפי הרכב שנבחר במסך המוסך. */
 export function setDemoElectric(electric: boolean): void {
   demoElectric = electric;
 }
 
-/** אמת כל עוד ההדגמה מחליפה את המתאם. */
 export function isDemoMode(): boolean {
   return demoMode;
 }
 
-// ─── הפונקציות שפונות למתאם ──────────────────────────────────────────────────
-
-/**
- * בדיקת חיים של המתאם.
- * זורקת שגיאה אם אי אפשר להגיע אליו.
- */
 export async function getScannerStatus(): Promise<ScannerStatus> {
   if (demoMode) return demoStatus();
   const res = await fetchWithTimeout(`${await baseUrl()}/status`, FETCH_TIMEOUT_MS);
@@ -136,11 +91,6 @@ export async function getScannerStatus(): Promise<ScannerStatus> {
 }
 
 // איתור: קריאת נתונים חיים מהמתאם - סל"ד, מהירות, טמפרטורה
-/**
- * מחזירה את קריאות החיישנים האחרונות מהרכב.
- * המתאם מרענן אותן בערך פעם בשנייה בלולאה שלו.
- * זורקת שגיאה אם אי אפשר להגיע אליו.
- */
 export async function getLiveData(): Promise<LiveData> {
   if (demoMode) return demoLiveData(demoElectric);
   const res = await fetchWithTimeout(`${await baseUrl()}/live-data`, FETCH_TIMEOUT_MS);
@@ -149,26 +99,15 @@ export async function getLiveData(): Promise<LiveData> {
 }
 
 // איתור: קריאת קודי תקלה מהמתאם (אפליקציה)
-/**
- * מפעילה סריקת תקלות חדשה ומחזירה את הקודים הגולמיים.
- * לדוגמה: { codes: ["P0300", "P0420"] }
- * זורקת שגיאה אם אי אפשר להגיע למתאם.
- */
 export async function scanDtcs(): Promise<DtcScanResult> {
   if (demoMode) return demoDtcs(demoElectric);
-  // ארוך יותר מהשאר: המתאם אוסף תשובות מכל מחשבי הרכב, וברכב אמיתי הוא
-  // עשוי להיות באמצע שאלה אחרת לרכב כשהבקשה מגיעה
+  // זמן ארוך יותר: המתאם אוסף תשובות מכל מחשבי הרכב
   const res = await fetchWithTimeout(`${await baseUrl()}/dtcs`, DTC_TIMEOUT_MS);
   if (!res.ok) throw new Error(`Scanner /dtcs returned ${res.status}`);
   return res.json() as Promise<DtcScanResult>;
 }
 
 // איתור: קריאת מספר שלדה (VIN) מהמתאם
-/**
- * שולפת את מספר השלדה מהמתאם, פעם אחת לכל חיבור.
- * מחזירה null אם הרכב לא תומך בכך או במצב הדגמה.
- * לעולם לא זורקת שגיאה: זיהוי השלדה הוא בונוס ולא תנאי.
- */
 export async function getVehicleVin(): Promise<VinResult> {
   if (demoMode) return demoVin();
   const res = await fetchWithTimeout(`${await baseUrl()}/vin`, FETCH_TIMEOUT_MS);
@@ -177,10 +116,6 @@ export async function getVehicleVin(): Promise<VinResult> {
 }
 
 // איתור: בדיקה אם המתאם מחובר
-/**
- * בדיקה מהירה אם המתאם נגיש. מחזירה אמת אם הוא ענה בזמן הקצוב.
- * לעולם לא זורקת שגיאה.
- */
 export async function isScannerReachable(): Promise<boolean> {
   if (demoMode) return true;
   try {
@@ -190,16 +125,10 @@ export async function isScannerReachable(): Promise<boolean> {
   return (await locateViaServer()) != null;
 }
 
-// ─── איתור המתאם על נקודת גישה חדשה ──────────────────────────────────────────
-
 /** קצר בכוונה: נבדקות מאות כתובות, ורובן פשוט לא קיימות. */
 const PROBE_TIMEOUT_MS = 1500;
 const PROBE_BATCH      = 32;
 
-/**
- * מצב המתאם בכתובת הזו, או null אם עונה שם משהו אחר או כלום.
- * לעולם לא זורקת שגיאה.
- */
 export async function checkScannerAt(address: string): Promise<ScannerStatus | null> {
   try {
     const res = await fetchWithTimeout(`http://${address}/status`, PROBE_TIMEOUT_MS);
@@ -211,17 +140,12 @@ export async function checkScannerAt(address: string): Promise<ScannerStatus | n
   }
 }
 
-/** אמת רק כשבכתובת עונה מתאם CarStats רגיל, ולא סתם מכשיר אחר ברשת. */
 async function isCarStatsScanner(address: string): Promise<boolean> {
   const status = await checkScannerAt(address);
   return !!status && !status.setupMode;
 }
 
 // איתור: איתור המתאם דרך השרת (אפליקציה)
-/**
- * שואלת את השרת איפה המתאם דיווח שהוא נמצא, בודקת שהוא באמת עונה שם,
- * ושומרת את הכתובת. null כשאין דיווח או שאף כתובת לא ענתה.
- */
 async function locateViaServer(): Promise<string | null> {
   const reported = await getNearbyScanners();
   if (reported.length === 0) return null;
@@ -231,10 +155,6 @@ async function locateViaServer(): Promise<string | null> {
 }
 
 // איתור: חיפוש המתאם ברשת
-/**
- * מחפשת את המתאם ושומרת את הכתובת שנמצאה. מחזירה אותה, או null.
- * onProgress מקבל כמה כתובות נבדקו מתוך כמה, בשביל פס התקדמות.
- */
 export async function findScanner(
   onProgress?: (checked: number, total: number) => void,
 ): Promise<string | null> {
@@ -260,20 +180,9 @@ export async function findScanner(
   return null;
 }
 
-// ─── העברת המתאם לנקודת גישה חדשה ────────────────────────────────────────────
-
-/**
- * הכתובת של המתאם ברשת ההגדרה שלו, "CarStats-Setup".
- * זו כתובת ברירת המחדל של ESP32 כנקודת גישה, והיא אותה כתובת בכל מתאם.
- */
 export const SETUP_NETWORK_ADDRESS = '192.168.4.1';
 
 // איתור: שליחת פרטי ההוטספוט למתאם
-/**
- * שולחת למתאם שם וסיסמה של נקודת גישה. המתאם שומר אותם, מאתחל את עצמו
- * ומתחבר אליה. לא צריך אינטרנט: זו הודעה ישירה מהטלפון למתאם.
- * זורקת שגיאה עם הודעה קריאה כשמשהו נכשל.
- */
 export async function sendHotspotToScanner(address: string, ssid: string, pass: string): Promise<void> {
   let res: Response;
   try {

@@ -15,7 +15,7 @@ describe('demo mode matches the car type', () => {
     for (let i = 0; i < 20; i++) {
       const d = demoLiveData(true);
       expect(d.rpm).toBe(d.speedKmh * 85);
-      expect(d.coolantCelsius).toBeLessThanOrEqual(34);   // battery temperature, not engine coolant
+      expect(d.coolantCelsius).toBeLessThanOrEqual(34);
     }
   });
 

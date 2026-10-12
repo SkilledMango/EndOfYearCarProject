@@ -1,9 +1,3 @@
-/**
- * Severity helpers — these decide the colour and label a driver sees for a
- * fault code, and which code "wins" when a scan returns several. Getting the
- * fold wrong would show a green badge on a scan containing a critical fault.
- */
-
 import { LightColors } from '@/constants/theme';
 import { ReportDtcResponse, SeverityLevel } from '@/services/api';
 import {
@@ -15,7 +9,6 @@ import {
 
 const c = LightColors;
 
-/** Minimal scan result carrying just the severity the helpers read. */
 function result(severity?: SeverityLevel, viaTranslation = true): ReportDtcResponse {
   return (viaTranslation
     ? { status: 'Logged', translation: severity == null ? undefined : { severity } }
@@ -30,7 +23,6 @@ describe('severityColor', () => {
   });
 
   it('falls back to caution yellow for an unknown level', () => {
-    // An unrecognised code must never render as green "all clear".
     expect(severityColor(c, undefined)).toBe(c.Severity.yellow);
   });
 });
@@ -86,7 +78,6 @@ describe('worstSeverity', () => {
   });
 
   it('does not let a leading green mask a later critical fault', () => {
-    // The reduce seeds from null, so a first-element Green must not win.
     expect(worstSeverity([result(SeverityLevel.Green), result(SeverityLevel.Red)]))
       .toBe(SeverityLevel.Red);
   });

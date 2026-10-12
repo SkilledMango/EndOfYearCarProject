@@ -14,7 +14,7 @@ const recentFix = { coords: { latitude: 32.44, longitude: 34.92 } };
 
 beforeEach(() => {
   getPos.mockReset();
-  getLast.mockReset().mockResolvedValue(null);   // no recent fix unless a test says so
+  getLast.mockReset().mockResolvedValue(null);
   resetAccuracyPromptForTests();
 });
 
@@ -48,14 +48,14 @@ describe('getCurrentPosition', () => {
     getLast.mockResolvedValueOnce(recentFix);
     await expect(getCurrentPosition()).resolves.toBe(recentFix);
     expect(getLast.mock.calls[0][0].maxAge).toBe(2 * 60 * 1000);
-    expect(getPos).toHaveBeenCalledTimes(1);   // only the declined attempt
+    expect(getPos).toHaveBeenCalledTimes(1);
   });
 
   it('gives up on a GPS that never answers, so the caller can use the last known spot', async () => {
     jest.useFakeTimers();
     try {
       getPos.mockRejectedValueOnce(new Error('settings unsatisfied'))
-        .mockReturnValueOnce(new Promise(() => {}));   // GPS that never answers
+        .mockReturnValueOnce(new Promise(() => {}));
       const result = getCurrentPosition();
       const assertion = expect(result).rejects.toThrow('No GPS fix in time');
       await jest.advanceTimersByTimeAsync(10_000);

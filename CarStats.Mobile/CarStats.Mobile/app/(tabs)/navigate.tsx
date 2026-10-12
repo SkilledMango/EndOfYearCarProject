@@ -1,15 +1,3 @@
-/**
- * מוצא המוסכים: מפה ומגירת "מוסכים בסביבה".
- *
- * המוסכים הם תוצאות אמיתיות מ-Google Places שנשלפות דרך הפרוקסי בשרת,
- * כולל שמות, דירוגים ומספר ביקורות. מספרי טלפון נשלפים רק בלחיצה על חיוג,
- * כי כל שליפה כזו מחויבת בנפרד.
- * כשאין הרשאת מיקום, החיפוש מתרכז בתל אביב.
- *
- * החיפוש מותאם לרכב שנבחר במסך המוסך: המוסך המורשה הקרוב של היצרן מופיע
- * ראשון, ורכב חשמלי מקבל כברירת מחדל מוסכים לרכב חשמלי והיברידי.
- */
-
 import ShopMap from '@/components/ShopMap';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
@@ -35,28 +23,21 @@ import {
 } from 'react-native';
 import { SegmentedButtons } from 'react-native-paper';
 
-// מרכז החיפוש כשאין הרשאת מיקום
-const FALLBACK_CENTER = { lat: 32.0853, lng: 34.7818 }; // Tel Aviv
+const FALLBACK_CENTER = { lat: 32.0853, lng: 34.7818 };
 
-/** Which point the shop search is centred on. */
 type SearchOrigin = 'current' | 'home';
 
 interface LocatedShop extends NearbyShop {
   distanceKm: number | null;
 }
 
-/**
- * מרחק אווירי בק"מ לפי נוסחת ההברסין.
- * פיתגורס לא מתאים כאן — כדור הארץ עגול, ומעלות של קו אורך
- * מתקרבות זו לזו ככל שמתרחקים מקו המשווה.
- */
+// מרחק אווירי בנוסחת Haversine (כדור הארץ עגול)
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;                                    // רדיוס כדור הארץ בק"מ
   // המרת מעלות לרדיאנים — פונקציות הטריגונומטריה עובדות ברדיאנים
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  // הכפלת הקוסינוסים מתקנת את הפרש קווי האורך לפי קו הרוחב:
-  // בקו המשווה מעלה אחת היא כ-111 ק"מ, וליד הקטבים כמעט כלום
+  // תיקון הפרש קווי האורך לפי קו הרוחב
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
@@ -72,31 +53,28 @@ export default function MechanicFinderScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [myPos, setMyPos]           = useState<{ lat: number; lng: number } | null>(null);
   const [usedFallback, setUsedFallback] = useState(false);
-  // ברירת מחדל 'home': קריאת כתובת שמורה מיידית, איכון עלול להיתקע.
   const [origin, setOrigin]         = useState<SearchOrigin>('home');
   const [hasHome, setHasHome]       = useState(false);
   const { user: authUser }          = useAuth();
-  // הרכב שנבחר במסך המוסך; החיפוש מחכה לו כדי לא לחפש פעמיים
   const [vehicle, setVehicle]       = useState<Vehicle | null>(null);
   const [vehicleReady, setVehicleReady] = useState(false);
   const [kind, setKind]             = useState<ShopKind>('fuel');
   const vehicleId = useRef<number | null>(null);
-  // מספרי טלפון שכבר נשלפו בסשן הזה, כדי לא לשלוף פעמיים
   const phoneCache = useRef<Record<string, string | null>>({});
       
   const load = useCallback(async (isRefresh = false, mode: SearchOrigin = origin) => {
-    if (isRefresh) setRefreshing(true); // נקודת המוצא של החיפוש: הבית או המיקום הנוכחי
+    if (isRefresh) setRefreshing(true);
     try {
       let pos: { lat: number; lng: number } | null = null;
 
       if (mode === 'home') {
-        const prefs = await loadPrefs(); // לוקח את כתובת הבית שנשמרה בהגדרות
+        const prefs = await loadPrefs();
         if (prefs.homeLat != null && prefs.homeLng != null) {
-          pos = { lat: prefs.homeLat, lng: prefs.homeLng }; // קו הרוחב וקו האורך של כתובת הבית
+          pos = { lat: prefs.homeLat, lng: prefs.homeLng };
         }
       }
 
-      if (!pos) { // כלומר המצב הוא מיקום נוכחי, או שאין כתובת בית שמורה
+      if (!pos) {
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status === 'granted') {
@@ -105,7 +83,7 @@ export default function MechanicFinderScreen() {
               const loc = await getCurrentPosition();
               coords = loc.coords;
             } catch {
-              // במקרה והמיקום של המכשיר לא זמין(כלומר חניון או משהו בסגנון) ניגש למיקום האחרון שהיה זמין
+              // אין מיקום עכשיו: המיקום האחרון הידוע
               const last = await Location.getLastKnownPositionAsync();
               coords = last?.coords ?? null;
             }
@@ -117,7 +95,7 @@ export default function MechanicFinderScreen() {
       if (mode === 'current') setMyPos(pos);
       setUsedFallback(!pos); // אם לא הצלחנו לקבל שום מיקום, נופלים לתל אביב
 
-      const center = pos ?? FALLBACK_CENTER; // מרכז תל אביב אם אין מיקום
+      const center = pos ?? FALLBACK_CENTER;
       const results = await getNearbyShops(center.lat, center.lng, {
         kind,
         make: vehicle?.make,
@@ -126,7 +104,7 @@ export default function MechanicFinderScreen() {
 
       setShops(results.map(shop => ({
         ...shop,
-        distanceKm: pos ? haversineKm(pos.lat, pos.lng, shop.latitude, shop.longitude) : null, // חישוב המרחק בין המיקום שלנו לבין המוסך
+        distanceKm: pos ? haversineKm(pos.lat, pos.lng, shop.latitude, shop.longitude) : null,
       })));
     } catch { /* השרת לא זמין — משאירים את הרשימה הקודמת */ }
     finally {
@@ -135,7 +113,6 @@ export default function MechanicFinderScreen() {
     }
   }, [origin, kind, vehicle]);
 
-  // נטען מחדש בכל שינוי של נקודת המוצא, סוג המוסך או הרכב
   useEffect(() => {
     if (!vehicleReady) return;
     setLoading(true);
@@ -146,14 +123,12 @@ export default function MechanicFinderScreen() {
     useCallback(() => {
       loadPrefs().then(p => setHasHome(p.homeLat != null && p.homeLng != null));
 
-      // הרכב שנבחר במסך המוסך — אולי הוחלף מאז הביקור הקודם כאן
       (async () => {
         try {
           if (!authUser) return;
           const [fresh, storedId] = await Promise.all([getUser(authUser.id), loadSelectedVehicleId()]);
           const list = fresh.vehicles ?? [];
           const picked = list.find(v => v.id === storedId) ?? list[0] ?? null;
-          // רכב אחר מבפעם הקודמת — גם סוג המוסכים מתאים את עצמו אליו
           if (picked?.id !== vehicleId.current) {
             vehicleId.current = picked?.id ?? null;
             setVehicle(picked);
@@ -205,7 +180,6 @@ export default function MechanicFinderScreen() {
 
   return (
     <View style={styles.container}>
-      {/* ── מפה בנייטיב, מלבן מעוצב בווב ── */}
       <View style={styles.mapArea}>
         <ShopMap
           shops={shops.map(s => ({
@@ -220,7 +194,6 @@ export default function MechanicFinderScreen() {
         />
       </View>
 
-      {/* ── המגירה התחתונה ── */}
       <View style={styles.sheet}>
         <View style={styles.sheetHandle} />
         <View style={styles.sheetHeader}>
@@ -328,14 +301,11 @@ export default function MechanicFinderScreen() {
   );
 }
 
-// ─── סגנונות, לפי קובץ העיצוב של מוצא המוסכים ────────────────────────────────
-
 const useStyles = createThemedStyles((c) => StyleSheet.create({
   container:      { flex: 1, backgroundColor: c.Dashboard.bg },
   centered:       { justifyContent: 'center', alignItems: 'center' },
   mapArea:        { flex: 1 },
 
-  // המגירה התחתונה
   sheet:          {
     height: '52%',
     backgroundColor: c.Dashboard.card,
@@ -362,7 +332,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
   sheetList:      { paddingHorizontal: 20, paddingBottom: 32, gap: 16 },
 
-  // כרטיסי המוסכים
   shopCard:       {
     backgroundColor: c.Dashboard.card,
     borderRadius: 8,
@@ -373,7 +342,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
     elevation: 2,
   },
   shopAccentBar:  { position: 'absolute', left: 0, top: 0, bottom: 0, width: 2 },
-  // המוסך המורשה של היצרן בולט מעל השאר
   brandCard:      { borderColor: c.Dashboard.accentDeep, borderWidth: 2 },
   brandBadge:     { fontSize: 11, fontWeight: '800', letterSpacing: 1, color: c.Dashboard.accentDeep, marginBottom: 6 },
   shopHeader:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
@@ -405,7 +373,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
   directionsBtnText: { fontSize: 15, fontWeight: '700', color: c.Dashboard.onAccent },
 
-  // מצב ריק
   emptyState:     { alignItems: 'center', paddingTop: 40 },
   emptyIcon:      { fontSize: 48 },
   emptyText:      { fontSize: 17, fontWeight: '600', color: c.Dashboard.textPrimary, marginTop: 12 },

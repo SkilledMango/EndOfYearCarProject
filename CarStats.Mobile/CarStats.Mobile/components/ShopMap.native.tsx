@@ -1,24 +1,13 @@
-/**
- * המפה האמיתית של מוצא המוסכים, לאנדרואיד ול-iOS.
- * הסיכות עגולות ומתחלפות בין מלאות למתוארות, והמוסך המורשה של היצרן
- * מקבל סיכה ירוקה עם כוכב. המפה ממסגרת את עצמה סביב הסיכות והמשתמש.
- */
-
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import type { ShopMapProps } from './ShopMap.types';
 
-// הסיכות הן תמונות מוכנות ולא רכיבים. באנדרואיד עם הארכיטקטורה החדשה,
-// react-native-maps מצלם סיכה שבנויה מרכיבים מתוך תיבה קטנה מהתוכן שלה,
-// והסיכה יוצאת חתוכה (באג פתוח בספרייה, react-native-maps#5877). תמונה
-// מוצגת כמו שהיא, בלי צילום, ולכן לא נחתכת — וגם לא צורכת זיכרון על כל
-// ציור מחדש. הצבעים הם של ערכת הנושא; התמונות נוצרו ב-@1x/@2x/@3x.
+// הסיכות הן תמונות: באנדרואיד סיכה שבנויה מרכיבים נחתכת
 const PIN_SHOP     = require('@/assets/images/pin-shop.png');
 const PIN_SHOP_ALT = require('@/assets/images/pin-shop-alt.png');
 const PIN_BRAND    = require('@/assets/images/pin-brand.png');
 
-// תל אביב, אזור ברירת מחדל סביר עד שהסיכות ידועות
 const DEFAULT_REGION = {
   latitude: 32.08,
   longitude: 34.78,
@@ -29,9 +18,7 @@ const DEFAULT_REGION = {
 // איתור: המפה עם סיכות המוסכים
 export default function ShopMap({ shops, userPos }: ShopMapProps) {
   const mapRef = useRef<MapView>(null);
-  // באנדרואיד המסגור לא עובד עד שהמפה סיימה להיפרס, והוא נכשל בשקט:
-  // המפה נשארה על תל אביב בזמן שהרשימה מתחתיה הציגה מוסכים בחדרה.
-  // ההמתנה לאירוע המוכנות היא מה שגורם למסגור להיתפס.
+  // באנדרואיד ממסגרים את המפה רק אחרי שהיא מוכנה
   const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
@@ -62,7 +49,6 @@ export default function ShopMap({ shops, userPos }: ShopMapProps) {
           description={shop.specialty}
           anchor={{ x: 0.5, y: 0.5 }}
           image={shop.highlighted ? PIN_BRAND : i % 2 === 1 ? PIN_SHOP_ALT : PIN_SHOP}
-          // המוסך המורשה מעל שאר הסיכות כשהן חופפות
           zIndex={shop.highlighted ? 1 : 0}
         />
       ))}

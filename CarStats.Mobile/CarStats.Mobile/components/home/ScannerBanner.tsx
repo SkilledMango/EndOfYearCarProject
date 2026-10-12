@@ -1,9 +1,3 @@
-/**
- * שורת מצב החיבור למתאם, בראש מסך המוסך.
- * מכילה גם את כפתור הניסיון החוזר, שהוא הדרך היחידה לחזור אחרי
- * שהמתאם סומן כמנותק.
- */
-
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ScannerStatus } from '@/services/scanner';
@@ -19,11 +13,9 @@ export default function ScannerBanner({
 }: {
   online: boolean;
   status: ScannerStatus | null;
-  /** אמת כל עוד מצב ההדגמה מחליף את המתאם. */
   demo: boolean;
   onRetry: () => void;
   onToggleDemo: () => void;
-  /** מסיים את החיבור למתאם בלי לנתק אותו פיזית. */
   onDisconnect: () => void;
 }) {
   const { colors: c } = useTheme();
@@ -43,8 +35,6 @@ export default function ScannerBanner({
         <Text style={bannerStyles.title}>
           {demo ? 'Demo Connection' : online ? 'OBD-II Adapter Connected' : 'Adapter Not Found'}
         </Text>
-        {/* נתוני הדגמה מסומנים תמיד ככאלה, כדי שאי אפשר יהיה לבלבל
-            בינם לבין נתונים מרכב אמיתי. */}
         {demo ? (
           <Text style={bannerStyles.sub}>Simulated readings — no car connected</Text>
         ) : online && status ? (

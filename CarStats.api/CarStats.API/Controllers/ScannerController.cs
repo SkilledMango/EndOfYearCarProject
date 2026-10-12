@@ -11,7 +11,6 @@ namespace CarStats.API.Controllers
         public string LocalIp { get; set; } = string.Empty;    // הכתובת שלו בנקודת הגישה
     }
 
-    // גילוי אוטומטי של המתאם: המתאם מדווח איפה הוא, האפליקציה שואלת. ראו ScannerRegistry.
     [Route("api/[controller]")]
     [ApiController]
     public class ScannerController : ControllerBase
@@ -26,7 +25,7 @@ namespace CarStats.API.Controllers
         }
 
         // איתור: המתאם מדווח לשרת איפה הוא (שרת)
-        // POST: api/scanner/announce — נקרא מהמתאם עצמו, שאין לו חשבון משתמש
+        // נקרא מהמתאם עצמו, שאין לו חשבון משתמש
         [HttpPost("announce")]
         [AllowAnonymous]
         public IActionResult Announce([FromBody] ScannerAnnounceRequest request)
@@ -44,7 +43,6 @@ namespace CarStats.API.Controllers
         }
 
         // איתור: האפליקציה שואלת את השרת איפה המתאם
-        // GET: api/scanner/nearby — האפליקציה: "איזה מתאם דיווח מהרשת שלי?"
         [HttpGet("nearby")]
         [Authorize]
         public IActionResult Nearby()
@@ -57,7 +55,7 @@ namespace CarStats.API.Controllers
         {
             var ip = HttpContext.Connection.RemoteIpAddress;
             if (ip == null) return null;
-            // IPv4 שמגיע עטוף כ-IPv6 (::ffff:1.2.3.4) — כדי ששני הצדדים ייראו אותו דבר
+            // IPv4 שמגיע עטוף כ-IPv6: מנרמלים
             return (ip.IsIPv4MappedToIPv6 ? ip.MapToIPv4() : ip).ToString();
         }
     }

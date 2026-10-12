@@ -4,12 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace CarStats.API.Controllers
 {
-    /// <summary>
-    /// פרוקסי בצד השרת לשירותי Google Maps. קיים משתי סיבות:
-    /// Google לא שולחת כותרות CORS ולכן גרסת הווב לא יכולה לקרוא לה ישירות,
-    /// ומפתח שנמצא בקוד הלקוח ניתן לחילוץ ולשימוש על חשבוננו.
-    /// המפתח יושב בקונפיגורציה של השרת בלבד.
-    /// </summary>
+    // פרוקסי ל-Google: אין CORS, והמפתח נשאר בשרת
     [Route("api/[controller]")]
     [ApiController]
     [Authorize]
@@ -27,8 +22,6 @@ namespace CarStats.API.Controllers
         private string? ApiKey => _config["GoogleMaps:ApiKey"];
 
         // איתור: חישוב מסלול נסיעה עם פקקים (Google, שרת)
-        // GET: api/navigation/route — מסלול, מרחק וזמן נסיעה עם תנועה חיה.
-        // התשובה של Google מועברת כמו שהיא, כי הלקוח כבר יודע לפרסר אותה.
         [HttpGet("route")]
         public async Task<IActionResult> GetRoute([FromQuery] string origin, [FromQuery] string destination)
         {
@@ -37,8 +30,6 @@ namespace CarStats.API.Controllers
             if (string.IsNullOrWhiteSpace(ApiKey))
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, "Route service is not configured.");
 
-            // region מטה שם מקום דו-משמעי לישראל, ו-language מחזיר שמות רחובות
-            // בעברית כדי שיתאימו לשלטים שהנהג רואה בפועל
             var url =
                 "https://maps.googleapis.com/maps/api/directions/json" +
                 $"?origin={Uri.EscapeDataString(origin)}" +
@@ -54,11 +45,6 @@ namespace CarStats.API.Controllers
         }
 
         // איתור: חיפוש מוסכים קרובים (שרת)
-        // GET: api/navigation/nearby-shops — מוסכים חיים סביב המשתמש.
-        //   kind=fuel (ברירת מחדל) — כל המוסכים, מהקרוב לרחוק
-        //   kind=electric — מוסכים לרכב חשמלי והיברידי
-        //   make / makeHe — יצרן הרכב באנגלית ובעברית: המוסך המורשה הקרוב שלו עולה לראש הרשימה
-        // התשובה מקוצצת לשדות שהמסך באמת מציג, כי המקורית ענקית.
         [HttpGet("nearby-shops")]
         public async Task<IActionResult> NearbyShops(
             [FromQuery] double lat, [FromQuery] double lng,
@@ -71,7 +57,7 @@ namespace CarStats.API.Controllers
             // איתור: מוסכים לרכב חשמלי
             if (kind == "electric")
             {
-                // "רכב חשמלי" לבד מחזיר גם מעבדות קורקינטים, ולכן שתי שאילתות וסינון
+                // 'רכב חשמלי' לבד מחזיר גם קורקינטים: שתי שאילתות וסינון
                 var a = await SearchAsync(lat, lng, "מוסך היברידי חשמלי");
                 var b = await SearchAsync(lat, lng, "רכב חשמלי");
                 if (a == null && b == null)
@@ -89,9 +75,7 @@ namespace CarStats.API.Controllers
                 shops = all;
             }
 
-            // המוסך המורשה הקרוב של יצרן הרכב — ראשון ברשימה, ומסומן ככזה.
-            // החיפוש של Google לפי מילת מפתח מחזיר גם מוסכים כלליים, ולכן נדרש
-            // שהיצרן יופיע בשם המוסך עצמו.
+            // מוסך היצרן: שם המוסך חייב להכיל את היצרן
             var names = new[] { make, makeHe }.Where(n => !string.IsNullOrWhiteSpace(n) && n!.Length <= 30).ToList();
             if (names.Count > 0)
             {
@@ -112,11 +96,9 @@ namespace CarStats.API.Controllers
         private record Shop(string PlaceId, string Name, string Address, double Rating, int ReviewCount,
                             double Latitude, double Longitude, bool IsBrandService = false);
 
-        // שמות שמסגירים שזה לא מוסך לרכב: קורקינטים, אופניים, עמדות טעינה ניידות
         private static readonly System.Text.RegularExpressions.Regex NotACarShop =
             new("קורקינט|אופני|scooter|bike|דלקן", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
-        /// <summary>חיפוש מוסכים אחד ב-Google, מהקרוב לרחוק. null כשהחיפוש נכשל.</summary>
         private async Task<List<Shop>?> SearchAsync(double lat, double lng, string? keyword)
         {
             var url =
@@ -125,7 +107,6 @@ namespace CarStats.API.Controllers
                 "&rankby=distance" +
                 "&type=car_repair" +
                 (keyword == null ? "" : $"&keyword={Uri.EscapeDataString(keyword)}") +
-                // שמות בעברית, כדי שהרשימה תתאים לשילוט ברחוב
                 "&language=he" +
                 $"&key={ApiKey}";
 
@@ -136,7 +117,6 @@ namespace CarStats.API.Controllers
             var status = doc.RootElement.GetProperty("status").GetString();
             if (status != "OK" && status != "ZERO_RESULTS") return null;
 
-            // בניית רשימה מצומצמת: שם, כתובת, דירוג ומיקום
             var shops = new List<Shop>();
             if (doc.RootElement.TryGetProperty("results", out var results))
             {
@@ -156,7 +136,7 @@ namespace CarStats.API.Controllers
             return shops;
         }
 
-        // מרחק אווירי בק"מ (הברסין) — לסידור תוצאות של שתי שאילתות יחד
+        // מרחק אווירי (Haversine), למיון תוצאות משתי שאילתות
         private static double DistanceKm(double lat1, double lng1, double lat2, double lng2)
         {
             const double R = 6371;
@@ -168,8 +148,6 @@ namespace CarStats.API.Controllers
         }
 
         // איתור: טלפון של מוסך
-        // GET: api/navigation/shop-phone — מספר הטלפון של מוסך.
-        // נשלף רק בלחיצה על "חייג", כי הוא לא חלק מתוצאות החיפוש והקריאה מחויבת בנפרד.
         [HttpGet("shop-phone")]
         public async Task<IActionResult> ShopPhone([FromQuery] string placeId)
         {
@@ -198,7 +176,6 @@ namespace CarStats.API.Controllers
         }
 
         // איתור: השלמה אוטומטית של כתובות (שרת)
-        // GET: api/navigation/autocomplete — השלמה אוטומטית של כתובות
         [HttpGet("autocomplete")]
         public async Task<IActionResult> Autocomplete([FromQuery] string input)
         {
@@ -207,8 +184,7 @@ namespace CarStats.API.Controllers
             if (string.IsNullOrWhiteSpace(ApiKey))
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, "Route service is not configured.");
 
-            // מוגבל לישראל ומוטה למרכז הארץ. בלי ההגבלה, תחילת שם רחוב
-            // מתאימה לאלפי מקומות בעולם והתוצאות כמעט אף פעם לא רלוונטיות.
+            // מוגבל לישראל
             var url =
                 "https://maps.googleapis.com/maps/api/place/autocomplete/json" +
                 $"?input={Uri.EscapeDataString(input)}" +
@@ -224,9 +200,6 @@ namespace CarStats.API.Controllers
         }
 
         // איתור: המרת כתובת לקואורדינטות
-        // GET: api/navigation/geocode — כתובת שהוקלדה אל קואורדינטות,
-        // כדי שלא כל תכונה תהיה תלויה ב-GPS של המכשיר.
-        // כאן התשובה כן מקוצצת: הקורא רוצה נקודה אחת ולא את כל הפלט של Google.
         [HttpGet("geocode")]
         public async Task<IActionResult> Geocode([FromQuery] string address)
         {
@@ -235,8 +208,6 @@ namespace CarStats.API.Controllers
             if (string.IsNullOrWhiteSpace(ApiKey))
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, "Geocoding is not configured.");
 
-            // אותה הטיה לישראל כמו בהשלמה, ופלט בעברית כדי ששאילתה בעברית
-            // לא תחזור מתועתקת לאנגלית
             var url =
                 "https://maps.googleapis.com/maps/api/geocode/json" +
                 $"?address={Uri.EscapeDataString(address)}" +
@@ -252,8 +223,6 @@ namespace CarStats.API.Controllers
             var root      = doc.RootElement;
             var status    = root.TryGetProperty("status", out var s) ? s.GetString() : "UNKNOWN_ERROR";
 
-            // כתובת שלא נמצאה היא תוצאה רגילה של שגיאת הקלדה ולא תקלת שרת,
-            // ולכן מוחזר 404 ולא שגיאה
             if (status != "OK" ||
                 !root.TryGetProperty("results", out var results) ||
                 results.GetArrayLength() == 0)

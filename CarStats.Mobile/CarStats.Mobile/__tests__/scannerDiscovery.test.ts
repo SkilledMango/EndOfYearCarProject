@@ -14,12 +14,10 @@ describe('candidateAddresses', () => {
 
   it('never repeats an address', () => {
     expect(new Set(list).size).toBe(list.length);
-    // the saved one is also a common subnet — it must still appear only once
     expect(list.filter(a => a === '192.168.148.100')).toHaveLength(1);
   });
 
   it('stays one address per network, not a full sweep', () => {
-    // saved + name + iPhone + 256 Android networks
     expect(list.length).toBeLessThanOrEqual(259);
   });
 });
@@ -37,7 +35,7 @@ describe('firstHit', () => {
     const hit = await firstHit(['slow', 'fast'], a => (a === 'fast' ? Promise.resolve(true) : slow()));
     expect(hit).toBe('fast');
     expect(Date.now() - start).toBeLessThan(500);
-    clearTimeout(timer);   // the slow probe is still pending — don't leave it running
+    clearTimeout(timer);
   });
 
   it('returns null when nothing answers, including probes that throw', async () => {

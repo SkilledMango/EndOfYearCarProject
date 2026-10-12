@@ -7,7 +7,6 @@ using CarStats.API.Services;
 
 namespace CarStats.API.Controllers
 {
-    // המוסך של המשתמש. כל פעולה בודקת מחדש שהרכב באמת שלו.
     [Route("api/[controller]")]
     [ApiController]
     [Authorize]
@@ -21,7 +20,6 @@ namespace CarStats.API.Controllers
         }
 
         // איתור: רשימת הרכבים של משתמש (שרת)
-        // GET: api/vehicles/user/{userId} — כל הרכבים של משתמש מסוים
         [HttpGet("user/{userId}")]
         public async Task<ActionResult<IEnumerable<Vehicle>>> GetVehiclesForUser(int userId)
         {
@@ -36,7 +34,6 @@ namespace CarStats.API.Controllers
         }
 
         // איתור: הוספת רכב (שרת)
-        // POST: api/vehicles — הוספת רכב למוסך
         [HttpPost]
         public async Task<ActionResult<Vehicle>> AddVehicle(Vehicle newVehicle)
         {
@@ -52,7 +49,6 @@ namespace CarStats.API.Controllers
         }
 
         // איתור: עדכון רכב (שרת)
-        // PUT: api/vehicles/{id} — עדכון פרטי רכב: דגם, שנה, מספר רישוי וצריכה
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateVehicle(int id, Vehicle updatedVehicle)
         {
@@ -75,7 +71,6 @@ namespace CarStats.API.Controllers
         }
 
         // איתור: מחיקת רכב (שרת)
-        // DELETE: api/vehicles/{id} — הסרת רכב מהמוסך
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteVehicle(int id)
         {
@@ -83,10 +78,7 @@ namespace CarStats.API.Controllers
             if (vehicle == null) return NotFound();
             if (!User.CanActFor(vehicle.AppUserId)) return Forbid();
 
-            // קודם מנתקים את היסטוריית התקלות מהרכב.
-            // בלי זה בסיס הנתונים היה דוחה את המחיקה בגלל המפתח הזר,
-            // ורכב שדיווח אי פעם על תקלה לא היה ניתן למחיקה בכלל.
-            // מנתקים ולא מוחקים, כדי שההיסטוריה של הנהג תישאר גם אחרי מכירת הרכב.
+            // מנתקים את התקלות מהרכב לפני המחיקה, כדי שההיסטוריה תישמר
             await _context.VehicleEvents
                 .Where(e => e.VehicleId == id)
                 .ExecuteUpdateAsync(s => s.SetProperty(e => e.VehicleId, (int?)null));

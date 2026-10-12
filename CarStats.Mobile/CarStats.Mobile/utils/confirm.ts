@@ -1,15 +1,7 @@
-/**
- * דיאלוגים שעובדים גם בדפדפן.
- *
- * React Native for Web לא מממש את Alert בכלל — הקריאה לא נכשלת ולא מדפיסה
- * כלום, פשוט לא קורה דבר. לכן כל כפתור שדורש אישור נראה שבור בדפדפן.
- */
+// ב-React Native Web אין Alert: דיאלוגים שעובדים גם בדפדפן
 
 import { Alert, Platform } from 'react-native';
 
-/**
- * שואל אישור לפני פעולה הרסנית, ומריץ אותה רק אם המשתמש אישר.
- */
 export function confirmDestructive(
   title: string,
   message: string,
@@ -28,7 +20,6 @@ export function confirmDestructive(
   ]);
 }
 
-/** מודיע למשתמש על משהו שקרה. הודעה בלבד, בלי בחירה. */
 export function notify(title: string, message?: string): void {
   if (Platform.OS === 'web') {
     // eslint-disable-next-line no-alert

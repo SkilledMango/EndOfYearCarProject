@@ -1,48 +1,36 @@
-/**
- * צבעי האפליקציה — המקור היחיד לכל צבע במערכת.
- *
- * שתי ערכות מלאות: בהירה מהעיצוב המקורי, וכהה שנגזרת ממנה. מסכים לעולם
- * לא מייבאים ערכה ישירות אלא קוראים את הפעילה דרך ThemeContext, וכך
- * מתג המצב הכהה משנה את כל האפליקציה בבת אחת.
- */
-
 // איתור: צבעי האפליקציה
 export interface ThemeColors {
   Dashboard: {
-    bg: string;            // רקע הדף
-    card: string;          // כרטיסים
-    cardBorder: string;    // מסגרת עדינה לכרטיס ולשדה קלט
-    textPrimary: string;   // טקסט ראשי
+    bg: string;
+    card: string;
+    cardBorder: string;
+    textPrimary: string;
     textSecondary: string;
-    accent: string;        // הכחול הראשי: כפתורים ומצבים פעילים
-    accentDeep: string;    // כחול כהה יותר ללחיצה ולהדגשה
-    accentSoft: string;    // גוון בהיר לרקע אייקונים וטאב פעיל
-    onAccent: string;      // טקסט ואייקונים על גבי הצבע הראשי
+    accent: string;
+    accentDeep: string;
+    accentSoft: string;
+    onAccent: string;
   };
   // צבעי דרגות החומרה, מקבילים ל-SeverityLevel בשרת
   Severity: { green: string; yellow: string; red: string; unknown: string };
-  // רקעים רכים לכרטיסי מצב
   SeveritySoft: { green: string; yellow: string; red: string };
-  // צבעי מסך הדלק
   Fuel: {
-    mintBar: string;    // פס ההדגשה בכרטיס העליון
-    trendGreen: string; // מגמת שיפור מול החודש הקודם
-    chipBg: string;     // עיגול רקע לאייקון ולכפתור רך
-    gridLine: string;   // קווי הרשת בגרף
-    axisLabel: string;  // תוויות ציר וטקסט יחידות
-    starAmber: string;  // כוכב הדירוג של מוסך
+    mintBar: string;
+    trendGreen: string;
+    chipBg: string;
+    gridLine: string;
+    axisLabel: string;
+    starAmber: string;
   };
-  // צבעי מסך הסריקה
   Scan: {
-    ringTrack: string; // רקע טבעת ההתקדמות
-    ringGlow: string;  // הטבעת הפנימית הדקורטיבית
-    errorDeep: string; // טקסט בתגי תקלה אדומים
-    amberInk: string;  // טקסט בתגים כתומים
-    greenInk: string;  // טקסט בתגים ירוקים
+    ringTrack: string;
+    ringGlow: string;
+    errorDeep: string;
+    amberInk: string;
+    greenInk: string;
   };
 }
 
-// ── ערכה בהירה — הפלטה מהעיצוב המקורי ──────────────────────────────────────
 export const LightColors: ThemeColors = {
   Dashboard: {
     bg: '#F1F1F9',
@@ -74,7 +62,6 @@ export const LightColors: ThemeColors = {
   },
 };
 
-// ── ערכה כהה — אותם צבעי בסיס במיפוי כהה ───────────────────────────────────
 export const DarkColors: ThemeColors = {
   Dashboard: {
     bg: '#121318',
@@ -106,7 +93,6 @@ export const DarkColors: ThemeColors = {
   },
 };
 
-// צבעי לוחית הרישוי הישראלית. עצם פיזי, ולכן זהה בשתי הערכות.
 export const Plate = {
   yellow: '#FFD700',
   border: '#191B23',

@@ -4,7 +4,6 @@ using System.Text.Json.Serialization;
 
 namespace CarStats.API.Models
 {
-    // רמות ההרשאה במערכת
     public enum UserRole
     {
         User = 1,       // נהג רגיל
@@ -13,7 +12,6 @@ namespace CarStats.API.Models
     }
 
     // איתור: מודל משתמש
-    // טבלת המשתמשים
     public class AppUser
     {
         [Key]
@@ -26,26 +24,23 @@ namespace CarStats.API.Models
         [Required]
         public string Email { get; set; } = string.Empty;
 
-        // הגיבוב לעולם לא מוחזר ללקוח. סיסמה נכנסת רק דרך NewPassword.
+        // הגיבוב לעולם לא מוחזר ללקוח
         [JsonIgnore]
         public string PasswordHash { get; set; } = string.Empty;
 
-        // לא נשמר בבסיס הנתונים: תיבת קלט זמנית לסיסמה שתגובב ותימחק
+        // סיסמה זמנית מהקלט, לא נשמרת
         [NotMapped]
         public string? NewPassword { get; set; }
 
         public UserRole Role { get; set; } = UserRole.User;
 
-        // מתמלא מספירה על טבלת האירועים בכל קריאת פרופיל, ולא נקרא מהעמודה
-        // הזו. הערך השמור נשאר מהתקופה שבה זה היה מונה, והוא כבר לא הקובע.
+        // מחושב מטבלת האירועים בכל קריאת פרופיל
         public int TotalFaultsLogged { get; set; } = 0;
         public bool IsPremiumMember { get; set; } = false;
 
-        // --- אימות מייל ---
         public bool IsEmailVerified { get; set; } = false;
 
-        // הקוד הפעיל חייב להישאר בשרת: אם הוא היה מוחזר בתשובת API,
-        // אפשר היה לקרוא אותו ולעקוף את כל תהליך האימות
+        // הקוד לא יוצא מהשרת
         [JsonIgnore]
         [MaxLength(6)]
         public string? EmailVerificationCode { get; set; }
@@ -53,15 +48,9 @@ namespace CarStats.API.Models
         [JsonIgnore]
         public DateTime? VerificationCodeExpiresAt { get; set; }
 
-        /// <summary>
-        /// ניחושים שגויים מול הקוד הנוכחי. קוד בן שש ספרות הוא מיליון
-        /// אפשרויות בלבד, ולכן בלי הגבלה אפשר פשוט לנסות עד שמצליחים.
-        /// מתאפס בכל פעם שמונפק קוד חדש.
-        /// </summary>
         [JsonIgnore]
         public int VerificationAttempts { get; set; } = 0;
 
-        // --- קשרים לטבלאות אחרות ---
         public List<Vehicle> Vehicles { get; set; } = new();
         public List<DiagnosticCode> SavedCodes { get; set; } = new();
         public List<VehicleEvent> VehicleEvents { get; set; } = new();

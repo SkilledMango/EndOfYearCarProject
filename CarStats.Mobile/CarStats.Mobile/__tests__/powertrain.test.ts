@@ -51,7 +51,6 @@ describe('isPlausibleCapacity', () => {
   });
 
   it('judges the same number differently for each powertrain', () => {
-    // 15 is a tiny battery but no fuel tank is that small
     expect(isPlausibleCapacity(15, true)).toBe(true);
     expect(isPlausibleCapacity(15, false)).toBe(false);
   });

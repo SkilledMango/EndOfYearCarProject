@@ -3,21 +3,11 @@
 namespace CarStats.API.Data
 {
     // איתור: מילון קודי התקלות - התוכן (כותרת, הסבר, עלות)
-    /// <summary>
-    /// המשך מילון התקלות: קודי P0xxx גנריים לפי תקן SAE J2012, אלה שרכב
-    /// בישראל באמת נוטה להוציא. מופרד מ-DbSeeder כדי שהרשימה הידנית תישאר קריאה.
-    ///
-    /// קודים ייחודיים ליצרן אינם מנוחשים כאן במכוון — הם נופלים להסבר ה-AI
-    /// באפליקציה.
-    ///
-    /// טווחי המחיר הם מחירי מוסך אופייניים בישראל, חלקים ועבודה, ורחבים
-    /// בכוונה: אותו קוד יכול להיות חיישן בחמישים שקל או עבודה באלפיים.
-    /// </summary>
+    // קודי P0xxx גנריים לפי תקן SAE J2012
     public static class DtcCatalog
     {
         public static List<DiagnosticCode> Codes => new()
         {
-            // ── מדידת אוויר ודלק ─────────────────────────────────────────────
             new() {
                 ErrorCode        = "P0102",
                 HumanTitle       = "Air Flow Sensor Reading Too Low",
@@ -131,7 +121,6 @@ namespace CarStats.API.Data
                 EstimatedCostMin = 300, EstimatedCostMax = 2500,
             },
 
-            // ── הצתה ומיסים (Misfire) ────────────────────────────────────────
             new() {
                 ErrorCode        = "P0303",
                 HumanTitle       = "Cylinder 3 Misfiring",
@@ -181,7 +170,6 @@ namespace CarStats.API.Data
                 EstimatedCostMin = 200, EstimatedCostMax = 900,
             },
 
-            // ── מערכות פליטה ─────────────────────────────────────────────────
             new() {
                 ErrorCode        = "P0401",
                 HumanTitle       = "Exhaust Gas Recirculation Flow Too Low",
@@ -223,7 +211,6 @@ namespace CarStats.API.Data
                 EstimatedCostMin = 10,  EstimatedCostMax = 500,
             },
 
-            // ── מהירות, סרק וחשמל ────────────────────────────────────────────
             new() {
                 ErrorCode        = "P0501",
                 HumanTitle       = "Speed Sensor Reading Implausible",
@@ -265,7 +252,6 @@ namespace CarStats.API.Data
                 EstimatedCostMin = 250, EstimatedCostMax = 1800,
             },
 
-            // ── תיבת הילוכים ─────────────────────────────────────────────────
             new() {
                 ErrorCode        = "P0715",
                 HumanTitle       = "Gearbox Input Speed Sensor Fault",
@@ -299,9 +285,6 @@ namespace CarStats.API.Data
                 EstimatedCostMin = 300, EstimatedCostMax = 3500,
             },
 
-            // ── רכב חשמלי והיברידי: הסוללה ומערכת המתח הגבוה (P0Axx) ──────────
-            // קודים גנריים של התקן, משותפים לכל היצרנים. עבודה על מתח גבוה
-            // דורשת מוסך מוסמך לרכב חשמלי, ולכן המחירים גבוהים יותר.
             new() {
                 ErrorCode        = "P0AA6",
                 HumanTitle       = "High-Voltage Insulation Fault",

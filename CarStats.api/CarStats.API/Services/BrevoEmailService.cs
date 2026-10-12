@@ -3,14 +3,7 @@ using System.Text.Json;
 
 namespace CarStats.API.Services
 {
-    /// <summary>
-    /// שולח את מייל האימות דרך ה-API של Brevo מעל HTTPS.
-    /// לא דרך SMTP במכוון: אחסון חינמי חוסם את פורטי ה-SMTP והמייל
-    /// פשוט לא היה נשלח.
-    ///
-    /// ההגדרות יושבות ב-appsettings.Production.json תחת "Brevo":
-    /// ApiKey, SenderEmail, SenderName.
-    /// </summary>
+    // שליחה דרך API ולא SMTP: האחסון חוסם SMTP
     public class BrevoEmailService : IEmailService
     {
         private const string BrevoUrl = "https://api.brevo.com/v3/smtp/email";
@@ -33,14 +26,12 @@ namespace CarStats.API.Services
             var senderEmail = _config["Brevo:SenderEmail"];
             var senderName  = _config["Brevo:SenderName"] ?? "CarStats";
 
-            // בלי מפתח או כתובת שולח אין מה לשלוח
             if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(senderEmail))
             {
                 _logger.LogError("Brevo is not configured — set Brevo:ApiKey and Brevo:SenderEmail.");
                 return false;
             }
 
-            // גוף הבקשה בפורמט שהספק מצפה לו
             var payload = new
             {
                 sender      = new { name = senderName, email = senderEmail },
@@ -54,8 +45,7 @@ namespace CarStats.API.Services
             req.Headers.Add("accept", "application/json");
             req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
-            // כישלון נרשם ללוג ומוחזר כשקר, ולא נזרק כשגיאה:
-            // תקלה אצל ספק המיילים לא אמורה להפיל את ההרשמה כולה
+            // כישלון במייל לא מפיל את ההרשמה
             try
             {
                 var res = await _http.SendAsync(req);
@@ -72,7 +62,6 @@ namespace CarStats.API.Services
             }
         }
 
-        // תבנית ה-HTML של המייל שהמשתמש מקבל
         private static string BuildHtml(string code) => $@"
 <!DOCTYPE html>
 <html>

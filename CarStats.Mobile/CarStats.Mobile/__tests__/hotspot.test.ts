@@ -3,7 +3,7 @@ import { hotspotError } from '@/utils/hotspot';
 describe('hotspotError', () => {
   it('accepts a normal hotspot', () => {
     expect(hotspotError('OrWifi', '24681357')).toBeNull();
-    expect(hotspotError('  iPhone של נועה  ', 'password123')).toBeNull();   // spaces trimmed, Hebrew fine
+    expect(hotspotError('  iPhone של נועה  ', 'password123')).toBeNull();
   });
 
   it('accepts an open hotspot with no password', () => {
@@ -24,7 +24,6 @@ describe('hotspotError', () => {
   it('measures the 32 limit in bytes, like WiFi does', () => {
     expect(hotspotError('a'.repeat(32), '24681357')).toBeNull();
     expect(hotspotError('a'.repeat(33), '24681357')).toMatch(/too long/);
-    // each Hebrew letter is 2 bytes: 16 fit, 17 don't
     expect(hotspotError('א'.repeat(16), '24681357')).toBeNull();
     expect(hotspotError('א'.repeat(17), '24681357')).toMatch(/too long/);
   });

@@ -3,8 +3,6 @@ using System.ComponentModel.DataAnnotations;
 namespace CarStats.API.Models
 {
     // איתור: מודל מטמון תשובות AI
-    // מטמון תשובות ה-AI. כל דגם רכב או קוד תקלה נשאל פעם אחת בלבד,
-    // וכך המכסה החינמית לא נגמרת גם כשהרבה משתמשים פותחים את אותו מסך.
     public class AiCacheEntry
     {
         [Key]

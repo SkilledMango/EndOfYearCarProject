@@ -11,7 +11,6 @@ import WarningAmberIcon  from '@mui/icons-material/WarningAmber';
 import AccessTimeIcon    from '@mui/icons-material/AccessTime';
 import CodeIcon          from '@mui/icons-material/Code';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
 const SEVERITY_COLOR = { 1: Palette.green, 2: Palette.yellow, 3: Palette.red };
 const SEVERITY_LABEL = { 1: 'Green',   2: 'Yellow',  3: 'Red'    };
 const SEVERITY_BG    = { 1: Palette.greenSoft, 2: Palette.yellowSoft, 3: Palette.redSoft };
@@ -33,7 +32,6 @@ const formatDay = (d) => {
     return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
 
-// ─── Stat Card ────────────────────────────────────────────────────────────────
 function StatCard({ icon, label, value, gradient, iconColor }) {
     return (
         <Card elevation={0} sx={{
@@ -66,7 +64,6 @@ function StatCard({ icon, label, value, gradient, iconColor }) {
     );
 }
 
-// ─── Bar Chart ────────────────────────────────────────────────────────────────
 function BarChart({ data, color = Palette.accent }) {
     const [hovered, setHovered] = useState(null);
 
@@ -82,7 +79,6 @@ function BarChart({ data, color = Palette.accent }) {
 
     return (
         <Box sx={{ position: 'relative' }}>
-            {/* Grid lines */}
             <Box sx={{ position: 'relative', height: 180, pt: 1 }}>
                 {[0.25, 0.5, 0.75, 1].map(pct => (
                     <Box key={pct} sx={{
@@ -93,7 +89,6 @@ function BarChart({ data, color = Palette.accent }) {
                     }} />
                 ))}
 
-                {/* Bars */}
                 <Box sx={{
                     display: 'flex',
                     alignItems: 'flex-end',
@@ -124,7 +119,6 @@ function BarChart({ data, color = Palette.accent }) {
                                         pb: '24px',
                                     }}
                                 >
-                                    {/* Value label */}
                                     <Typography variant="caption" sx={{
                                         fontSize: 10, fontWeight: 700,
                                         color: isHov ? color : 'transparent',
@@ -133,7 +127,6 @@ function BarChart({ data, color = Palette.accent }) {
                                     }}>
                                         {d.value > 0 ? d.value : ''}
                                     </Typography>
-                                    {/* Bar */}
                                     <Box sx={{
                                         width: '100%',
                                         height: `${barH}px`,
@@ -149,7 +142,6 @@ function BarChart({ data, color = Palette.accent }) {
                     })}
                 </Box>
 
-                {/* X-axis labels */}
                 <Box sx={{
                     display: 'flex',
                     gap: '4px',
@@ -159,7 +151,6 @@ function BarChart({ data, color = Palette.accent }) {
                     {data.map((d, i) => (
                         <Box key={i} sx={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
                             <Typography variant="caption" sx={{ fontSize: 9, color: Palette.inkMuted, textAlign: 'center' }}>
-                                {/* Show every other label to avoid clutter */}
                                 {i % 2 === 0 ? d.label : ''}
                             </Typography>
                         </Box>
@@ -170,7 +161,6 @@ function BarChart({ data, color = Palette.accent }) {
     );
 }
 
-// ─── Severity Breakdown ────────────────────────────────────────────────────────
 function SeverityBreakdown({ data }) {
     const total = data.reduce((s, d) => s + d.count, 0);
 
@@ -182,10 +172,8 @@ function SeverityBreakdown({ data }) {
         );
     }
 
-    // Stacked bar at top
     return (
         <Box>
-            {/* Stacked bar */}
             <Box sx={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden', mb: 3, gap: '2px' }}>
                 {data.filter(d => d.count > 0).map((d, i) => (
                     <Tooltip key={i} title={`${SEVERITY_LABEL[d.severity]}: ${d.count} (${Math.round((d.count / total) * 100)}%)`} arrow>
@@ -201,7 +189,6 @@ function SeverityBreakdown({ data }) {
                 ))}
             </Box>
 
-            {/* Legend rows */}
             <Stack spacing={1.5}>
                 {data.map((d, i) => {
                     const pct = Math.round((d.count / total) * 100);
@@ -244,7 +231,6 @@ function SeverityBreakdown({ data }) {
     );
 }
 
-// ─── Section header ────────────────────────────────────────────────────────────
 function SectionTitle({ icon, children }) {
     return (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
@@ -257,7 +243,6 @@ function SectionTitle({ icon, children }) {
 }
 
 // איתור: גרפים וסטטיסטיקות (פאנל ניהול)
-// ─── Main Analytics ────────────────────────────────────────────────────────────
 export default function Analytics() {
     const [stats, setStats]     = useState(null);
     const [loading, setLoading] = useState(true);
@@ -289,7 +274,6 @@ export default function Analytics() {
 
     return (
         <Box sx={{ mt: 2, pb: 6 }}>
-            {/* Page header */}
             <Box sx={{ mb: 4 }}>
                 <Typography variant="h5" fontWeight={800} color={Palette.ink} gutterBottom>
                     Analytics Overview
@@ -299,7 +283,6 @@ export default function Analytics() {
                 </Typography>
             </Box>
 
-            {/* ── Stat cards ── */}
             <Grid container spacing={2.5} sx={{ mb: 3.5 }}>
                 <Grid item xs={12} sm={4}>
                     <StatCard
@@ -330,9 +313,7 @@ export default function Analytics() {
                 </Grid>
             </Grid>
 
-            {/* ── Charts row ── */}
             <Grid container spacing={2.5} sx={{ mb: 2.5 }}>
-                {/* Bar chart */}
                 <Grid item xs={12} md={8}>
                     <Card elevation={0} sx={{ borderRadius: 3, border: `1px solid ${Palette.border}`, height: '100%' }}>
                         <CardContent sx={{ p: 3 }}>
@@ -344,7 +325,6 @@ export default function Analytics() {
                     </Card>
                 </Grid>
 
-                {/* Severity breakdown */}
                 <Grid item xs={12} md={4}>
                     <Card elevation={0} sx={{ borderRadius: 3, border: `1px solid ${Palette.border}`, height: '100%' }}>
                         <CardContent sx={{ p: 3 }}>
@@ -357,9 +337,7 @@ export default function Analytics() {
                 </Grid>
             </Grid>
 
-            {/* ── Bottom row ── */}
             <Grid container spacing={2.5}>
-                {/* Top fault codes */}
                 <Grid item xs={12} md={5}>
                     <Card elevation={0} sx={{ borderRadius: 3, border: `1px solid ${Palette.border}` }}>
                         <CardContent sx={{ p: 3 }}>
@@ -374,7 +352,6 @@ export default function Analytics() {
                                         display: 'flex', justifyContent: 'space-between',
                                         alignItems: 'center', py: 1.5,
                                     }}>
-                                        {/* Rank badge */}
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                                             <Box sx={{
                                                 width: 28, height: 28, borderRadius: '50%',
@@ -423,7 +400,6 @@ export default function Analytics() {
                     </Card>
                 </Grid>
 
-                {/* Recent events */}
                 <Grid item xs={12} md={7}>
                     <Card elevation={0} sx={{ borderRadius: 3, border: `1px solid ${Palette.border}` }}>
                         <CardContent sx={{ p: 3 }}>
@@ -438,7 +414,6 @@ export default function Analytics() {
                                         display: 'flex', justifyContent: 'space-between',
                                         alignItems: 'center', py: 1.5, gap: 2,
                                     }}>
-                                        {/* Dot + code */}
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
                                             <Box sx={{
                                                 width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
@@ -464,7 +439,6 @@ export default function Analytics() {
                                             </Box>
                                         </Box>
 
-                                        {/* User + time */}
                                         <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
                                             <Typography variant="caption" fontWeight={600} color={Palette.ink} display="block">
                                                 {ev.userName}

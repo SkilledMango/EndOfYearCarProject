@@ -1,9 +1,8 @@
 import { hebrewMakeName, translateMake } from '@/services/vehiclelookup';
 
-// Exact tozeret_nm values from the Israeli registry (data.gov.il), October 2026
 describe('translateMake — names as the registry writes them', () => {
   it.each([
-    ['גילי סין',        'Geely'],     // no geresh, unlike the old "ג'ילי" key
+    ['גילי סין',        'Geely'],
     ['בי ווי די סין',   'BYD'],
     ["צ'רי סין",        'Chery'],
     ['אומודה סין',      'Omoda'],
@@ -29,7 +28,7 @@ describe('translateMake — names as the registry writes them', () => {
     ["לנצ'יה איטליה",   'Lancia'],
     ['ביואיק ארהב"',    'Buick'],     // country with the quote at the end
     ['לינקולן ארהב"',   'Lincoln'],
-    ['סאנגיונג ד.קור',  'SsangYong'], // "ד.קור" = South Korea
+    ['סאנגיונג ד.קור',  'SsangYong'],
     ['מ.ג סין',         'MG'],
   ])('%s → %s', (hebrew, english) => {
     expect(translateMake(hebrew)).toBe(english);
@@ -58,7 +57,7 @@ describe('hebrewMakeName — for finding the brand garage by its sign', () => {
     ['Hyundai', 'יונדאי'],
     ['Mercedes-Benz', 'מרצדס בנץ'],
     ['Geely', "ג'ילי"],
-    ['kia', 'קיה'],            // case doesn't matter
+    ['kia', 'קיה'],
   ])('%s → %s', (english, hebrew) => {
     expect(hebrewMakeName(english)).toBe(hebrew);
   });

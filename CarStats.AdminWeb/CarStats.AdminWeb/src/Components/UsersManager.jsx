@@ -19,19 +19,16 @@ const emptyVehicle = (userId) => ({
     isElectric: false, tankCapacity: 0, appUserId: userId
 });
 
-// Electric cars are measured in kWh, fuel cars in litres.
 const consumptionUnit = (isElectric) => (isElectric ? 'kWh/100km' : 'L/100km');
 
 // איתור: ניהול משתמשים ורכבים (פאנל ניהול)
 export default function UsersManager() {
     const [users, setUsers] = useState([]);
 
-    // --- User dialog state ---
     const [userOpen, setUserOpen] = useState(false);
     const [editUser, setEditUser] = useState(null);
     const [isCreating, setIsCreating] = useState(false);
 
-    // --- Vehicle dialog state ---
     const [vehicleOpen, setVehicleOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState(null);
     const [vehicles, setVehicles] = useState([]);
@@ -40,8 +37,6 @@ export default function UsersManager() {
 
     const [loadError, setLoadError] = useState(null);
 
-    // An unhandled rejection here used to leave the table silently empty, which
-    // is indistinguishable from "there are no users" — surface it instead.
     const loadUsers = async () => {
         try {
             const data = await getUsers();
@@ -54,8 +49,6 @@ export default function UsersManager() {
     };
 
     useEffect(() => { loadUsers(); }, []);
-
-    // ---- USER HANDLERS ----
 
     const handleAddClick = () => {
         setIsCreating(true);
@@ -86,8 +79,6 @@ export default function UsersManager() {
         }
     };
 
-    // ---- VEHICLE HANDLERS ----
-
     const handleOpenVehicles = async (user) => {
         setSelectedUser(user);
         const data = await getVehiclesForUser(user.id);
@@ -116,7 +107,7 @@ export default function UsersManager() {
         const updated = await getVehiclesForUser(selectedUser.id);
         setVehicles(updated);
         setEditVehicle(null);
-        loadUsers(); // refresh vehicle count in the main table
+        loadUsers();
     };
 
     const handleDeleteVehicle = async (id) => {
@@ -130,7 +121,6 @@ export default function UsersManager() {
 
     return (
         <div style={{ marginTop: '20px' }}>
-            {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
                 <Typography variant="h5">User Management</Typography>
                 <Button variant="contained" color="primary" onClick={handleAddClick}>
@@ -142,7 +132,6 @@ export default function UsersManager() {
                 <Alert severity="error" sx={{ mb: 2 }}>{loadError}</Alert>
             )}
 
-            {/* Users Table */}
             <TableContainer component={Paper}>
                 <Table>
                     <TableHead>
@@ -190,7 +179,6 @@ export default function UsersManager() {
                 </Table>
             </TableContainer>
 
-            {/* ---- USER EDIT / CREATE DIALOG ---- */}
             <Dialog open={userOpen} onClose={() => setUserOpen(false)} maxWidth="sm" fullWidth>
                 <DialogTitle>{isCreating ? 'Create New User' : 'Edit User'}</DialogTitle>
                 {editUser && (
@@ -228,13 +216,11 @@ export default function UsersManager() {
                 </DialogActions>
             </Dialog>
 
-            {/* ---- VEHICLE MANAGEMENT DIALOG ---- */}
             <Dialog open={vehicleOpen} onClose={() => { setVehicleOpen(false); setEditVehicle(null); }} maxWidth="md" fullWidth>
                 <DialogTitle>
                     Vehicles — {selectedUser?.fullName}
                 </DialogTitle>
                 <DialogContent>
-                    {/* Vehicle list */}
                     {vehicles.length === 0 && !editVehicle && (
                         <Typography color="text.secondary" style={{ marginBottom: '12px' }}>
                             No vehicles registered yet.
@@ -257,7 +243,6 @@ export default function UsersManager() {
                         </div>
                     ))}
 
-                    {/* Add / Edit vehicle form */}
                     {editVehicle && (
                         <>
                             <Divider style={{ margin: '16px 0' }} />

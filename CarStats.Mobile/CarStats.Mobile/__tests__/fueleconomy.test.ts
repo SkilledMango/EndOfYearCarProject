@@ -1,17 +1,8 @@
-/**
- * Fuel-economy conversions and the Hebrew fuel-type fallback.
- *
- * These feed the consumption figure the whole fuel estimate is built on, so a
- * wrong number here propagates silently into the range and refuel warnings.
- */
-
 import { FEVehicleDetails, epaElectricInfo, mpgToL100km, suggestL100kmByFuelType } from '@/services/fueleconomy';
 
 describe('mpgToL100km', () => {
   it('converts using the standard 235.214 constant', () => {
-    // 30 US MPG ≈ 7.8 L/100km
     expect(mpgToL100km(30)).toBeCloseTo(7.8, 1);
-    // 25 US MPG ≈ 9.4 L/100km
     expect(mpgToL100km(25)).toBeCloseTo(9.4, 1);
   });
 
@@ -21,7 +12,6 @@ describe('mpgToL100km', () => {
   });
 
   it('returns 0 rather than Infinity for zero MPG', () => {
-    // Guards a divide-by-zero that would otherwise render "Infinity L/100km".
     expect(mpgToL100km(0)).toBe(0);
   });
 
@@ -38,12 +28,10 @@ describe('mpgToL100km', () => {
 
 describe('suggestL100kmByFuelType', () => {
   it('returns null for a full-electric vehicle', () => {
-    // BEVs have no L/100km; null tells the caller to skip litre-based estimates.
     expect(suggestL100kmByFuelType('חשמל')).toBeNull();
   });
 
   it('does NOT treat a plug-in hybrid as full electric', () => {
-    // Both strings contain חשמל — the בנזין check is what separates them.
     expect(suggestL100kmByFuelType('חשמל/בנזין')).toBe(2.5);
   });
 
@@ -74,7 +62,6 @@ describe('epaElectricInfo', () => {
   };
 
   it('converts an EV\'s kWh per 100 miles into kWh per 100 km', () => {
-    // EPA rates a Model 3 at about 25 kWh/100mi ≈ 15.5 kWh/100km
     const info = epaElectricInfo({ ...base, atvType: 'EV', fuelType: 'Electricity', comb08: 131, combE: 25 });
     expect(info.isElectric).toBe(true);
     expect(info.kwhPer100km).toBeCloseTo(15.5, 1);

@@ -1,9 +1,3 @@
-/**
- * גרסת הווב של המפה. ספריית המפות היא native בלבד, ולכן בדפדפן מוצג
- * מלבן מעוצב במקומה — אחרת בניית הווב נשברת.
- * המפה האמיתית נמצאת ב-ShopMap.native.tsx.
- */
-
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';

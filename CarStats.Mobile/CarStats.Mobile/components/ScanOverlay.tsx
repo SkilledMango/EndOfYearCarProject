@@ -1,8 +1,3 @@
-/**
- * מסך הסריקה המלא: טבעת התקדמות, אריחי נתונים חיים וכרטיס התקלות שנמצאו.
- * הפריסה והמידות לקוחות מקובץ העיצוב live_scan.
- */
-
 import React, { useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
@@ -13,18 +8,16 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { resultSeverity, worstSeverity } from '@/utils/severity';
 
 const RING_R = 44;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_R; // היקף הטבעת, לפי המידה שבעיצוב
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_R;
 
 interface Props {
   visible: boolean;
   scanning: boolean;
   vehicleName: string;
   results: ReportDtcResponse[];
-  /** מתמלא כשהסריקה הסתיימה בלי תקלות או נכשלה */
   finishedMessage: string | null;
   liveData: LiveData | null;
   estimatedFuelPct: number | null;
-  /** ברכב חשמלי אריח הדלק מציג סוללה */
   isElectric?: boolean;
   onClose: () => void;
 }
@@ -44,11 +37,9 @@ export default function ScanOverlay({
   const { colors: c } = useTheme();
   const styles = useStyles();
 
-  // הקריאה של הרכב עצמו קודמת; ההערכה משמשת רק לרכבים שלא מדווחים מפלס דלק.
   const fuelPct = liveData?.fuelPercent ?? estimatedFuelPct;
 
-  // התקדמות מדומה בזמן שהסריקה רצה: זוחלת עד 90 אחוז וקופצת ל-100
-  // כשהתוצאות מגיעות.
+  // התקדמות מדומה בזמן הסריקה: עד 90%, וקופץ ל-100 כשהתוצאות מגיעות
   const [progress, setProgress] = useState(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -76,7 +67,6 @@ export default function ScanOverlay({
     <Modal visible={visible} animationType="fade" onRequestClose={onClose}>
       <View style={styles.container}>
         <ScrollView contentContainerStyle={styles.content}>
-          {/* ── כותרת ── */}
           <Text style={styles.title} numberOfLines={1}>
             {scanning ? `Scanning ${vehicleName}...` : `Scan Complete`}
           </Text>
@@ -85,7 +75,6 @@ export default function ScanOverlay({
             <Text style={styles.statusText}>OBD-II Connected</Text>
           </View>
 
-          {/* ── טבעת ההתקדמות ── */}
           <View style={styles.ringWrap}>
             <View style={styles.ringOuterDecor} />
             <View style={styles.ringMidDecor} />
@@ -114,23 +103,17 @@ export default function ScanOverlay({
             </View>
           </View>
 
-          {/* ── אריחי הנתונים החיים ── */}
           <View style={styles.tileGrid}>
-            {/* ברכב חשמלי אותם אריחים מתארים את המנוע החשמלי ואת הסוללה,
-                כמו בלוח הנתונים החיים במסך הבית */}
             <Tile icon="gauge" label={isElectric ? 'MOTOR RPM' : 'RPM'}
               value={liveData ? String(liveData.rpm) : '—'} unit="rev/min" />
             <Tile icon="car.fill" label="SPEED"
               value={liveData ? String(liveData.speedKmh) : '—'} unit="km/h" />
             <Tile icon="thermometer" label={isElectric ? 'BATTERY TEMP' : 'COOLANT'}
               value={liveData ? `${liveData.coolantCelsius}°C` : '—'} />
-            {/* מעדיף את הקריאה של הרכב ונופל להערכה רק בהיעדרה. ההערכה היא
-                null במכוון כשקיימת קריאה אמיתית. */}
             <Tile icon={isElectric ? 'bolt.fill' : 'fuelpump.fill'} label={isElectric ? 'BATTERY' : 'FUEL'}
               value={fuelPct != null ? `${Math.round(fuelPct)}%` : '—'} />
           </View>
 
-          {/* ── התקלות שנמצאו ── */}
           {done && results.length > 0 && (
             <View style={styles.faultsCard}>
               <View style={[
@@ -153,7 +136,6 @@ export default function ScanOverlay({
             </View>
           )}
 
-          {/* ── Clean result / error ── */}
           {done && results.length === 0 && finishedMessage && (
             <View style={styles.faultsCard}>
               <View style={[styles.faultsAccentBar, { backgroundColor: c.Severity.green }]} />
@@ -168,7 +150,6 @@ export default function ScanOverlay({
             </View>
           )}
 
-          {/* ── Done button ── */}
           {done && (
             <Pressable style={styles.doneBtn} onPress={onClose}>
               <Text style={styles.doneBtnText}>Done</Text>
@@ -209,9 +190,7 @@ function FaultRow({ result }: { result: ReportDtcResponse }) {
   const code = result.translation?.errorCode
     ?? result.message?.match(/Code (\w+)/)?.[1]
     ?? 'Unknown';
-  // The API's fallback text tells the user to check the manual, which was
-  // written before unknown codes got an AI explanation. Say what the app can
-  // actually do instead — the same promise the result cards make.
+  // קוד לא מוכר: מבטיחים הסבר AI במסך הפירוט
   const desc = result.translation?.humanTitle
     ?? (code !== 'Unknown'
       ? 'Not in our dictionary — tap the fault below for an AI explanation.'
@@ -230,8 +209,6 @@ function FaultRow({ result }: { result: ReportDtcResponse }) {
   );
 }
 
-// ─── Styles (values from the live_scan Stitch export) ─────────────────────────
-
 const useStyles = createThemedStyles((c) => StyleSheet.create({
   container:      { flex: 1, backgroundColor: c.Dashboard.bg },
   content:        { alignItems: 'center', paddingHorizontal: 20, paddingTop: 72, paddingBottom: 48 },
@@ -247,7 +224,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   statusDot:      { width: 10, height: 10, borderRadius: 5, backgroundColor: c.Severity.green },
   statusText:     { fontSize: 12, fontWeight: '600', letterSpacing: 0.6, color: c.Dashboard.textSecondary },
 
-  // Ring
   ringWrap:       {
     width: 300, height: 300, maxWidth: '100%',
     marginTop: 32, marginBottom: 24,
@@ -275,7 +251,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
   ringPct:        { fontSize: 28, lineHeight: 34, fontWeight: '700', color: c.Dashboard.accentDeep, marginTop: 4 },
 
-  // Tiles
   tileGrid:       { width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 32 },
   tile:           {
     flexBasis: '45%', flexGrow: 1,
@@ -291,7 +266,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   tileValue:      { fontSize: 24, lineHeight: 32, fontWeight: '700', color: c.Dashboard.textPrimary },
   tileUnit:       { fontSize: 12, fontWeight: '600', color: c.Fuel.axisLabel },
 
-  // Faults card
   faultsCard:     {
     width: '100%',
     backgroundColor: c.Dashboard.card,
@@ -317,7 +291,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   faultRowCode:   { fontSize: 16, lineHeight: 24, fontWeight: '700' },
   faultRowDesc:   { fontSize: 14, lineHeight: 20 },
 
-  // Done
   doneBtn:        {
     width: '100%',
     backgroundColor: c.Dashboard.accentDeep,

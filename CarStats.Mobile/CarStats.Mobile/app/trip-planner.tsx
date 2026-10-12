@@ -30,11 +30,8 @@ import {
   View,
 } from 'react-native';
 
-// הקריאות ל-Google עוברות דרך הפרוקסי בשרת: אין CORS בשירותים שלה,
-// והמפתח נשאר מחוץ ללקוח. גם מחיר הדלק מגיע מהשרת, כי המחיר המפוקח
-// מתעדכן מדי חודש.
+// הקריאות ל-Google עוברות דרך השרת
 
-// ─── טיפוסים ─────────────────────────────────────────────────────────────────
 interface RouteResult {
   distanceKm:         number;
   durationMin:        number;
@@ -46,17 +43,12 @@ interface RouteResult {
   fuelCostILS:        number;
   trafficLabel:       string;
   trafficColor:       string;
-  /** נקודת המוצא של המסלול, כפי ש-Google פענחה אותה. */
   originLatLng:       string;
-  /** נקודת היעד, כפי ש-Google פענחה אותה. */
   destinationLatLng:  string;
-  /** למה Google התאימה את היעד, למשל "AM:PM, חדרה". */
   destinationAddress: string;
-  /** מה שהמשתמש הקליד בדיוק. מוצג בממשק, אף פעם לא נשלח למפות. */
   destinationText:    string;
 }
 
-// ─── עזרים ───────────────────────────────────────────────────────────────────
 function trafficMeta(c: ThemeColors, ratio: number): { label: string; color: string } {
   if (ratio < 1.1) return { label: 'CLEAR',    color: c.Severity.green  };
   if (ratio < 1.3) return { label: 'MODERATE', color: c.Severity.yellow };
@@ -74,18 +66,12 @@ function calcFuelWithTraffic(
 ) {
   const baseFuelL      = (distanceKm / 100) * avgL100; // בודק את כמות הדלק שהרכב צורך לפי המרחק והצריכה הממוצעת
   const trafficRatio   = durationSec > 0 ? durationTrafficSec / durationSec : 1; //מחשב ביחס כמה יותר זמן לקח בפקקים לעומת הנסיעה הרגילה
-  // כמה דלק נוסף יידרש בגלל הפקקים. ברכב חשמלי אין קנס: מנוע חשמלי כמעט
-  // לא צורך בעמידה, ובלימה חוזרת מחזירה חלק מהאנרגיה לסוללה.
+  // קנס פקקים, אבל לא לרכב חשמלי
   const trafficMult    = isElectric ? 1 : 1 + Math.max(0, (trafficRatio - 1) * 0.5);
   const estimatedFuelL = baseFuelL * trafficMult; //התוצאה הסופית — בסיס כפול המכפיל 
   return { baseFuelL, estimatedFuelL, extraFuelL: estimatedFuelL - baseFuelL, trafficRatio };
 }
 
-/**
- * המיקום לנקודת המוצא, או null אם המכשיר לא יכול לספק אף אחד.
- * נופל למיקום האחרון שנקלט: בקשת מיקום נכשלת מיד בתוך מבנה או כש-ה-GPS
- * עדיין קר, ומיקום מלפני כמה דקות כמעט לא משנה את ההערכה.
- */
 async function getOriginCoords(): Promise<{ latitude: number; longitude: number } | null> {
   try {
     const loc = await getCurrentPosition();
@@ -106,14 +92,12 @@ async function getOriginCoords(): Promise<{ latitude: number; longitude: number 
 }
 
 // איתור: מתכנן נסיעה
-// ─── המסך הראשי ──────────────────────────────────────────────────────────────
 export default function TripPlannerScreen() {
   const { user: authUser }            = useAuth();
   const { colors: c } = useTheme();
   const styles = useStyles();
   const [vehicle, setVehicle]         = useState<Vehicle | null>(null);
   const [destination, setDestination] = useState('');
-  // ריק פירושו להשתמש במיקום הנוכחי.
   const [origin, setOrigin]           = useState('');
   const [fuelInput, setFuelInput]     = useState('8.0');
   const [loading, setLoading]         = useState(false);
@@ -123,11 +107,9 @@ export default function TripPlannerScreen() {
   const inputRef = useRef<TextInput>(null);
 
   const [fuelPrice, setFuelPrice] = useState<FuelPrice | null>(null);
-  // מתמחר לפי הדלק שהרכב צורך — הפרש של כ-40 אחוז בין סולר לבנזין.
   const [fuelType, setFuelType]   = useState<FuelType>('95');
   const isElectric = vehicle?.isElectric ?? false;
   const unit = energyUnit(isElectric);   // "L" או "kWh"
-  // ברכב חשמלי: תעריף החשמל הביתי במקום מחיר המשאבה
   const pricePerLitre = isElectric
     ? (fuelPrice?.electricityPerKwhILS ?? FALLBACK_ELECTRICITY_PER_KWH)
     : (fuelPrice?.prices?.find(p => p.fuelType === fuelType)?.pricePerLitreILS ??
@@ -135,8 +117,7 @@ export default function TripPlannerScreen() {
 
   useEffect(() => {
     if (!authUser) return;
-    // הרכב שנבחר במסך המוסך — אחרת כרטיס "מתכנן אנרגיה" של טסלה היה
-    // פותח את המתכנן על הרכב הראשון ברשימה, בליטרים
+    // הרכב שנבחר במסך המוסך
     Promise.all([getUser(authUser.id), loadSelectedVehicleId()]).then(([u, selectedId]) => {
       const list = u?.vehicles ?? [];
       const v = list.find(x => x.id === selectedId) ?? list[0] ?? null;
@@ -148,8 +129,6 @@ export default function TripPlannerScreen() {
     }).catch(() => {});
   }, [authUser]);
 
-  // נפרד מטעינת הרכב, כדי שכשל בקבלת המחיר לא יעלה למסך
-  // את נתוני הצריכה.
   useEffect(() => {
     getFuelPrice().then(setFuelPrice);
   }, []);
@@ -163,8 +142,6 @@ export default function TripPlannerScreen() {
     loadFuelType(vehicle?.id).then(setFuelType);
   }, [vehicle?.id, vehicle?.tankCapacity]);
 
-  // מותנה בקריאה אמיתית מהרכב: אמירה שתגיע צריכה להסתמך על
-  // מדידה, לא על אומדן מנקודת ייחוס שהוקלדה לפני ימים.
   const outlook =
     result && tankLevel?.isReal
       ? tripFuelOutlook(tankL, tankLevel.pct, result.estimatedFuelL, pricePerLitre)
@@ -183,7 +160,6 @@ export default function TripPlannerScreen() {
     inputRef.current?.blur();
   };
 
-  // ── חישוב המסלול ─────────────────────────────────────────────────────────
   const handleCalculate = async () => {
     clear();
     if (!destination.trim()) { setError('Please enter a destination.'); return; }
@@ -199,7 +175,7 @@ export default function TripPlannerScreen() {
     inputRef.current?.blur();
 
     try {
-      // נקודת מוצא שהוקלדה מדלגת על האיכון — גוגל מקבלת גם כתובת.
+      // נקודת מוצא שהוקלדה: בלי איכון
       let originParam = origin.trim();
 
       if (!originParam) {
@@ -224,8 +200,6 @@ export default function TripPlannerScreen() {
       });
 
       if (data.status !== 'OK') {
-        // גוגל מסבירה את הסירוב בשדה נפרד. בלי השורה הזאת נשארים עם
-        // הסטטוס בלבד, שלא מבדיל בין מפתח שגוי, חיוב שכבוי, והגבלה על המפתח.
         console.warn('[trip-planner] Google rejected:', data.status, data.error_message);
         setError(routeErrorMessage(data.status));
         setLoading(false);
@@ -250,18 +224,13 @@ export default function TripPlannerScreen() {
         fuelCostILS:        fuel.estimatedFuelL * pricePerLitre,
         trafficLabel:       tm.label,
         trafficColor:       tm.color,
-        // הקואורדינטות נלקחות מהמסלול עצמו ולא מהטקסט שהוקלד: שם כמו
-        // "AM-PM" מתאים למאות מקומות, וההטיה שלנו לישראל לא עוברת
-        // בקישור החוצה. מסירת הנקודות המדויקות מבטיחה שייפתח בדיוק
-        // המסלול שחושב.
+        // הקואורדינטות מהמסלול עצמו, לא מהטקסט שהוקלד
         originLatLng:       `${leg.start_location.lat},${leg.start_location.lng}`,
         destinationLatLng:  `${leg.end_location.lat},${leg.end_location.lng}`,
         destinationAddress: leg.end_address ?? destination.trim(),
         destinationText:    destination.trim(),
       });
     } catch (err: any) {
-      // מדפיס את הסיבה האמיתית. בעבר כל שגיאה דווחה כ"תקלת רשת",
-      // וזה שלח את האיתור לכיוון הלא נכון.
       console.warn('[trip-planner] route request failed', err);
       const serverStatus = err?.response?.status;
       setError(
@@ -276,7 +245,6 @@ export default function TripPlannerScreen() {
     }
   };
 
-  // ── פתיחה ב-Google Maps ──────────────────────────────────────────────────
   const openInGoogleMaps = async () => {
     if (!result) return;
     const url =
@@ -288,8 +256,6 @@ export default function TripPlannerScreen() {
     if (supported) {
       await Linking.openURL(url);
     } else {
-      // הגיבוי מוותר על המסלול ומציג רק את סיכת היעד, עדיין לפי
-      // קואורדינטות כדי שינחת במקום הנכון.
       await Linking.openURL(
         `https://maps.google.com/?q=${encodeURIComponent(result.destinationLatLng)}`
       );
@@ -303,14 +269,12 @@ export default function TripPlannerScreen() {
       style={{ flex: 1, backgroundColor: c.Dashboard.bg }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {/* הכותרת תואמת לכרטיס במסך הבית: "אנרגיה" לרכב חשמלי */}
       <Stack.Screen options={{ title: isElectric ? 'Trip Energy Planner' : 'Trip Fuel Planner' }} />
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        {/* ── הרכב והצריכה שלו ── */}
         <View style={styles.vehicleRow}>
           <View style={styles.vehicleDot} />
           <Text style={styles.vehicleName}>{vehicleName}</Text>
@@ -326,7 +290,6 @@ export default function TripPlannerScreen() {
           </View>
         </View>
 
-        {/* ── שדות המסלול ── */}
         <View style={styles.card}>
           <Text style={styles.cardLabel}>STARTING POINT</Text>
           <TextInput
@@ -352,7 +315,6 @@ export default function TripPlannerScreen() {
               returnKeyType="search"
             />
 
-            {/* רשימת ההשלמה האוטומטית */}
             {showSuggestions && suggestions.length > 0 && (
               <View style={styles.dropdown}>
                 {suggestions.map((s, i) => (
@@ -380,14 +342,10 @@ export default function TripPlannerScreen() {
           {error && <Text style={styles.errorText}>{error}</Text>}
         </View>
 
-        {/* ── התוצאות ── */}
         {result && (
           <>
-            {/* סיכום המסלול */}
             <View style={styles.card}>
               <Text style={styles.cardLabel}>ROUTE SUMMARY</Text>
-              {/* למה Google באמת התאימה את היעד. שם קצר יכול להתאים
-                  לעשרות מקומות, ובלי זה אין דרך לדעת אם נבחר הנכון. */}
               <Text style={styles.resolvedTo} numberOfLines={2}>
                 → {result.destinationAddress}
               </Text>
@@ -408,7 +366,6 @@ export default function TripPlannerScreen() {
                 </View>
               </View>
 
-              {/* תג העומס */}
               <View style={[styles.trafficBadge, {
                 backgroundColor: result.trafficColor + '18',
                 borderColor: result.trafficColor + '55',
@@ -424,13 +381,11 @@ export default function TripPlannerScreen() {
                 )}
               </View>
 
-              {/* כפתור הפתיחה במפות */}
               <Pressable style={styles.mapsButton} onPress={openInGoogleMaps}>
                 <Text style={styles.mapsButtonText}>🗺  Open in Google Maps</Text>
               </Pressable>
             </View>
 
-            {/* הערכת הדלק */}
             <View style={[styles.card, styles.fuelCard]}>
               <Text style={styles.cardLabel}>{isElectric ? 'ENERGY ESTIMATE' : 'FUEL ESTIMATE'}</Text>
               <View style={styles.fuelMain}>
@@ -438,8 +393,6 @@ export default function TripPlannerScreen() {
                 <Text style={styles.fuelUnit}>{isElectric ? 'kWh' : 'litres'}</Text>
               </View>
               <Text style={styles.fuelCost}>≈ ₪{result.fuelCostILS.toFixed(2)}</Text>
-              {/* מחיר הליטר מוצג במפורש: מספר עלות בלי המחיר שמאחוריו
-                  לא מאפשר לנהג להשוות למה שהוא באמת משלם. */}
               <Text style={styles.fuelPriceNote}>
                 {isElectric
                   ? `at ₪${pricePerLitre.toFixed(2)}/kWh, the home electricity rate`
@@ -464,10 +417,7 @@ export default function TripPlannerScreen() {
               </View>
             </View>
 
-            {/* ── האם אגיע? ──
-                מוצג רק כשהרכב דיווח בעצמו על מפלס הדלק. אמירה שיש מספיק
-                דלק להגיע ראויה להישען על מדידה, לא על הערכה שנבנתה
-                מנקודת ייחוס שהוקלדה לפני ימים. */}
+            {/* 'האם אגיע?' מוצג רק כשהרכב דיווח מפלס דלק אמיתי */}
             {outlook && (
               <View style={[styles.outlookCard, !outlook.enough && styles.outlookCardShort]}>
                 {outlook.enough ? (
@@ -514,10 +464,9 @@ export default function TripPlannerScreen() {
   );
 }
 
-// ─── סגנונות ─────────────────────────────────────────────────────────────────
 const useStyles = createThemedStyles((c) => StyleSheet.create({
   container:   { flex: 1 },
-  content:     { padding: 24, paddingBottom: 48 }, // הכותרת של המערכת מספקת את המרווח העליון
+  content:     { padding: 24, paddingBottom: 48 },
 
   vehicleRow:  {
     flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -545,7 +494,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   fuelCard:    { borderColor: c.Dashboard.accent + '44' },
   cardLabel:   { fontSize: 11, color: c.Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 14 },
   resolvedTo:  { fontSize: 14, fontWeight: '600', color: c.Dashboard.textPrimary, marginTop: -6, marginBottom: 14 },
-  // מפריד בין קבוצת השדות השנייה לזו שמעליה
   cardLabelSpaced: { marginTop: 4 },
 
   input:       {
@@ -596,8 +544,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   fuelValue:   { fontSize: 52, fontWeight: '800', color: c.Dashboard.textPrimary, lineHeight: 56 },
   fuelUnit:    { fontSize: 18, color: c.Dashboard.textSecondary, marginBottom: 8 },
   fuelCost:    { fontSize: 20, fontWeight: '600', color: c.Dashboard.accent, marginBottom: 2 },
-  // נושא את המרווח התחתון, כדי שהבלוק שמתחת ישמור על המרווח שלו
-  // בלי קשר לאיזה משני האלמנטים מופיע אחרון.
   fuelPriceNote: { fontSize: 12, color: c.Dashboard.textSecondary, marginBottom: 16 },
   fuelDivider: { height: 1, backgroundColor: c.Dashboard.cardBorder, marginBottom: 14 },
   outlookCard: {

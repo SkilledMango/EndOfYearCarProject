@@ -46,17 +46,14 @@ import {
   isPlausibleCapacity,
 } from '@/utils/powertrain';
 
-// ברכב חשמלי אותו יומן משמש לטעינות: "ליטרים" של רשומה הם קוט"ש שנטענו,
-// ו-l100km הוא קוט"ש ל-100 ק"מ. המבנה זהה ורק השמות והטווחים משתנים.
-
-// ─── יומן התדלוקים, נשמר במכשיר לכל רכב בנפרד ────────────────────────────────
+// ברכב חשמלי אותו יומן משמש לטעינות (ליטרים = קוט"ש)
 
 interface FillUp {
-  id: number;       // חותמת הזמן ביצירה
-  date: string;     // התאריך
+  id: number;
+  date: string;
   liters: number;
-  price: number;    // הסכום ששולם בפועל, בשקלים
-  l100km: number | null; // מחושב רק כשהמשתמש מזין גם ק"מ שנסעו
+  price: number;
+  l100km: number | null;
 }
 
 const fillupsKey = (vehicleId: number) => `fuel_fillups_${vehicleId}`;
@@ -76,20 +73,12 @@ async function saveFillUps(vehicleId: number, entries: FillUp[]) {
   } catch { /* האחסון מלא או לא זמין — הרשומות נשארות בזיכרון לסשן הזה */ }
 }
 
-/** הצריכה הממוצעת מתוך התדלוקים שנרשמו. רשומה בלי ק"מ מדולגת. */
 const averageL100km = (entries: FillUp[]): number | null => {
   const vals = entries.map(e => e.l100km).filter((v): v is number => v != null);
   if (vals.length === 0) return null;
   return vals.reduce((a, b) => a + b, 0) / vals.length;
 };
 
-/**
- * אחוז השינוי בצריכה, כשמספר שלילי הוא שיפור, יחד עם בסיס ההשוואה.
- *
- * הבסיס נשמר עם המספר כי השניים אינם זהים: השוואה בין שני תדלוקים
- * שסומנה "מול החודש שעבר" סתרה את כרטיס העלויות, שאמר נכונה שאין
- * עדיין חודש קודם.
- */
 interface Trend {
   pct: number;
   basis: 'month' | 'fillup';
@@ -99,7 +88,7 @@ const trendPct = (entries: FillUp[]): Trend | null => {
   const withVal = entries.filter(e => e.l100km != null);
   if (withVal.length < 2) return null;
 
-  const monthOf = (e: FillUp) => e.date.slice(0, 7); // מפתח חודשי
+  const monthOf = (e: FillUp) => e.date.slice(0, 7);
   const byMonth = new Map<string, number[]>();
   for (const e of withVal) {
     const m = monthOf(e);
@@ -121,13 +110,9 @@ const trendPct = (entries: FillUp[]): Trend | null => {
 const formatDay = (iso: string) =>
   new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-// ─── גרף המגמה ───────────────────────────────────────────────────────────────
-
 function TrendChart({ values }: { values: number[] }) {
   const { colors: c } = useTheme();
   const styles = useStyles();
-  // גבולות הציר האנכי: חלון סימטרי סביב הנתונים, לפחות ±1, ומתרחב
-  // כשהקריאות מפוזרות יותר.
   const min  = Math.min(...values);
   const max  = Math.max(...values);
   const span = Math.max(2, max - min + 0.8);
@@ -135,22 +120,18 @@ function TrendChart({ values }: { values: number[] }) {
   const hi   = mid + span / 2;
   const lo   = mid - span / 2;
 
-  // לשורות הרשת יש ריפוד אנכי בתוך הגרף, ולכן הנקודות ממופות לתוך
-  // הרצועה המרופדת ולא לגובה המלא.
   const y = (v: number) => 5 + ((hi - v) / (hi - lo)) * 90;
   const x = (i: number) => (values.length > 1 ? (i * 100) / (values.length - 1) : 50);
   const points = values.map((v, i) => `${x(i)},${y(v)}`).join(' ');
 
   return (
     <View style={styles.chartArea}>
-      {/* תוויות הציר האנכי */}
       <View style={styles.chartYAxis}>
         <Text style={styles.chartYLabel}>{hi.toFixed(1)}</Text>
         <Text style={styles.chartYLabel}>{mid.toFixed(1)}</Text>
         <Text style={styles.chartYLabel}>{lo.toFixed(1)}</Text>
       </View>
       <View style={styles.chartPlot}>
-        {/* קווי הרשת */}
         <View style={styles.chartGrid}>
           <View style={styles.chartGridLine} />
           <View style={styles.chartGridLine} />
@@ -194,8 +175,6 @@ function TrendChart({ values }: { values: number[] }) {
   );
 }
 
-// ─── המסך ────────────────────────────────────────────────────────────────────
-
 // איתור: מסך מעקב דלק / טעינה
 export default function FuelScreen() {
   const { user: authUser } = useAuth();
@@ -207,15 +186,13 @@ export default function FuelScreen() {
   const [loading, setLoading]         = useState(true);
   const [refreshing, setRefreshing]   = useState(false);
 
-  // מצב חלון הוספת התדלוק
   const [modalVisible, setModalVisible] = useState(false);
   const [liters, setLiters]   = useState('');
   const [price, setPrice]     = useState('');
   const [km, setKm]           = useState('');
   const [saving, setSaving]   = useState(false);
   const [fuelType, setFuelType] = useState<FuelType>('95');
-  // ברגע שהנהג הקליד מחיר, הוא שלו: הקבלה גוברת על החשבון שלנו,
-  // ודריסה שקטה שלו בהקלדה הבאה בשדה הליטרים הייתה מטריפה.
+  // מחיר שהנהג הקליד לא נדרס בחישוב האוטומטי
   const [priceEdited, setPriceEdited] = useState(false);
   const [fuelPrice, setFuelPrice] = useState<FuelPrice | null>(null);
   const [tankLevel, setTankLevel] = useState<TankLevel | null>(null);
@@ -228,16 +205,13 @@ export default function FuelScreen() {
   const unit = energyUnit(isElectric);   // "L" או "kWh"
 
   const priceEntry = fuelPrice?.prices?.find(p => p.fuelType === fuelType) ?? null;
-  // ברכב חשמלי: תעריף החשמל הביתי במקום מחיר המשאבה
   const pricePerLitre = isElectric
     ? (fuelPrice?.electricityPerKwhILS ?? FALLBACK_ELECTRICITY_PER_KWH)
     : (priceEntry?.pricePerLitreILS ?? FALLBACK_FUEL_PRICES[fuelType]);
-  // רק 95 מפוקח; כל השאר הוא מחיר אופייני, והממשק חייב לומר זאת
-  // ולא להציג הערכה באותה ודאות כמו עובדה.
+  // רק 95 מפוקח; לשאר סוגי הדלק זה מחיר אופייני
   const priceIsOfficial = priceEntry?.isOfficial ?? fuelType === '95';
 
-  // המסך נפתח על הרכב שנבחר במסך המוסך, ועובר אליו שוב כשהבחירה שם משתנה.
-  // החלפת רכב כאן, בכפתור הרכב, לא נדרסת כל עוד הבחירה במוסך לא זזה.
+  // נפתח על הרכב שנבחר במסך המוסך ועוקב אחרי הבחירה שם
   const garageChoice = useRef<number | null | undefined>(undefined);
   const followGarageSelection = (list: Vehicle[], selectedId: number | null) => {
     if (selectedId === garageChoice.current) return;
@@ -272,10 +246,6 @@ export default function FuelScreen() {
     if (vehicle) loadFuelType(vehicle.id).then(setFuelType);
   }, [vehicle?.id]);
 
-  // קריאה מחדש בכל כניסה למסך ולא רק בטעינה: מסך הבית כותב את המפלס
-  // בזמן שהוא דוגם את המתאם, ולכן מעבר משם צריך להציג את הקריאה
-  // האחרונה ולא כזו מהביקור הקודם.
-  // חזרה ללשונית אחרי שהרכב הוחלף במסך המוסך
   useFocusEffect(
     useCallback(() => {
       if (vehicles.length > 0) loadSelectedVehicleId().then(id => followGarageSelection(vehicles, id));
@@ -285,7 +255,6 @@ export default function FuelScreen() {
   useFocusEffect(
     useCallback(() => {
       loadTankLevel(vehicle?.id).then(setTankLevel);
-      // מה שהנהג הקליד גובר; אחרת הגודל שה-AI מילא לרכב
       loadTankSize(vehicle?.id).then(saved => setTankL(saved ?? (vehicle?.tankCapacity || null)));
     }, [vehicle?.id, vehicle?.tankCapacity]),
   );
@@ -304,7 +273,6 @@ export default function FuelScreen() {
     await saveTankSize(size, vehicle?.id);
     setTankL(size);
     setTankModalVisible(false);
-    // ובשרת, כדי שהגודל ילווה את הרכב גם למכשיר אחר
     if (vehicle && size !== vehicle.tankCapacity) {
       updateVehicle(vehicle.id, { ...vehicle, tankCapacity: size }).catch(() => { /* נשמר במכשיר */ });
     }
@@ -314,9 +282,7 @@ export default function FuelScreen() {
     getFuelPrice().then(setFuelPrice);
   }, []);
 
-  // המחיר מתמלא מעצמו לפי ליטרים כפול מחיר המשאבה, כך שהמקרה הנפוץ
-  // דורש הקלדה של מספר אחד. זהו מילוי מראש ולא שדה מחושב: הנהג יכול
-  // לדרוס אותו, ומה שנשמר הוא מה ששילם בפועל.
+  // המחיר מתמלא אוטומטית (ליטרים × מחיר), והנהג יכול לשנות אותו
   useEffect(() => {
     if (!modalVisible || priceEdited) return;
     const cost = fillUpCost(parseFloat(liters), pricePerLitre);
@@ -328,16 +294,12 @@ export default function FuelScreen() {
     if (vehicle) saveFuelType(next, vehicle.id);
   };
 
-  // כל יציאה מהחלון מנקה את הטופס, כדי שהתדלוק הבא יתחיל ריק וסימון
-  // "המחיר נערך" לא ידלוף לרשומה הבאה ויבטל שם את המילוי האוטומטי.
-  // סוג הדלק כן נשמר, כי הוא שייך לרכב.
   const closeModal = () => {
     setModalVisible(false);
     setLiters(''); setPrice(''); setKm('');
     setPriceEdited(false);
   };
 
-  // ממוין מהחדש לישן עבור ההיסטוריה, ולפי סדר כרונולוגי עבור הגרף
   const history = useMemo(
     () => [...fillUps].sort((a, b) => b.date.localeCompare(a.date)),
     [fillUps],
@@ -348,13 +310,11 @@ export default function FuelScreen() {
   }, [fillUps]);
 
   const loggedAvg  = averageL100km(fillUps);
-  // עד שיירשם תדלוק עם מרחק, מוצג הערך משרשרת האיתור האוטומטית.
   const displayAvg = loggedAvg ?? (vehicle && vehicle.averageFuelConsumption > 0
     ? vehicle.averageFuelConsumption
     : null);
   const trend = trendPct(fillUps);
 
-  // נגזר מהשקלים שכבר נרשמו בכל תדלוק, ולכן לא דורש מהנהג שום נתון נוסף.
   const spend      = useMemo(() => fuelSpend(fillUps), [fillUps]);
   const costPer100 = useMemo(() => costPer100km(fillUps), [fillUps]);
 
@@ -364,8 +324,6 @@ export default function FuelScreen() {
     if (!vehicle) return;
     setFillUps(entries);
     await saveFillUps(vehicle.id, entries);
-    // מסנכרן את הממוצע השמור בשרת עם היומן, כדי שכל שאר האפליקציה
-    // תראה את אותו מספר.
     const avg = averageL100km(entries);
     if (avg != null) {
       try {
@@ -438,7 +396,6 @@ export default function FuelScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={c.Dashboard.accent} />
         }
       >
-        {/* ── כותרת ובורר רכב ── */}
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
             <Text style={styles.screenTitle}>{isElectric ? 'Charging' : 'Fuel Tracking'}</Text>
@@ -466,7 +423,6 @@ export default function FuelScreen() {
           </View>
         ) : (
           <>
-            {/* ── הכרטיס הראשי: הצריכה הממוצעת ── */}
             <View style={styles.heroCard}>
               <View style={styles.heroAccentBar} />
               <Text style={styles.heroLabel}>Average Consumption</Text>
@@ -495,9 +451,6 @@ export default function FuelScreen() {
               )}
             </View>
 
-            {/* ── עלויות שוטפות ──
-                הצריכה אומרת כמה הרכב "שותה"; זה אומר כמה זה עולה, וזו
-                השאלה שלנהג באמת יש. הכול מחושב מהתדלוקים שכבר נרשמו. */}
             <View style={styles.costCard}>
               <Text style={styles.costTitle}>Running Costs</Text>
               <View style={styles.costRow}>
@@ -518,9 +471,6 @@ export default function FuelScreen() {
                   <Text style={styles.costLabel}>this year</Text>
                 </View>
               </View>
-              {/* דורש גם גודל מיכל וגם מפלס ידוע. במקום להיעלם בשקט כשהגודל
-                  חסר, מציעים להגדיר אותו: זה הנתון היחיד שאף ממשק
-                  לא יכול לספק. */}
               <View style={styles.fillRow}>
                 {fillCost ? (
                   <>
@@ -576,7 +526,6 @@ export default function FuelScreen() {
               )}
             </View>
 
-            {/* ── גרף המגמה ── */}
             <View style={styles.chartCard}>
               <View style={styles.chartHeader}>
                 <Text style={styles.chartTitle}>Recent Trend</Text>
@@ -597,7 +546,6 @@ export default function FuelScreen() {
               )}
             </View>
 
-            {/* ── ההיסטוריה ── */}
             <Text style={styles.historyTitle}>History</Text>
             {history.length === 0 ? (
               <Text style={styles.historyEmpty}>
@@ -629,17 +577,12 @@ export default function FuelScreen() {
         )}
       </ScrollView>
 
-      {/* ── כפתור הוספת תדלוק ── */}
       {vehicle && (
         <Pressable style={styles.fab} onPress={() => setModalVisible(true)}>
           <IconSymbol name="plus" size={28} color={c.Dashboard.onAccent} />
         </Pressable>
       )}
 
-      {/* ── חלון גודל המיכל ──
-          יושב כאן ולא מאחורי מחוון הדלק במסך הבית: האריח שם לחיץ רק
-          כשהרכב לא מדווח מפלס, ולכן נהג שהרכב שלו כן מדווח לא היה יכול
-          להזין קיבולת בכלל. */}
       <Modal
         visible={tankModalVisible}
         transparent
@@ -675,7 +618,6 @@ export default function FuelScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* ── חלון הוספת תדלוק ── */}
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={closeModal}>
         <KeyboardAvoidingView
           style={styles.modalBackdrop}
@@ -685,7 +627,6 @@ export default function FuelScreen() {
           <View style={styles.modalSheet}>
             <Text style={styles.modalTitle}>{isElectric ? 'Log Charge' : 'Log Fill-up'}</Text>
 
-            {/* לרכב חשמלי אין סוג דלק לבחור */}
             {!isElectric && (
               <>
                 <Text style={styles.modalLabel}>Fuel type</Text>
@@ -761,8 +702,6 @@ export default function FuelScreen() {
   );
 }
 
-// ─── סגנונות, לפי קובץ העיצוב של מסך הדלק ───────────────────────────────────
-
 const useStyles = createThemedStyles((c) => StyleSheet.create({
   container:      { flex: 1, backgroundColor: c.Dashboard.bg },
   centered:       { justifyContent: 'center', alignItems: 'center' },
@@ -776,7 +715,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
 
-  // הכרטיס הראשי
   heroCard:       {
     backgroundColor: c.Dashboard.card,
     borderRadius: 12,
@@ -803,7 +741,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   trendText:      { fontSize: 14, lineHeight: 20, fontWeight: '500' },
   trendHint:      { fontSize: 13, color: c.Dashboard.textSecondary },
 
-  // כרטיס הגרף
   costCard:       {
     backgroundColor: c.Dashboard.card,
     borderRadius: 12,
@@ -819,7 +756,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
   costTitle:      { fontSize: 16, fontWeight: '700', color: c.Dashboard.textPrimary, marginBottom: 14 },
   costRow:        { flexDirection: 'row', alignItems: 'center' },
-  // כל תא תופס שליש, כדי ששלושת המספרים יישארו מיושרים גם כשהם גדלים.
   costCell:       { flex: 1, alignItems: 'center' },
   costCellDivider:{ width: 1, alignSelf: 'stretch', backgroundColor: c.Dashboard.cardBorder },
   costValue:      { fontSize: 22, fontWeight: '800', color: c.Dashboard.textPrimary },
@@ -859,7 +795,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   chartEmpty:     { height: 160, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   chartEmptyText: { fontSize: 13, color: c.Dashboard.textSecondary, textAlign: 'center', lineHeight: 18 },
 
-  // ההיסטוריה
   historyTitle:   { fontSize: 16, fontWeight: '600', color: c.Dashboard.textPrimary, marginBottom: 16, paddingHorizontal: 4 },
   historyEmpty:   { fontSize: 13, color: c.Dashboard.textSecondary, paddingHorizontal: 4 },
   historyList:    { gap: 8 },
@@ -888,7 +823,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   entryLiters:    { fontSize: 14, lineHeight: 20, color: c.Dashboard.textSecondary },
   entryPrice:     { fontSize: 16, fontWeight: '600', color: c.Dashboard.textPrimary },
 
-  // כפתור ההוספה
   fab:            {
     position: 'absolute', right: 20, bottom: 24,
     width: 56, height: 56, borderRadius: 12,
@@ -901,7 +835,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
     elevation: 6,
   },
 
-  // חלון הוספת התדלוק
   modalBackdrop:  { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(25,27,35,0.4)' },
   modalSheet:     {
     backgroundColor: c.Dashboard.card,
@@ -923,8 +856,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
     paddingVertical: 10,
     marginBottom: 14,
   },
-  // מוצמד לשדה שהוא מסביר; אחרת המרווח התחתון של השדה היה משאיר
-  // את ההערה תלויה באוויר בין השניים.
   modalHint:      {
     fontSize: 12,
     lineHeight: 17,
@@ -954,7 +885,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
   modalSaveText:  { color: c.Dashboard.onAccent, fontSize: 15, fontWeight: '700' },
 
-  // מצב ריק
   emptyState:     { alignItems: 'center', paddingTop: 80 },
   emptyIcon:      { fontSize: 48 },
   emptyText:      { fontSize: 17, fontWeight: '600', color: c.Dashboard.textPrimary, marginTop: 12 },

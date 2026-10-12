@@ -14,8 +14,6 @@ export default function Dashboard() {
 
     const [loadError, setLoadError] = useState(null);
 
-    // Without the catch a failed fetch rejects unhandled and the table just
-    // shows nothing, which reads as "the dictionary is empty".
     const loadCodes = async () => {
         try {
             const data = await getDiagnosticCodes();

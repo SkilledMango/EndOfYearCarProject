@@ -1,8 +1,3 @@
-/**
- * כרטיס תקלה בודדת מסריקה שהסתיימה: כותרת בשפה פשוטה, הסבר והערכת מחיר,
- * צבוע לפי דרגת החומרה.
- */
-
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { CarIdentity, ReportDtcResponse } from '@/services/api';
@@ -18,10 +13,7 @@ export default function DtcResultCard({
   vehicle,
 }: {
   result: ReportDtcResponse;
-  /** הקוד שנסרק. נדרש כי לתקלה ללא תרגום אין אובייקט שממנו לקרוא אותו,
-      ודווקא אלה הקודים שלמסך הפירוט יש מה להוסיף עליהם דרך ה-AI. */
   rawCode?: string;
-  /** הרכב שנסרק, כדי שהסבר ה-AI יתאים לקודי היצרן שלו. */
   vehicle?: CarIdentity | null;
 }) {
   const { colors: c } = useTheme();
@@ -35,12 +27,10 @@ export default function DtcResultCard({
     <Pressable
       style={[styles.resultCard, { borderColor: meta.color }]}
       onPress={code ? () => router.push({ pathname: '/fault/[code]', params: faultParams(code, vehicle) }) : undefined}
-      // לא לחיץ רק כשאין באמת קוד לחפש
       disabled={!code}
     >
       <View style={styles.resultHeader}>
         <Text style={[styles.resultBadge, { color: meta.color }]}>{meta.label}</Text>
-        {/* הקוד מוצג בין אם יש לנו רשומה עליו ובין אם לא: זה מה שהמוסך ישאל. */}
         {!!code && <Text style={styles.resultCode}>{code}</Text>}
       </View>
 
@@ -64,7 +54,6 @@ export default function DtcResultCard({
           </Text>
         </View>
       ) : code ? (
-        // אומר במפורש שיש עוד מידע מאחורי הכרטיס. בלעדיו הוא נראה כמו סוף הדרך.
         <View style={[styles.costPill, { borderColor: meta.color }]}>
           <Text style={[styles.costValue, styles.tapHint, { color: meta.color }]}>
             ✨ TAP FOR AI EXPLANATION
@@ -98,6 +87,5 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
   costLabel:             { fontSize: 10, color: c.Dashboard.textSecondary, letterSpacing: 1.5, marginBottom: 4 },
   costValue:             { fontSize: 22, fontWeight: '700' },
-  // אותה גלולה כמו המחיר, אבל כאן זו תווית ולא מספר
   tapHint:               { fontSize: 13, fontWeight: '800', letterSpacing: 1 },
 }));

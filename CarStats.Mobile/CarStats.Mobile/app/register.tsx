@@ -1,10 +1,3 @@
-/**
- * מסך ההרשמה, בשלושה שלבים: פרטי החשבון, הקוד שנשלח במייל, והרכב הראשון.
- *
- * שלב הקוד נמצא באמצע במכוון: חשבון לא מאומת הוא חסר ערך, ואין טעם
- * לאסוף רכב לחשבון שאולי לא יאושר.
- */
-
 import React, { useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -24,17 +17,12 @@ import { AddVehicleModal } from '@/components/AddVehicleModal';
 import { createThemedStyles, useTheme } from '@/context/ThemeContext';
 import { PASSWORD_REQUIREMENTS, validatePassword } from '@/utils/password';
 
-// בדיקת תקינות כתובת מייל, מקבילה לזו שבשרת
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type Step = 'account' | 'verify' | 'vehicle';
 const STEP_ORDER: Step[] = ['account', 'verify', 'vehicle'];
 const STEP_LABELS = ['Account', 'Verify', 'Car'];
 
-/**
- * שדה הטקסט של הספרייה מעביר את ההפניה שלו לשדה המקורי, ולכן זה
- * הטיפוס שבו מוגדרות ההפניות כאן.
- */
 type FieldRef = RNTextInput;
 
 export default function RegisterScreen() {
@@ -43,16 +31,13 @@ export default function RegisterScreen() {
   const styles = useStyles();
   const router = useRouter();
 
-  // כשמגיעים ממסך ההתחברות עם חשבון לא מאומת, קופצים ישר לשלב האימות
-  // כשכתובת המייל כבר מולאה.
+  // חשבון לא מאומת מגיע ישר לשלב האימות
   const params       = useLocalSearchParams<{ verifyEmail?: string }>();
   const initialEmail = typeof params.verifyEmail === 'string' ? params.verifyEmail : '';
   const fromLogin    = !!initialEmail;
 
-  // ── מצב התהליך ──
   const [step, setStep] = useState<Step>(initialEmail ? 'verify' : 'account');
 
-  // ── טופס החשבון ──
   const [fullName, setFullName]       = useState('');
   const [email, setEmail]             = useState(initialEmail);
   const [password, setPassword]       = useState('');
@@ -60,15 +45,12 @@ export default function RegisterScreen() {
   const [showPass, setShowPass]       = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  // ── אימות ──
   const [code, setCode]           = useState('');
   const [resendMsg, setResendMsg] = useState<string | null>(null);
 
-  // ── שלב הרכב הראשון ──
   const [newUserId, setNewUserId]  = useState<number | null>(null);
   const [addCarVisible, setAddCar] = useState(false);
 
-  // ── מצב ממשק משותף ──
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
 
@@ -80,12 +62,10 @@ export default function RegisterScreen() {
   const currentIndex = STEP_ORDER.indexOf(step);
 
   // איתור: מסך הרשמה
-  // ── שלב 1: יצירת החשבון ──────────────────────────────────────────────────
   const handleRegister = async () => {
     setError(null);
     if (!fullName.trim())             { setError('Please enter your full name.');            return; }
     if (!EMAIL_RE.test(email.trim())) { setError('Please enter a valid email address.');     return; }
-    // אותם כללים שהשרת אוכף, ראה utils/password.ts
     const passwordProblem = validatePassword(password);
     if (passwordProblem)              { setError(passwordProblem);                           return; }
     if (password !== confirmPassword) { setError('Passwords do not match.');                 return; }
@@ -93,7 +73,7 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       await register(fullName.trim(), email.trim(), password);
-      setStep('verify');   // נשלח קוד במייל
+      setStep('verify');
     } catch (err: any) {
       setError(err.message ?? 'Registration failed. Please try again.');
     } finally {
@@ -102,7 +82,6 @@ export default function RegisterScreen() {
   };
 
   // איתור: מסך הזנת קוד האימות
-  // ── שלב 2: אימות הקוד שנשלח ──────────────────────────────────────────────
   const handleVerify = async () => {
     setError(null);
     if (code.trim().length !== 6) { setError('Enter the 6-digit code from your email.'); return; }
@@ -111,7 +90,7 @@ export default function RegisterScreen() {
     try {
       const user = await verifyCode(email.trim(), code.trim());
       if (fromLogin) {
-        goToApp();   // רק אישור של חשבון קיים
+        goToApp();
       } else {
         setNewUserId(user.id);
         setStep('vehicle');
@@ -134,7 +113,6 @@ export default function RegisterScreen() {
     }
   };
 
-  // ── שלב 3: סיום ──────────────────────────────────────────────────────────
   const goToApp = () => router.replace('/(tabs)');
 
   const handleCarAdded = async () => {
@@ -149,13 +127,11 @@ export default function RegisterScreen() {
     router.back();
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
   return (
     <KeyboardAvoidingView
       style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      {/* כותרת: כפתור חזרה עגול וכותרת ממורכזת */}
       <View style={styles.header}>
         <IconButton
           icon="arrow-left"
@@ -168,7 +144,6 @@ export default function RegisterScreen() {
         <View style={styles.backCircleSpacer} />
       </View>
 
-      {/* מחוון השלבים */}
       <View style={styles.stepper}>
         {STEP_LABELS.map((label, i) => (
           <React.Fragment key={label}>
@@ -191,7 +166,6 @@ export default function RegisterScreen() {
 
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
 
-        {/* ─────────── שלב 1: החשבון ─────────── */}
         {step === 'account' && (
           <>
             <Text style={styles.headline}>Create Account</Text>
@@ -252,8 +226,6 @@ export default function RegisterScreen() {
               }
             />
 
-            {/* מציג את הכללים מראש, ואז מצמצם לכלל שנשבר בזמן ההקלדה,
-                כדי שאף אחד לא יגלה את הדרישות רק אחרי שנכשל בשליחה. */}
             <HelperText type={password && validatePassword(password) ? 'error' : 'info'} visible>
               {password ? (validatePassword(password) ?? '✓ Password looks good.') : PASSWORD_REQUIREMENTS}
             </HelperText>
@@ -303,7 +275,6 @@ export default function RegisterScreen() {
           </>
         )}
 
-        {/* ─────────── שלב 2: אימות הקוד ─────────── */}
         {step === 'verify' && (
           <>
             <Text style={styles.headline}>Check your email</Text>
@@ -349,7 +320,6 @@ export default function RegisterScreen() {
           </>
         )}
 
-        {/* ─────────── שלב 3: הרכב הראשון ─────────── */}
         {step === 'vehicle' && (
           <Card mode="elevated" style={styles.successCard}>
             <Card.Content style={styles.successContent}>
@@ -378,7 +348,6 @@ export default function RegisterScreen() {
         )}
       </ScrollView>
 
-      {/* חלון הוספת הרכב */}
       {newUserId != null && (
         <AddVehicleModal
           visible={addCarVisible}
@@ -394,7 +363,6 @@ export default function RegisterScreen() {
 const useStyles = createThemedStyles((c) => StyleSheet.create({
   root: { flex: 1, backgroundColor: c.Dashboard.bg },
 
-  // הכותרת
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -402,7 +370,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 8,
   },
-  // מאזן את הכפתור שמשמאל, כדי שהכותרת תישאר ממורכזת לעין
   backCircleSpacer: { width: 44 },
   headerTitle: {
     flex: 1,
@@ -413,7 +380,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
     letterSpacing: 2,
   },
 
-  // מחוון השלבים
   stepper: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -466,8 +432,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
     marginBottom: 18,
   },
 
-  // שדה הטקסט של הספרייה מצייר בעצמו מסגרת ותווית צפה; כאן רק
-  // המרווחים והשדה המוגדל של קוד האימות.
   field: { marginTop: 14 },
   codeField:        { marginTop: 10 },
   codeFieldContent: {
@@ -478,14 +442,12 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   },
   resendOk: { fontSize: 13, color: c.Severity.green, textAlign: 'center', marginTop: 10 },
 
-  // כפתורים
   buttonContent: { paddingVertical: 8, flexDirection: 'row-reverse' },
   buttonLabel:   { fontSize: 18, fontWeight: '700' },
 
   footerLink:     { alignItems: 'center', marginTop: 20, paddingVertical: 6 },
   footerLinkText: { fontSize: 15, color: c.Dashboard.textSecondary },
 
-  // שלב 3
   successCard:    { borderRadius: 24, marginTop: 12 },
   successContent: { alignItems: 'center', paddingVertical: 12 },
   successBtn:     { alignSelf: 'stretch', marginTop: 8 },

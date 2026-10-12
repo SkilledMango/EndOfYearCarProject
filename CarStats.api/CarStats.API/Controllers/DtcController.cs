@@ -6,7 +6,6 @@ using CarStats.API.Models;
 
 namespace CarStats.API.Controllers
 {
-    // מילון קודי התקלה: קריאה למשתמש מחובר, עריכה למנהלים בלבד
     [Route("api/[controller]")]
     [ApiController]
     [Authorize]
@@ -14,14 +13,12 @@ namespace CarStats.API.Controllers
     {
         private readonly AppDbContext _context;
 
-        // הזרקת החיבור לבסיס הנתונים
         public DtcController(AppDbContext context)
         {
             _context = context;
         }
 
         // איתור: שליפת מילון התקלות (שרת)
-        // GET: api/dtc — מחזיר את כל המילון. משמש גם את האפליקציה וגם את פאנל הניהול
         [HttpGet]
         public async Task<ActionResult<IEnumerable<DiagnosticCode>>> GetDiagnosticCodes()
         {
@@ -29,7 +26,6 @@ namespace CarStats.API.Controllers
         }
 
         // איתור: הוספת קוד תקלה למילון (שרת)
-        // POST: api/dtc — הוספת קוד חדש למילון מפאנל הניהול
         [HttpPost]
         [Authorize(Policy = "AdminOnly")]
         public async Task<ActionResult<DiagnosticCode>> PostDiagnosticCode(DiagnosticCode diagnosticCode)
@@ -41,7 +37,6 @@ namespace CarStats.API.Controllers
         }
 
         // איתור: מחיקת קוד תקלה מהמילון (שרת)
-        // DELETE: api/dtc/{id} — מחיקת קוד מהמילון
         [HttpDelete("{id}")]
         [Authorize(Policy = "AdminOnly")]
         public async Task<IActionResult> DeleteDtc(int id)

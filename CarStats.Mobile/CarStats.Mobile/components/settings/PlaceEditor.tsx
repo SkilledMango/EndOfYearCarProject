@@ -1,11 +1,3 @@
-/**
- * עורך מקום שמור אחד — הבית או העבודה — במסך ההגדרות.
- *
- * הקלדת כתובת (עם השלמה אוטומטית) או לקיחת המיקום הנוכחי, ותווית שמראה
- * מה נשמר. אותו רכיב משמש לשני המקומות, כדי שלא יהיו שני עותקים של אותה
- * לוגיקה במסך. השמירה עצמה — העדפות וגדר גיאוגרפית — נשארת אצל המסך.
- */
-
 import React, { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, TextInput } from 'react-native-paper';
@@ -18,11 +10,9 @@ import { createThemedStyles } from '@/context/ThemeContext';
 export interface PlaceEditorProps {
   title: string;
   subtitle: string;
-  /** "Home" / "Work" — לתווית השדה ולתווית מה שנשמר */
   name: string;
   placeholder: string;
   icon: string;
-  /** מה שנשמר כרגע, לתצוגה. null = עוד לא נשמר כלום */
   savedLabel: string | null;
   disabled?: boolean;
   onSave: (lat: number, lng: number, label: string) => Promise<void>;
@@ -48,8 +38,6 @@ export default function PlaceEditor({
     clear();
   };
 
-  // הקלדת כתובת לא דורשת GPS כלל, וזה חשוב במכשיר שלא מצליח לאכן —
-  // וגם מאפשרת להגדיר מקום שלא נמצאים בו כרגע.
   const saveFromAddress = async () => {
     const query = address.trim();
     if (!query) { Alert.alert('Enter an address', `Type your ${name.toLowerCase()} address first.`); return; }
@@ -85,8 +73,6 @@ export default function PlaceEditor({
     try {
       const { lat, lng } = await captureCurrentLocation();
 
-      // המרת הקואורדינטות לכתובת קריאה. נעשה במכשיר ולא דרך השרת, כי
-      // הספרייה כבר יודעת לעשות זאת וזה חוסך פנייה שלמה בשביל תווית.
       let label = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
       try {
         const [place] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
@@ -191,8 +177,6 @@ const useStyles = createThemedStyles((c) => StyleSheet.create({
   rowSub:   { fontSize: 13, color: c.Dashboard.textSecondary, marginTop: 2, lineHeight: 18 },
 
   input: { marginTop: 12 },
-  // רשימת ההצעות מרחפת מעל התוכן ולא דוחפת אותו, כדי שהכרטיס לא יקפוץ
-  // בכל פעם שההצעות מופיעות.
   dropdown: {
     position: 'absolute',
     top: '100%',

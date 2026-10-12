@@ -1,13 +1,3 @@
-/**
- * פענוח מספר שלדה בן 17 תווים מול שירות NHTSA האמריקאי. חינמי, בלי מפתח.
- *
- * השירות מכסה רכבים מתוצרת ארה"ב וגם רוב הרכבים המיובאים, כי שלושת התווים
- * הראשונים של מספר השלדה הם תקן עולמי שמזהה את היצרן.
- *
- * לדגמים שאינם נמכרים בארה"ב הוא עשוי להחזיר יצרן ושנה נכונים אבל דגם כללי.
- * גם זה מספיק כדי לזהות את הרכב ולהציע להוסיף אותו למוסך.
- */
-
 import { Vehicle } from './api';
 import { fetchWithTimeout } from './http';
 
@@ -15,18 +5,12 @@ const NHTSA_BASE = 'https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin';
 
 export interface VinDecodeResult {
   vin:   string;
-  make:  string;   // היצרן, מוחזר באותיות גדולות
-  model: string;   // הדגם
+  make:  string;
+  model: string;
   year:  number;
 }
 
-// ─── הפונקציה הראשית ─────────────────────────────────────────────────────────
-
 // איתור: פענוח מספר שלדה (VIN)
-/**
- * מפענחת מספר שלדה ליצרן, דגם ושנה.
- * מחזירה null אם המספר אינו תקין או שהשירות לא מזהה אותו.
- */
 export async function decodeVin(vin: string): Promise<VinDecodeResult | null> {
   if (!vin || vin.length !== 17) return null;
 
@@ -35,7 +19,6 @@ export async function decodeVin(vin: string): Promise<VinDecodeResult | null> {
     if (!res.ok) return null;
 
     const json = await res.json();
-    // התשובה מגיעה כמערך של זוגות שם ערך
     const results: { Variable: string; Value: string }[] = json?.Results ?? [];
 
     const get = (name: string) =>
@@ -49,7 +32,6 @@ export async function decodeVin(vin: string): Promise<VinDecodeResult | null> {
     // הפענוח יכול להיות חלקי; מספיק שקיבלנו יצרן ושנה
     if (!make || !year) return null;
 
-    // המרת שם היצרן לאות גדולה בתחילת מילה בלבד
     const titleMake = make
       .toLowerCase()
       .split('-')
@@ -66,12 +48,6 @@ export async function decodeVin(vin: string): Promise<VinDecodeResult | null> {
   }
 }
 
-// ─── עזר להשוואה ─────────────────────────────────────────────────────────────
-
-/**
- * בודקת אם השלדה שפוענחה מתאימה לרכב שכבר קיים במוסך.
- * ההשוואה גמישה, כי הכתיב שהשירות מחזיר עשוי להיות שונה ממה שהמשתמש הקליד.
- */
 export function vinMatchesVehicle(decoded: VinDecodeResult, vehicle: Vehicle): boolean {
   const norm = (s: string) => s.toLowerCase().replace(/[\s\-_]/g, '');
 
@@ -80,7 +56,7 @@ export function vinMatchesVehicle(decoded: VinDecodeResult, vehicle: Vehicle): b
     norm(vehicle.make).includes(norm(decoded.make));
 
   const modelMatch =
-    !decoded.model ||                                    // אם לא הוחזר דגם, מדלגים על הבדיקה
+    !decoded.model ||
     norm(decoded.model).includes(norm(vehicle.model)) ||
     norm(vehicle.model).includes(norm(decoded.model));
 

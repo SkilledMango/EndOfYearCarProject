@@ -1,12 +1,3 @@
-/**
- * השלמה אוטומטית של כתובות, עם השהיה בין הקלדות.
- *
- * הופרד ממתכנן הנסיעה כדי ששדה כתובת הבית בהגדרות ישתמש באותה התנהגות
- * במקום בעותק שני שלה.
- *
- * הבקשות עוברות דרך הפרוקסי בשרת, שמחזיק את מפתח Google אצלו.
- */
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/services/api';
 
@@ -15,9 +6,7 @@ export interface PlaceSuggestion {
   description: string;
 }
 
-/** מתחת לאורך הזה Google מחזירה רעש, ולא שווה לבזבז בקשה. */
 const MIN_QUERY_LENGTH = 3;
-/** הפסקת ההקלדה שאחריה נשלחת בקשה. */
 const DEBOUNCE_MS = 350;
 const MAX_RESULTS = 5;
 
@@ -26,8 +15,7 @@ export function usePlaceSuggestions() {
   const [visible, setVisible]         = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // בקשה שכבר בדרך לא צריכה למלא את הרשימה אחרי שהיא נוקתה,
-  // אחרת בחירת הצעה גורמת לרשימה להיפתח שוב לרגע.
+  // בקשה ישנה לא ממלאת רשימה שכבר נוקתה
   const requestId = useRef(0);
 
   const clear = useCallback(() => {
@@ -53,7 +41,7 @@ export function usePlaceSuggestions() {
         const { data } = await api.get('/navigation/autocomplete', {
           params: { input: text.trim() },
         });
-        if (id !== requestId.current) return;  // הבקשה כבר לא רלוונטית
+        if (id !== requestId.current) return;
 
         if (data.status === 'OK' && Array.isArray(data.predictions)) {
           setSuggestions(
@@ -68,7 +56,6 @@ export function usePlaceSuggestions() {
           setVisible(false);
         }
       } catch {
-        // ההשלמה היא נוחות בלבד; כישלון שלה לא יעצור את ההקלדה
         if (id === requestId.current) {
           setSuggestions([]);
           setVisible(false);
@@ -77,7 +64,6 @@ export function usePlaceSuggestions() {
     }, DEBOUNCE_MS);
   }, []);
 
-  // ניקוי הטיימר כשהמסך נסגר
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
   return { suggestions, visible, search, clear };

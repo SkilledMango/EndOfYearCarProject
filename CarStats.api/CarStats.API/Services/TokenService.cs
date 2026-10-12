@@ -8,21 +8,15 @@ namespace CarStats.API.Services
 {
     public interface ITokenService
     {
-        /// <summary>מייצר טוקן חתום לסשן של משתמש מאומת.</summary>
         string CreateToken(AppUser user);
     }
 
-    /// <summary>
-    /// מנפיק טוקני JWT חתומים בשיטת HS256, הנושאים את מזהה המשתמש,
-    /// המייל והתפקיד. מפתח החתימה מגיע מהקונפיגורציה בלבד.
-    /// </summary>
     public class TokenService : ITokenService
     {
         public const string Issuer   = "CarStats.API";
         public const string Audience = "CarStats.Clients";
 
-        // סשן ארוך במכוון: זו אפליקציית טלפון, והתחברות תכופה מחדש
-        // דרך קוד במייל הייתה מזיקה יותר ממה שהיא מגינה
+        // סשן ארוך (30 יום) במכוון
         private const int LifetimeDays = 30;
 
         private readonly SymmetricSecurityKey _key;
@@ -32,10 +26,6 @@ namespace CarStats.API.Services
             _key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(GetKeyMaterial(config, env)));
         }
 
-        /// <summary>
-        /// משותפת ליצירת הטוקן כאן ולאימות שלו ב-Program.cs,
-        /// כדי ששני הצדדים ישתמשו תמיד באותו מפתח.
-        /// </summary>
         public static string GetKeyMaterial(IConfiguration config, IWebHostEnvironment env)
         {
             var configured = config["Jwt:Key"];
@@ -46,8 +36,7 @@ namespace CarStats.API.Services
                 return configured;
             }
 
-            // בסביבת Production זורקים שגיאה במקום ליפול למפתח ידוע:
-            // עדיף ששרת לא יעלה מאשר שינפיק בשקט טוקנים שאפשר לזייף
+            // בייצור בלי מפתח - השרת לא עולה
             if (!env.IsDevelopment())
                 throw new InvalidOperationException(
                     "Jwt:Key is not configured. Set it in appsettings.Production.json.");
@@ -56,7 +45,6 @@ namespace CarStats.API.Services
         }
 
         // איתור: יצירת טוקן JWT
-        // הרכבת הטוקן: מזהה, מייל ותפקיד, עם חתימה ותאריך תפוגה
         public string CreateToken(AppUser user)
         {
             var claims = new List<Claim>
