@@ -74,6 +74,7 @@ namespace CarStats.API.Services
             return new AiResult(null, "none", allRateLimited ? Failure.RateLimited : Failure.Unavailable);
         }
 
+        // איתור: חיבור ל-API של Groq (AI, שרת)
         private async Task<(string? Text, bool RateLimited)> AskGroqAsync(string prompt)
         {
             var client = _httpFactory.CreateClient();
@@ -109,6 +110,7 @@ namespace CarStats.API.Services
             return (text, false);
         }
 
+        // איתור: חיבור ל-API של גוגל - Gemini (AI, שרת)
         private async Task<(string? Text, bool RateLimited)> AskGeminiAsync(string model, string prompt)
         {
             var client = _httpFactory.CreateClient();

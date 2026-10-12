@@ -99,6 +99,7 @@ namespace CarStats.API.Controllers
         private static readonly System.Text.RegularExpressions.Regex NotACarShop =
             new("קורקינט|אופני|scooter|bike|דלקן", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
+        // איתור: חיבור ל-API של גוגל - חיפוש מוסכים (Google Places, שרת)
         private async Task<List<Shop>?> SearchAsync(double lat, double lng, string? keyword)
         {
             var url =
