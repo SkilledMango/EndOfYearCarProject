@@ -76,6 +76,7 @@ export default function MechanicFinderScreen() {
 
       if (!pos) {
         try {
+          // איתור: בקשת הרשאת מיקום מהטלפון - מסך המוסכים (אפליקציה)
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status === 'granted') {
             let coords = null;

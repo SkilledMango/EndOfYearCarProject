@@ -179,6 +179,7 @@ export default function TripPlannerScreen() {
       let originParam = origin.trim();
 
       if (!originParam) {
+        // איתור: בקשת הרשאת מיקום מהטלפון - תכנון נסיעה (אפליקציה)
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
           setError('Location permission is required, or type a starting point above.');

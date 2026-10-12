@@ -120,6 +120,7 @@ export async function enableChildReminder(regions: Location.LocationRegion[]): P
   if (!(await ensureNotifPermission())) {
     throw new Error('Notification permission is required for the reminder.');
   }
+  // איתור: בקשת הרשאת מיקום מהטלפון - גם ברקע, לתזכורת ילד ברכב (אפליקציה)
   const fg = await Location.requestForegroundPermissionsAsync();
   if (fg.status !== 'granted') {
     throw new Error('Location permission is required to detect arrival.');
