@@ -443,6 +443,7 @@ void pollLiveData() {
                   liveData.rpm, liveData.speedKmh, liveData.coolantCelsius,
                   liveData.fuelPercent, liveData.engineLoadPct);
   } else {
+    // איתור: הרכב לא ענה - מעבר למצב סימולציה (מתאם)
     if (!simMode) {
       cachedVin    = "";
       vinAttempted = false;
