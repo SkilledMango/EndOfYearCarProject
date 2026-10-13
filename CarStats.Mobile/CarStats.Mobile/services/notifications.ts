@@ -142,6 +142,7 @@ export async function disableChildReminder(): Promise<void> {
   } catch { /* המשימה מעולם לא נרשמה במכשיר הזה */ }
 }
 
+// איתור: לקיחת המיקום הנוכחי מהטלפון - בשביל Use my current location (אפליקציה)
 export async function captureCurrentLocation(): Promise<{ lat: number; lng: number }> {
   const fg = await Location.requestForegroundPermissionsAsync();
   if (fg.status !== 'granted') {

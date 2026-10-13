@@ -150,6 +150,7 @@ export default function PlaceEditor({
         Save this address
       </Button>
 
+      {/* איתור: הכפתור Use my current location במסך ההגדרות (אפליקציה) */}
       <Button
         mode="outlined"
         icon="crosshairs-gps"
