@@ -68,6 +68,7 @@ export default function PlaceEditor({
     }
   };
 
+  // איתור: כפתור Use my current location - שמירת המיקום הנוכחי כבית או עבודה (אפליקציה)
   const saveFromGps = async () => {
     setBusy(true);
     try {
